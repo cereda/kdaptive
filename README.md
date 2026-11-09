@@ -259,12 +259,12 @@ and has a test that keeps it honest:
 | `CallReturnExampleKt` | `ac*b` via submachine call/return |
 | `NestedCallReturnExampleKt` | nested submachine calls (balanced structure) |
 | `BalancedParenthesesExampleKt` | balanced parentheses |
-| `NondeterminismExampleKt` | `a(b|c)` via forks |
+| `NondeterminismExampleKt` | `a(b\|c)` via forks |
 | `LexerExampleKt` | simplified tokenizer (identifiers, numbers, spaces) |
 | `ArithmeticExampleKt` | simple binary expressions `digit op digit` (`0`/`1`, `+`/`*`) |
 | `ConfigParserExampleKt` | a config line like `a=[01]+;` (multi-phase recognizer) |
-| `ModuloExampleKt` | `{aⁿ | n mod 3 = 0}` via a three-state ring counter |
-| `SubstringExampleKt` | `{ w | w contains "ab" }` over `{a, b}` |
+| `ModuloExampleKt` | `{aⁿ \| n mod 3 = 0}` via a three-state ring counter |
+| `SubstringExampleKt` | `{ w \| w contains "ab" }` over `{a, b}` |
 | `DslShowcaseExampleKt` | dynamic edge insertion (`ElementaryActions.add`) |
 
 Run any of them:
