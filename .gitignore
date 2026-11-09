@@ -1,0 +1,18 @@
+*.class
+*.log
+
+# Gradle
+.gradle/
+build/
+
+# Kotlin
+.kotlinc/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store

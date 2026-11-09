@@ -1,0 +1,635 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package br.usp.poli.lta.cereda.kdaptive.dsl
+
+import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
+import br.usp.poli.lta.cereda.kdaptive.model.Action
+import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Transition
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
+import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
+
+/**
+ * The handler signature for DSL-registered adaptive actions.
+ *
+ * The receiver ([DslActionContext]) carries the elementary actions over the
+ * mapping currently being executed plus a fresh-state factory; the parameters
+ * are [Transition] (the edge that triggered the action) and the argument list
+ * bound in the [ActionRef] that fired.
+ */
+typealias DslActionHandler = DslActionContext.(transition: Transition, parameters: List<Any>) -> Unit
+
+/**
+ * Runtime context handed to DSL-registered adaptive actions.
+ *
+ * Wraps the [ElementaryActions] facade over the running mapping, a read-only
+ * view of the states of the automaton and a per-run fresh-state factory, so
+ * handlers do not need to manage mutable state-name counters themselves.
+ *
+ * @param ea the elementary actions over the currently executed mapping
+ * @param states the states of the automaton, keyed by name
+ * @param newStateSupplier the factory allocating fresh states
+ */
+class DslActionContext internal constructor(
+    /** The elementary actions over the mapping currently being executed. */
+    val ea: ElementaryActions,
+    private val states: Map<String, State>,
+    private val newStateSupplier: (String) -> State,
+) {
+    /**
+     * Looks up a state of the automaton by [name].
+     *
+     * This is a read-only lookup: a name that does not denote a state of the
+     * automaton is an error, not a request to create one.
+     *
+     * @throws IllegalArgumentException if the automaton has no state named [name]
+     */
+    fun state(name: String): State = requireNotNull(states[name]) {
+        "No state named '$name' in this automaton. Known states: ${states.keys.joinToString(", ")}."
+    }
+
+    /**
+     * Returns a fresh [State] with [prefix] plus a unique numeric suffix,
+     * restarting at zero for each recognition run.
+     */
+    fun freshState(prefix: String = "g"): State = newStateSupplier(prefix)
+
+    /**
+     * Builds an [ActionRef] with the given runtime [args], which are passed
+     * through unchanged (they are values known only during execution).
+     */
+    fun ref(name: String, vararg args: Any): ActionRef = ActionRef(name = name, args = args.toList())
+}
+
+/**
+ * Specification produced by the builder DSL, consumed by [specToAutomaton].
+ *
+ * @property states the states of the automaton, keyed by name
+ * @property submachines the submachines, keyed by name
+ * @property transitions the transitions of the main submachine
+ * @property actions the DSL-registered adaptive actions, keyed by name
+ * @property main the name of the main submachine, or null when not set
+ */
+data class AutomatonSpec(
+    val states: Map<String, State> = emptyMap(),
+    val submachines: Map<String, Submachine> = emptyMap(),
+    val transitions: List<TransitionEdge> = emptyList(),
+    val actions: Map<String, DslActionHandler> = emptyMap(),
+    val main: String? = null,
+)
+
+/**
+ * Builds an [AdaptiveAutomaton] from an [AutomatonSpec].
+ *
+ * The built automaton owns a fresh-state counter used by
+ * [AutomatonBuilder.action] handlers through [DslActionContext.freshState];
+ * the counter starts at zero for each recognition run, since `recognize`
+ * executes on a clone built by `newInstance`. Generated names never collide
+ * with the states already known to the specification.
+ *
+ * @param spec the specification to build from
+ * @return a fresh automaton whose [AdaptiveAutomaton.setup] materialises [spec]
+ * @throws IllegalArgumentException if the specification declares no main
+ * submachine, or names one that does not exist
+ */
+fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
+    val mainName =
+        requireNotNull(spec.main) {
+            "The specification does not declare a main submachine."
+        }
+    require(mainName in spec.submachines) {
+        "Main submachine '$mainName' is not declared in the specification. " +
+            "Declared submachines: ${spec.submachines.keys.joinToString(", ")}."
+    }
+    return object : AdaptiveAutomaton() {
+        private var freshStateCounter = 0
+        private val reservedStateNames = spec.states.keys.toSet()
+
+        override fun newInstance(): AdaptiveAutomaton = specToAutomaton(spec)
+
+        private fun nextFreshState(prefix: String): State {
+            var index = freshStateCounter
+            var candidate = "$prefix$index"
+            while (candidate in reservedStateNames) {
+                index = index + 1
+                candidate = "$prefix$index"
+            }
+            freshStateCounter = index + 1
+            val stateName = candidate
+            return object : State() {
+                override fun toString(): String = stateName
+            }
+        }
+
+        override fun setup() {
+            mainSubmachine = spec.main
+            spec.submachines.values.forEach { submachines.add(it) }
+            spec.transitions.forEach { transitions.add(it) }
+            spec.actions.forEach { (name, handler) ->
+                actions.add(
+                    Action(name = name) { transitions, transition, parameters ->
+                        handler(
+                            DslActionContext(ElementaryActions(transitions), spec.states) { prefix ->
+                                nextFreshState(prefix)
+                            },
+                            transition,
+                            parameters,
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Builder for constructing an [AutomatonSpec] using a fluent DSL.
+ *
+ * State and symbol parameters accept either the typed objects ([State], [Symbol])
+ * or convenient raw values ([String] for state names, [Char] for symbols that map
+ * to [CharSymbol]). Action references accept [ActionRef] or a plain [String] name.
+ */
+class AutomatonBuilder {
+    private val states = mutableMapOf<String, State>()
+    private val transitions = mutableListOf<TransitionEdge>()
+    private val submachineBuilders = mutableMapOf<String, SubmachineBuilder>()
+    private val actions = mutableMapOf<String, DslActionHandler>()
+    private val actionArities = mutableMapOf<String, Int>()
+    private val actionReferences = mutableMapOf<String, MutableList<Int>>()
+    private val argumentStates = mutableListOf<Pair<String, State>>()
+    private val declaredStates = mutableSetOf<State>()
+    private var main: String? = null
+
+    /** Creates or looks up a plain [State] by name. */
+    fun state(name: String): State = states.getOrPut(name) {
+        object : State() {
+            override fun toString(): String = name
+        }
+    }.also { declaredStates.add(it) }
+
+    private fun resolveState(value: Any): State = when (value) {
+        is State -> {
+            value
+        }
+
+        is String -> {
+            states.getOrPut(value) {
+                object : State() {
+                    override fun toString(): String = value
+                }
+            }
+        }
+
+        else -> {
+            throw IllegalArgumentException("Cannot resolve '$value' to State")
+        }
+    }
+
+    private fun resolveSymbol(value: Any): Symbol = when (value) {
+        is Symbol -> value
+        is Char -> CharSymbol(value)
+        else -> throw IllegalArgumentException("Cannot resolve '$value' to Symbol")
+    }
+
+    private fun resolveActionRef(value: Any?): ActionRef? = when (value) {
+        null -> null
+        is ActionRef -> value
+        is String -> ActionRef(name = value)
+        else -> throw IllegalArgumentException("Cannot resolve '$value' to ActionRef")
+    }
+
+    /** Defines a submachine built by the [SubmachineBuilder] block. */
+    fun submachine(name: String, configure: SubmachineBuilder.() -> Unit) {
+        submachineBuilders[name] = SubmachineBuilder(states).also(configure)
+    }
+
+    /** Sets the main submachine name. */
+    fun main(name: String) {
+        this.main = name
+    }
+
+    // -----------------------------------------------------------------------
+    // Adaptive actions
+    // -----------------------------------------------------------------------
+
+    /**
+     * Registers an adaptive action under [name], making previous/post action
+     * references with that name resolvable by the built automaton.
+     *
+     * The [handler] receives a [DslActionContext] as receiver: `ea` exposes the
+     * elementary actions over the mapping currently being executed and
+     * `freshState(prefix)` allocates a unique state, restarting at zero for
+     * each recognition run.
+     *
+     * When [arity] is given, every reference to this action must bind exactly
+     * that many arguments; the builder rejects mismatches before the automaton
+     * is built. Leave it null for actions that are legitimately called with
+     * different argument counts.
+     *
+     * @throws IllegalArgumentException if an action with the same name is
+     * already registered
+     */
+    fun action(name: String, arity: Int? = null, handler: DslActionHandler) {
+        require(!actions.containsKey(name)) { "Action '$name' is already registered." }
+        require(arity == null || arity >= 0) { "Action '$name' cannot declare a negative arity." }
+        actions[name] = handler
+        if (arity != null) {
+            actionArities[name] = arity
+        }
+    }
+
+    /**
+     * Builds an [ActionRef] with build-time argument resolution: [String]
+     * arguments become the corresponding named [State], [Char] arguments
+     * become a [CharSymbol] and any other value is passed through unchanged.
+     *
+     * A string argument names a state of the automaton: the builder checks at
+     * the end of the block that every named state really belongs to the
+     * automaton, so typos fail loudly instead of creating a phantom state.
+     * Use plain `actionRef` or [ActionRef] directly to pass string payloads
+     * or when the arguments are already typed objects.
+     */
+    fun ref(name: String, vararg args: Any): ActionRef {
+        val resolved = args.map { argument ->
+            when (argument) {
+                is State -> argument
+
+                is String -> {
+                    val state = resolveState(argument)
+                    argumentStates.add(name to state)
+                    state
+                }
+
+                is Char -> CharSymbol(argument)
+
+                is Symbol -> argument
+
+                else -> argument
+            }
+        }
+        return ActionRef(name = name, args = resolved)
+    }
+
+    // -----------------------------------------------------------------------
+    // Symbol-consuming transitions
+    // -----------------------------------------------------------------------
+
+    /** Adds a symbol-consuming transition, [prior]/[post] being optional action references. */
+    fun consume(from: Any, symbol: Any, to: Any, prior: Any? = null, post: Any? = null) {
+        val s = resolveState(from)
+        val t = resolveState(to)
+        val sym = resolveSymbol(symbol)
+        val p = resolveActionRef(prior)
+        val po = resolveActionRef(post)
+        p?.let { recordReference(it) }
+        po?.let { recordReference(it) }
+        transitions.add(
+            TransitionEdge(
+                source = s,
+                target = t,
+                transition = Transition.SymbolTransition(symbol = sym, sourceState = s, targetState = t),
+                prior = p,
+                post = po,
+            ),
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Epsilon transitions
+    // -----------------------------------------------------------------------
+
+    /**
+     * Adds an epsilon transition, [prior]/[post] being optional action references.
+     *
+     * The prior action fires before the move, the post action after it.
+     */
+    fun epsilon(from: Any, to: Any, prior: Any? = null, post: Any? = null) {
+        val s = resolveState(from)
+        val t = resolveState(to)
+        val p = resolveActionRef(prior)
+        val po = resolveActionRef(post)
+        p?.let { recordReference(it) }
+        po?.let { recordReference(it) }
+        transitions.add(
+            TransitionEdge(
+                source = s,
+                target = t,
+                transition = Transition.Epsilon,
+                prior = p,
+                post = po,
+            ),
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Submachine calls
+    // -----------------------------------------------------------------------
+
+    /**
+     * Adds a transition calling submachine [submachineName], [prior]/[post]
+     * being optional action references.
+     *
+     * The prior action fires before the call (the return state is not pushed
+     * yet), the post action after the jump into the called submachine.
+     */
+    fun call(from: Any, submachineName: String, to: Any, prior: Any? = null, post: Any? = null) {
+        val s = resolveState(from)
+        val t = resolveState(to)
+        val p = resolveActionRef(prior)
+        val po = resolveActionRef(post)
+        p?.let { recordReference(it) }
+        po?.let { recordReference(it) }
+        transitions.add(
+            TransitionEdge(
+                source = s,
+                target = t,
+                transition = Transition.Call(submachine = submachineName),
+                prior = p,
+                post = po,
+            ),
+        )
+    }
+
+    // -----------------------------------------------------------------------
+    // Block grouping: transitions from the same source state
+    // -----------------------------------------------------------------------
+
+    /** Adds several transitions from the same [source] state using the [configure] block. */
+    fun from(source: Any, configure: TransitionGroup.() -> Unit) {
+        TransitionGroup(this, source).configure()
+    }
+
+    /** Builder for adding multiple transitions from a single source state. */
+    class TransitionGroup(private val ab: AutomatonBuilder, private val source: Any) {
+        /** Adds a symbol-consuming transition from the group's source state. */
+        fun symbol(sym: Any, target: Any, prior: Any? = null, post: Any? = null) {
+            ab.consume(source, sym, target, prior, post)
+        }
+
+        /** Adds an epsilon transition from the group's source state. */
+        fun epsilon(target: Any, prior: Any? = null, post: Any? = null) {
+            ab.epsilon(source, target, prior, post)
+        }
+
+        /** Adds a submachine-call transition from the group's source state. */
+        fun call(submachine: String, target: Any, prior: Any? = null, post: Any? = null) {
+            ab.call(source, submachine, target, prior, post)
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Infix operators for readable transition specifications
+    // -----------------------------------------------------------------------
+
+    /** Holds source state awaiting a symbol. */
+    class TransitionStepSource(private val ab: AutomatonBuilder, private val source: Any) {
+        /** Infix: `stepSource on 'a'` creates a step awaiting a target. */
+        infix fun on(symbol: Any): TransitionStep = TransitionStep(ab, source, symbol)
+    }
+
+    /** Holds source+symbol awaiting a target state. */
+    class TransitionStep(private val ab: AutomatonBuilder, private val source: Any, private val symbol: Any) {
+        /** Completes the transition: source --symbol--> target, with optional prior/post actions. */
+        fun to(target: Any, prior: Any? = null, post: Any? = null) {
+            ab.consume(source, symbol, target, prior, post)
+        }
+
+        /**
+         * Completes the transition infix-style: `this on "q0" on 'a' to "q1"` inside the
+         * builder block. Without this overload the chain's trailing `to` silently resolves
+         * to the stdlib `Pair` factory (which builds nothing), so the singly-parametrized
+         * member overload exists to make the bare chain work. Prior/post actions still go
+         * through the three-parameter dotted [to].
+         */
+        infix fun to(target: Any) = to(target, null, null)
+    }
+
+    /** Infix: `builder on "q0"` creates a step source awaiting a symbol. */
+    infix fun AutomatonBuilder.on(source: Any): TransitionStepSource = TransitionStepSource(this, source)
+
+    // -----------------------------------------------------------------------
+
+    /** Builds the immutable [AutomatonSpec] for this builder. */
+    fun toSpec(): AutomatonSpec {
+        val submachines = submachineBuilders.mapValues { (name, builder) -> builder.build(name) }
+        validateArities()
+        validateArgumentStates(submachines.values)
+        validateMain(submachines)
+        validateTransitions(submachines.values)
+        return AutomatonSpec(
+            states = states.toMap(),
+            submachines = submachines,
+            transitions = transitions,
+            actions = actions.toMap(),
+            main = main,
+        )
+    }
+
+    /** Records that an edge refers to [reference], for the arity contract. */
+    private fun recordReference(reference: ActionRef) {
+        val name = reference.name ?: return
+        actionReferences.getOrPut(name) { mutableListOf() }.add(reference.args.size)
+    }
+
+    /** Checks every reference against the arity declared by its action. */
+    private fun validateArities() {
+        actionArities.forEach { (name, expected) ->
+            actionReferences[name].orEmpty().forEach { actual ->
+                require(actual == expected) {
+                    "Action '$name' expects $expected argument(s), but a reference binds $actual."
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks that every state named as an action argument really belongs to
+     * the automaton: edge endpoints, submachine members or explicitly declared
+     * states. Typos would otherwise create a phantom state and silently
+     * miswire the action.
+     */
+    private fun validateArgumentStates(submachines: Collection<Submachine>) {
+        if (argumentStates.isEmpty()) {
+            return
+        }
+        val known = mutableSetOf<State>()
+        known.addAll(declaredStates)
+        transitions.forEach { edge ->
+            known.add(edge.source)
+            known.add(edge.target)
+        }
+        submachines.forEach { submachine -> known.addAll(submachine.states) }
+        argumentStates.forEach { (actionName, state) ->
+            require(state in known) {
+                "Action '$actionName' refers to state '$state', which is not part of the automaton. " +
+                    "Known states: ${known.joinToString(", ") { it.toString() }}. " +
+                    "Use actionRef(...) to pass a string payload."
+            }
+        }
+    }
+
+    /**
+     * Checks that a main submachine is declared and exists: recognition starts
+     * there, so a missing one is a modeling mistake, not a runtime detail.
+     */
+    private fun validateMain(submachines: Map<String, Submachine>) {
+        val mainName =
+            requireNotNull(main) {
+                "The automaton must declare a main submachine, for example main(\"M\")."
+            }
+        require(mainName in submachines) {
+            "Main submachine '$mainName' is not declared. " +
+                "Declared submachines: ${submachines.keys.joinToString(", ")}."
+        }
+    }
+
+    /**
+     * Checks the shape of every edge:
+     *
+     * - both endpoints belong to a submachine, otherwise the executor cannot
+     *   tell which submachine is running when the edge is taken;
+     * - a call names a declared submachine;
+     * - a call returns to a state owned by the calling submachine, otherwise
+     *   the return would switch the running submachine.
+     */
+    private fun validateTransitions(submachines: Collection<Submachine>) {
+        val names = submachines.map { it.name }.toSet()
+        transitions.forEach { edge ->
+            val sourceOwners = ownersOf(edge.source, submachines)
+            val targetOwners = ownersOf(edge.target, submachines)
+            require(sourceOwners.isNotEmpty()) { unownedStateMessage(edge.source) }
+            require(targetOwners.isNotEmpty()) { unownedStateMessage(edge.target) }
+            val call = edge.transition as? Transition.Call ?: return@forEach
+            require(call.submachine in names) {
+                "Call to undeclared submachine '${call.submachine}'. " +
+                    "Declared submachines: ${names.joinToString(", ")}."
+            }
+            require(targetOwners.any { it in sourceOwners }) {
+                "Call to submachine '${call.submachine}' returns to '${edge.target}', owned by " +
+                    "${targetOwners.joinToString(", ")} and not by the calling submachine " +
+                    "${sourceOwners.joinToString(", ")}. A call must return to a state of its caller."
+            }
+        }
+    }
+
+    /** Returns the names of the submachines owning [state]. */
+    private fun ownersOf(state: State, submachines: Collection<Submachine>): Set<String> =
+        submachines.filter { state in it.states }.map { it.name }.toSet()
+
+    /** Builds the error message for a state owned by no submachine. */
+    private fun unownedStateMessage(state: State): String =
+        "State '$state' is not part of any submachine. Declare it inside a submachine block, " +
+            "for example submachine(\"M\") { state(\"$state\") }."
+}
+
+/**
+ * Builder for a single [Submachine] within the automaton DSL.
+ *
+ * States referenced by name are shared with the parent builder, so submachines
+ * may call into states defined elsewhere.
+ *
+ * @param sharedStates the state map shared with the parent builder
+ */
+class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
+    private val initials = mutableListOf<State>()
+    private val accepting = mutableListOf<State>()
+    private val states = mutableListOf<State>()
+
+    /** Sets the initial state of the submachine. Accepts a [State] or a state name. */
+    fun initial(value: Any) {
+        val s = resolve(value)
+        initials.add(s)
+        states.add(s)
+    }
+
+    /**
+     * Adds one or more accepting states. Accepts a [State] or a state name.
+     *
+     * @throws IllegalArgumentException if no value is given
+     */
+    fun accepting(vararg values: Any) {
+        require(values.isNotEmpty()) { "A submachine must define at least one accepting state." }
+        values.forEach { value ->
+            val s = resolve(value)
+            accepting.add(s)
+            states.add(s)
+        }
+    }
+
+    /** Adds a plain (non-initial, non-accepting) state. Accepts a [State] or a state name. */
+    fun state(value: Any) {
+        states.add(resolve(value))
+    }
+
+    /** Resolves a [State] or a state name into the shared state table. */
+    private fun resolve(value: Any): State = when (value) {
+        is State -> {
+            value
+        }
+
+        is String -> {
+            sharedStates.getOrPut(value) {
+                object : State() {
+                    override fun toString(): String = value
+                }
+            }
+        }
+
+        else -> {
+            throw IllegalArgumentException("Cannot resolve '$value' to State")
+        }
+    }
+
+    /**
+     * Builds the [Submachine]. Requires exactly one initial state to have been set.
+     *
+     * @throws IllegalArgumentException if no initial state, or more than one, was configured.
+     */
+    fun build(name: String): Submachine {
+        require(initials.size == 1) {
+            if (initials.isEmpty()) {
+                "Submachine '$name' must define an initial state."
+            } else {
+                "Submachine '$name' defines more than one initial state."
+            }
+        }
+        val init = initials.single()
+        val allStates = states.toMutableSet()
+        allStates.add(init)
+        allStates.addAll(accepting)
+        return Submachine(
+            name = name,
+            states = allStates,
+            initialState = init,
+            acceptingStates = accepting.toSet(),
+        )
+    }
+}
+
+/**
+ * Creates an [AutomatonSpec] by configuring a fresh [AutomatonBuilder].
+ *
+ * Example:
+ * ```
+ * val spec = automaton {
+ *     submachine("M") {
+ *         initial("q0")
+ *         accepting("q1")
+ *     }
+ *     consume("q0", 'a', "q1")
+ *     main("M")
+ * }
+ * ```
+ */
+inline fun automaton(configure: AutomatonBuilder.() -> Unit): AutomatonSpec {
+    val b = AutomatonBuilder()
+    b.configure()
+    return b.toSpec()
+}
+
+/** Creates a [CharSymbol] for the given character. */
+fun sym(c: Char): CharSymbol = CharSymbol(c)
