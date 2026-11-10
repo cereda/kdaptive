@@ -21,16 +21,29 @@ class TransitionMapping {
     /** Lazy index of transitions grouped by source state; null when invalidated by a mutation. */
     private var bySource: Map<State, List<TransitionEdge>>? = null
 
+    /** Callback invoked after a transition edge is added to this mapping. */
+    var onEdgeAdded: ((TransitionEdge) -> Unit)? = null
+
+    /** Callback invoked after a transition edge is removed from this mapping. */
+    var onEdgeRemoved: ((TransitionEdge) -> Unit)? = null
+
     /** Returns (building if needed) the index of transitions grouped by source state. */
     private fun sourceIndex(): Map<State, List<TransitionEdge>> {
         bySource?.let { return it }
         return transitions.groupBy { it.source }.also { bySource = it }
     }
 
-    /** Adds a transition to the mapping. */
+    /**
+     * Adds a transition to the mapping.
+     *
+     * Adding a transition that is already present is a no-op: the
+     * [onEdgeAdded] callback only fires on an actual insertion, so observers
+     * never see a phantom mutation.
+     */
     fun add(t: TransitionEdge) {
-        transitions.add(t)
+        if (!transitions.add(t)) return
         bySource = null
+        onEdgeAdded?.invoke(t)
     }
 
     /** Returns all transitions in the mapping. */
@@ -139,8 +152,10 @@ class TransitionMapping {
 
     /** Removes the transition with the given identifier from the mapping. */
     fun removeFromIdentifier(id: Int) {
+        val removed = transitions.firstOrNull { it.id == id }
         transitions.removeIf { it.id == id }
         bySource = null
+        removed?.let { onEdgeRemoved?.invoke(it) }
     }
 
     /** Creates a copy of this mapping with copies of all transitions. */

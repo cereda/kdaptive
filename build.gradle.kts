@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "1.0.0"
+version = "1.1.0"
 
 tapmoc {
     java(11)
@@ -92,6 +92,11 @@ kover {
             excludes {
                 // Logging facade: exercised transitively by every other test run.
                 packages("br.usp.poli.lta.cereda.kdaptive.logging")
+                // Kotlin's jvm-default=all mode emits a synthetic `X$DefaultImpls` class
+                // holding binary-compatibility bridges. Nothing can call it, so it is
+                // unreachable by construction; the real default bodies live in the
+                // interface itself, which stays in the report.
+                classes("*\$DefaultImpls")
             }
         }
         verify {

@@ -519,7 +519,10 @@ fun main() {
 
 - **Adaptive actions**: `docs/ADAPTIVE-ACTIONS-GUIDE.md`. Queries, removals, insertions
   (`ElementaryActions`), argument passing, firing order and per-path isolation.
+- **Watching a run**: the "Observing recognition: the visitor pattern" section of
+  `README.md` (and §7.1 of the adaptive-actions guide) documents `ExecutionVisitor` and
+  the GraphViz DOT export built on top of it.
 - **Examples**: `examples/src/main/kotlin/br/usp/poli/lta/cereda/kdaptive/examples/`:
-  14 small programs covering regular → context-sensitive languages, lexing and DSL
-  usage; each has a corresponding test in `examples/src/test/`.
+  15 small programs covering regular → context-sensitive languages, lexing, DSL usage
+  and GraphViz export; each has a corresponding test in `examples/src/test/`.
 - **API docs**: `./gradlew dokkaGenerateHtml`, then open `build/dokka/html/index.html`.

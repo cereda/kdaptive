@@ -180,6 +180,9 @@ abstract class AdaptiveAutomaton {
     /** When true, recognition stops as soon as the first path finishes (whether accepted or rejected). */
     var stopAtFirstFinishedRecognitionPath: Boolean = false
 
+    /** Visitors observing recognition lifecycle and path execution events. */
+    var visitors: MutableList<ExecutionVisitor> = mutableListOf()
+
     /** Defines the initial configuration of the adaptive automaton. */
     abstract fun setup()
 
@@ -221,10 +224,16 @@ abstract class AdaptiveAutomaton {
         stack = this@AdaptiveAutomaton.stack.copy()
         mainSubmachine = this@AdaptiveAutomaton.mainSubmachine
         stopAtFirstFinishedRecognitionPath = this@AdaptiveAutomaton.stopAtFirstFinishedRecognitionPath
+        visitors = this@AdaptiveAutomaton.visitors.toMutableList()
     }
 
     private fun recognizeOnce(input: List<Symbol>): Boolean {
         setup()
+
+        // The lifecycle events fire on the clone, after setup() materialised its
+        // topology, so a visitor sees the automaton it is about to execute.
+        visitors.forEach { it.onRecognizeStart(this) }
+
         val mainSub = requireNotNull(mainSubmachine) { "Main submachine cannot be null." }
 
         threads.clear()
@@ -243,6 +252,7 @@ abstract class AdaptiveAutomaton {
                     enablePriorAction = true,
                     currentSubmachine = mainSub,
                     mainSubmachine = mainSub,
+                    visitors = visitors.toMutableList(),
                 ),
                 threads = threads,
                 paths = paths,
@@ -280,7 +290,9 @@ abstract class AdaptiveAutomaton {
             }
         }
 
-        return paths.values.any { it.done && it.result == true }
+        val result = paths.values.any { it.done && it.result == true }
+        visitors.forEach { it.onRecognizeEnd(result) }
+        return result
     }
 
     private fun atLeastOneRecognitionPathIsDone(): Boolean {

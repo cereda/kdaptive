@@ -21,17 +21,17 @@ Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 | Language | Kotlin 2.4 (language/api level 2.4.0) |
 | Bytecode | Java 11 (major version 55) |
 | Build | Gradle wrapper 9.8.2, Kotlin DSL build script |
-| Tests | `kotlin("test")` over JUnit 5 (259 tests: 151 library, 108 examples) |
+| Tests | `kotlin("test")` over JUnit 5 (295 tests: 182 library, 113 examples) |
 | Static analysis | detekt 1.23.8, **zero-tolerance** config |
 | Format / style | Spotless, ktlint rules, 120-col, SPDX license header |
 | Docs | Dokka HTML (`./gradlew dokkaGenerateHtml`, fail-on-warning) |
 | Coverage | Kover: line ≥ 95%, branch ≥ 78% enforced on `check` |
 | Logging | SLF4J API only (backend chosen by the consumer) |
 
-Coordinates: `br.usp.poli.lta.cereda:kdaptive:1.0.0`.
+Coordinates: `br.usp.poli.lta.cereda:kdaptive:1.1.0`.
 
 > **Remark**: the build currently **does not ship a publishing plugin**. The library jar
-> lands in `./build/libs/kdaptive-1.0.0.jar` after `./gradlew build`, and `:examples`
+> lands in `./build/libs/kdaptive-1.1.0.jar` after `./gradlew build`, and `:examples`
 > consumes `:kdaptive` (the root module) from the same multi-module build. To use the
 > library in another project, either include it (composite build / `includeBuild`) or
 > install the jar into a local repository of your choice.
@@ -166,6 +166,94 @@ and a catalogue of pitfalls and warnings.
 
 ---
 
+## Observing recognition: the visitor pattern
+
+An adaptive automaton is a program that rewrites itself while it runs, so "what actually
+happened?" is a fair question. The library answers it with `ExecutionVisitor`: an
+interface whose methods are **no-ops by default**. Implement the events you care about,
+ignore the rest.
+
+```kotlin
+import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
+
+val events = mutableListOf<String>()
+
+val visitor = object : ExecutionVisitor {
+    override fun onEdgeAdded(
+        pathId: Int,
+        edge: TransitionEdge,
+        transitions: TransitionMapping,
+        submachines: SubmachinesSet,
+    ) {
+        events.add("path $pathId added $edge")
+    }
+}
+
+ka.visitors.add(visitor)
+ka.recognize(convert("ab"))
+```
+
+### The event catalogue
+
+| Event | Fires when |
+|---|---|
+| `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
+| `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
+| `onPathStart(pathId, input)` | a path begins; forked children included |
+| `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
+| `onPathFork(pathId, childPathIds)` | a path forks: it reaches no verdict, its children carry on |
+| `onBeforeTraverse(pathId, edge)` / `onAfterTraverse(pathId, edge)` | around each edge traversal |
+| `onBeforeAction(pathId, actionRef, isPrior)` / `onAfterAction(pathId, actionRef, isPrior)` | around each adaptive action handler |
+| `onEdgeAdded(...)` / `onEdgeRemoved(...)` | after each insertion/deletion in the path's mapping, together with the full mapping and submachines |
+| `onCall(pathId, submachine)` / `onReturn(pathId)` | entering or leaving a submachine |
+
+Two rules are worth remembering:
+
+- **A path terminates exactly once**, either with `onPathEnd` (accept or reject) or with
+  `onPathFork` (the path was replaced by its children). A visitor that tracks open paths
+  must handle both.
+- **Callbacks are synchronous**, on the recognition thread: a slow visitor slows
+  recognition down. With no visitor registered the engine skips every callback, so the
+  feature costs nothing when unused.
+
+### Per-path isolation
+
+Forked paths own independent copies of the transition mapping, so a mutation on one path
+never shows up on a sibling. The `onEdgeAdded` / `onEdgeRemoved` events carry the
+`pathId` of the path that mutated, so the streams of different paths stay apart.
+
+### GraphViz export
+
+`br.usp.poli.lta.cereda.kdaptive.dot` ships a ready-made consumer of those events.
+`GraphVizVisitor` renders the topology as
+[GraphViz DOT](https://graphviz.org/doc/info/lang.html) text on every mutation, and
+`DotExporter` is the renderer behind it: one cluster per submachine, accepting states as
+`doublecircle`, edges labeled with the symbol (or ε / call / return) plus the prior and
+post actions.
+
+```kotlin
+import br.usp.poli.lta.cereda.kdaptive.dot.GraphVizVisitor
+
+val frames = mutableListOf<Pair<Int, String>>()
+ka.visitors.add(GraphVizVisitor { pathId, dot -> frames.add(pathId to dot) })
+ka.recognize(convert("ab"))
+// frames: one (pathId, DOT document) per topology mutation
+```
+
+The output is plain text: there is **no dependency on the `dot` binary** nor on any
+GraphViz library. Save a frame as `frame.dot` and render it with
+`dot -Tpng frame.dot -o frame.png`, or feed it to any GraphViz-compatible tool.
+`DotExporter.toDot(transitions, submachines)` is public too, so a topology can also be
+snapshotted on demand.
+
+A runnable example lives in `br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExample`:
+
+```bash
+./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExampleKt
+```
+
+---
+
 ## Model API tour
 
 | Type | Role |
@@ -180,6 +268,8 @@ and a catalogue of pitfalls and warnings.
 | `TransitionMapping` | The mutable set of edges; O(1) filtered lookups via `withSourceState` and friends. |
 | `RecognitionPath` | The trail of one recognizer path: transition `toString()`s, termination cursor/state, accepted/rejected result. |
 | `AdaptiveAutomaton` | The automaton itself, plus the recognition driver. |
+| `ExecutionVisitor` | The recognition-event interface: no-op defaults for every event, registered through `AdaptiveAutomaton.visitors`. |
+| `DotExporter` / `GraphVizVisitor` | GraphViz DOT rendering of a topology, and the visitor that emits a snapshot on every mutation. |
 
 ---
 
@@ -240,14 +330,16 @@ kdaptive/                    the library (root module)
   src/main/kotlin/br/usp/poli/lta/cereda/kdaptive/
     model/                   State, Symbol, CharSymbol, Transition, TransitionEdge,
                              Submachine, Action, Stack + predicates/ + sets/ + actions/
-    execution/               AdaptiveAutomaton (the public entry), PathExecutor, PathExecutorConfig
+    execution/               AdaptiveAutomaton (the public entry), PathExecutor, PathExecutorConfig,
+                             ExecutionVisitor (the recognition-event interface)
+    dot/                     DotExporter, GraphVizVisitor (GraphViz DOT export)
     dsl/                     AutomatonDsl.kt: automaton { } / specToAutomaton
     logging/                 SLF4J facade (`val <T> Any.logger`)
   src/test/kotlin/           mirrors main, with unit, error-path and coverage tests
-examples/                    :examples, 14 executable examples, depends on the root module
+examples/                    :examples, 15 executable examples, depends on the root module
 ```
 
-The **14 examples** double as the living documentation: each is small, prints its result,
+The **15 examples** double as the living documentation: each is small, prints its result,
 and has a test that keeps it honest:
 
 | Example | Language / behaviour |
@@ -266,6 +358,7 @@ and has a test that keeps it honest:
 | `ModuloExampleKt` | `{aⁿ \| n mod 3 = 0}` via a three-state ring counter |
 | `SubstringExampleKt` | `{ w \| w contains "ab" }` over `{a, b}` |
 | `DslShowcaseExampleKt` | dynamic edge insertion (`ElementaryActions.add`) |
+| `GraphVizExampleKt` | GraphViz DOT snapshots of the topology, taken on every mutation |
 
 Run any of them:
 

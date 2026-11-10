@@ -184,6 +184,11 @@ This is the single most important runtime-model fact:
 > handler closure is shared by every path running that action. Mutating such captured
 > state inside an action creates cross-path coupling you must reason about yourself.
 
+> **Hint**: the per-path copies are observable too. The `ExecutionVisitor` events
+> `onEdgeAdded` / `onEdgeRemoved` report the `pathId` of the path that mutated, so a
+> debugger can watch one path's topology evolve without confusing it with a sibling's.
+> See §7.1.
+
 ---
 
 ## 4. `ElementaryActions`, the complete API
@@ -416,6 +421,85 @@ actions.add(Action(name = "Lexer") { _, transition, _ ->
 - SLF4J debug logging in `PathExecutor` reports path starts, prior/post firings, forks
   and accept/reject: use your backend's level knobs, not printlns, inside the engine.
 
+### 7.1 Watching the automaton mutate: `ExecutionVisitor`
+
+When the printed dumps are not enough, register a visitor and let the engine report what
+it did. `ExecutionVisitor` (package `br.usp.poli.lta.cereda.kdaptive.execution`) declares
+every event with a **no-op default**, so you implement only what you need:
+
+```kotlin
+import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
+
+val trace = mutableListOf<String>()
+
+val visitor = object : ExecutionVisitor {
+    override fun onBeforeAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) {
+        trace.add("path $pathId is about to fire ${actionRef.name}")
+    }
+
+    override fun onEdgeAdded(
+        pathId: Int,
+        edge: TransitionEdge,
+        transitions: TransitionMapping,
+        submachines: SubmachinesSet,
+    ) {
+        trace.add("path $pathId gained $edge")
+    }
+}
+
+automaton.visitors.add(visitor)
+```
+
+The events, and when they fire:
+
+| Event | Fires when |
+|---|---|
+| `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
+| `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
+| `onPathStart(pathId, input)` | a path begins; forked children included |
+| `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
+| `onPathFork(pathId, childPathIds)` | a path forks: it reaches no verdict, its children carry on |
+| `onBeforeTraverse` / `onAfterTraverse` | around each edge traversal |
+| `onBeforeAction` / `onAfterAction` | around each action handler (`isPrior` tells prior from post) |
+| `onEdgeAdded` / `onEdgeRemoved` | after each insertion/deletion in the path's mapping, with the full mapping and submachines |
+| `onCall` / `onReturn` | entering or leaving a submachine |
+
+> **Pitfall**: a path terminates **exactly once**, either with `onPathEnd` (accept or
+> reject) or with `onPathFork` (the path was replaced by its children). A visitor that
+> keeps a set of open paths must close the path on both events, otherwise every forked
+> path leaks in the bookkeeping.
+
+> **Call-out**: the callbacks are **synchronous**, on the recognition thread. A slow
+> visitor slows recognition down. With no visitor registered the engine skips every
+> callback, so the feature is free when unused.
+
+### 7.2 GraphViz snapshots of the topology
+
+`br.usp.poli.lta.cereda.kdaptive.dot.GraphVizVisitor` is a ready-made visitor: it renders
+the topology as GraphViz DOT text on every mutation and hands the document to a sink.
+
+```kotlin
+import br.usp.poli.lta.cereda.kdaptive.dot.GraphVizVisitor
+
+val frames = mutableListOf<Pair<Int, String>>()
+automaton.visitors.add(GraphVizVisitor { pathId, dot -> frames.add(pathId to dot) })
+automaton.recognize(input)
+// frames: one (pathId, DOT document) per topology mutation
+```
+
+The output is plain text — **no `dot` binary and no GraphViz library required**. Save a
+frame as `frame.dot` and render it with `dot -Tpng frame.dot -o frame.png`, or feed it to
+any GraphViz-compatible tool. Each submachine becomes a cluster, accepting states are
+drawn as `doublecircle`, and edges are labeled with the symbol (or ε / call / return) plus
+the prior and post action references. `DotExporter.toDot(transitions, submachines)` is
+public too, so a topology can also be snapshotted on demand.
+
+Runnable example: `examples/GraphVizExampleKt`
+
+```bash
+./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExampleKt
+```
+
 ---
 
 ## 8. Catalogue of pitfalls and warnings
@@ -444,6 +528,8 @@ actions.add(Action(name = "Lexer") { _, transition, _ ->
     *semantic* state (buffers, counts that mean something) should be reset inside
     `setup()` itself or not captured at all, otherwise the second `recognize()` starts
     from the first one's leftovers.
+11. **Visitors run synchronously** (§7.1): a slow, blocking or throwing visitor slows
+    down — or breaks — the recognition it is observing.
 
 ---
 
@@ -451,6 +537,8 @@ actions.add(Action(name = "Lexer") { _, transition, _ ->
 
 - Read `examples/ContextSensitiveLanguageExampleKt` as the reference study of the trio
   (query/remove/add) used at full power; its companion test keeps it working.
+- Read `examples/GraphVizExampleKt` for the visitor pattern in action: it registers a
+  `GraphVizVisitor` and prints the topology after every mutation (§7.2).
 - The JUnit suites (`src/test/kotlin/.../model/ElementaryActionsOverloadsTest.kt`,
   `ModelSetsTest.kt`, `execution/ErrorPathTest.kt`) double as executable
   documentation of the matching rules in §4.3; when in doubt, verify against them.

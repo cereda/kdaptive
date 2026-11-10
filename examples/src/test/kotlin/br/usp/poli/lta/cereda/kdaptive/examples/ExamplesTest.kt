@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.examples
 
+import br.usp.poli.lta.cereda.kdaptive.dot.GraphVizVisitor
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -237,22 +238,22 @@ class ExamplesTest {
     }
 
     @Test
-    fun `arithmetic accepts 0*0`() {
+    fun `arithmetic accepts 0x0`() {
         assertTrue(ArithmeticExample().recognize("0*0"))
     }
 
     @Test
-    fun `arithmetic accepts 0*1`() {
+    fun `arithmetic accepts 0x1`() {
         assertTrue(ArithmeticExample().recognize("0*1"))
     }
 
     @Test
-    fun `arithmetic accepts 1*0`() {
+    fun `arithmetic accepts 1x0`() {
         assertTrue(ArithmeticExample().recognize("1*0"))
     }
 
     @Test
-    fun `arithmetic accepts 1*1`() {
+    fun `arithmetic accepts 1x1`() {
         assertTrue(ArithmeticExample().recognize("1*1"))
     }
 
@@ -262,7 +263,7 @@ class ExamplesTest {
     }
 
     @Test
-    fun `arithmetic rejects *1`() {
+    fun `arithmetic rejects x1`() {
         assertFalse(ArithmeticExample().recognize("*1"))
     }
 
@@ -598,5 +599,41 @@ class ExamplesTest {
     @Test
     fun `substring example rejects empty string`() {
         assertFalse(SubstringExample().recognize(""))
+    }
+
+    // -----------------------------------------------------------------------
+    // GraphVizExample: ab, with a GraphViz snapshot of every mutation
+    // -----------------------------------------------------------------------
+    @Test
+    fun `graphviz example accepts ab`() {
+        assertTrue(GraphVizExample().recognize("ab"))
+    }
+
+    @Test
+    fun `graphviz example accepts aba`() {
+        assertTrue(GraphVizExample().recognize("aba"))
+    }
+
+    @Test
+    fun `graphviz example rejects a`() {
+        assertFalse(GraphVizExample().recognize("a"))
+    }
+
+    @Test
+    fun `graphviz example rejects empty string`() {
+        assertFalse(GraphVizExample().recognize(""))
+    }
+
+    @Test
+    fun `graphviz example emits a DOT snapshot per topology mutation`() {
+        val frames = mutableListOf<Pair<Int, String>>()
+        val example = GraphVizExample()
+        example.visitors.add(GraphVizVisitor { pathId, dot -> frames.add(pathId to dot) })
+
+        assertTrue(example.recognize("ab"))
+
+        assertFalse(frames.isEmpty())
+        assertTrue(frames.all { frame -> frame.second.startsWith("digraph Automaton {") })
+        assertTrue(frames.any { frame -> frame.second.contains("subgraph cluster_M") })
     }
 }

@@ -52,6 +52,8 @@ data class PathExecutorConfig(
     var enablePriorAction: Boolean = true,
     var currentSubmachine: String? = null,
     var mainSubmachine: String? = null,
+    /** Visitors observing this path's execution events. */
+    var visitors: MutableList<ExecutionVisitor> = mutableListOf(),
 )
 
 /**
@@ -125,6 +127,17 @@ class PathExecutor(
     fun run() {
         logger.debug("Path $id started run()")
 
+        // Wire topology mutation callbacks so visitors observe every edge
+        // add/remove on this path's transition mapping.
+        config.transitions.onEdgeAdded = { edge ->
+            config.visitors.forEach { it.onEdgeAdded(id, edge, config.transitions, config.submachines) }
+        }
+        config.transitions.onEdgeRemoved = { edge ->
+            config.visitors.forEach { it.onEdgeRemoved(id, edge, config.transitions, config.submachines) }
+        }
+
+        config.visitors.forEach { it.onPathStart(id, config.input) }
+
         var tr = config.transition ?: return
 
         while (true) {
@@ -139,6 +152,8 @@ class PathExecutor(
     /** Processes one computational step. Returns PathStep.Stop if the path
      * terminated, or PathStep.Continue with the next transition. */
     private fun processStep(tr: TransitionEdge): PathStep {
+        config.visitors.forEach { it.onBeforeTraverse(id, tr) }
+
         // Apply prior action if present and enabled
         val afterPrior = applyPriorAction(tr)
         val current =
@@ -150,6 +165,8 @@ class PathExecutor(
         applyTransition(current)
         executePostAction(current)
         config.enablePriorAction = true
+
+        config.visitors.forEach { it.onAfterTraverse(id, current) }
 
         val query = applicableTransitions(config.currentState, config.cursor)
 
@@ -174,13 +191,17 @@ class PathExecutor(
     private fun applyPriorAction(tr: TransitionEdge): PathStep {
         if (tr.prior == null || !config.enablePriorAction) return PathStep.Continue(tr)
 
-        logger.debug("[Path $id] Executing prior action ${tr.prior.name} on transition ${tr.id}.")
-        val name = tr.prior.name
+        val ref = tr.prior
+        config.visitors.forEach { it.onBeforeAction(id, ref, isPrior = true) }
+
+        logger.debug("[Path $id] Executing prior action ${ref.name} on transition ${tr.id}.")
+        val name = ref.name
             ?: error(
                 "Prior action on transition ${tr.id} has no name; an action reference must name a registered action.",
             )
-        actions.fromName(name).handler(transitions, tr.transition, tr.prior.args)
+        actions.fromName(name).handler(transitions, tr.transition, ref.args)
         config.enablePriorAction = false
+        config.visitors.forEach { it.onAfterAction(id, ref, isPrior = true) }
 
         return if (transitions.hasIdentifier(tr.id)) PathStep.Continue(tr) else handleNoTransition()
     }
@@ -197,6 +218,7 @@ class PathExecutor(
                 stack.push(tr.target)
                 config.currentSubmachine = tr.transition.submachine
                 config.currentState = submachines.getFromName(tr.transition.submachine).initialState
+                config.visitors.forEach { it.onCall(id, tr.transition.submachine) }
             }
 
             is Transition.Epsilon -> {
@@ -207,6 +229,7 @@ class PathExecutor(
                 val returned = stack.pop()
                 config.currentState = returned
                 config.currentSubmachine = submachines.getFromState(returned).name
+                config.visitors.forEach { it.onReturn(id) }
             }
         }
         config.transition = tr
@@ -215,12 +238,15 @@ class PathExecutor(
     /** Executes the post action after the transition has been applied. */
     private fun executePostAction(tr: TransitionEdge) {
         val ref = tr.post ?: return
+        config.visitors.forEach { it.onBeforeAction(id, ref, isPrior = false) }
+
         val name = ref.name
             ?: error(
                 "Post action on transition ${tr.id} has no name; an action reference must name a registered action.",
             )
         logger.debug("[Path $id] Executing post action $name on transition ${tr.id}.")
         actions.fromName(name).handler(transitions, tr.transition, ref.args)
+        config.visitors.forEach { it.onAfterAction(id, ref, isPrior = false) }
     }
 
     /**
@@ -233,11 +259,13 @@ class PathExecutor(
         return when (result) {
             PathResult.Accept -> {
                 accept(config.currentState, config.cursor)
+                config.visitors.forEach { it.onPathEnd(id, accepted = true, cursor = config.cursor) }
                 PathStep.Stop
             }
 
             PathResult.Reject -> {
                 reject(config.currentState, config.cursor)
+                config.visitors.forEach { it.onPathEnd(id, accepted = false, cursor = config.cursor) }
                 PathStep.Stop
             }
 
@@ -300,18 +328,26 @@ class PathExecutor(
     }
 
     private fun forkAll(query: List<TransitionEdge>) {
-        for (alt in query) {
-            fork(alt, config.currentState, config.cursor, config.currentSubmachine, config.enablePriorAction)
-        }
+        val childIds =
+            query.map { alt ->
+                fork(alt, config.currentState, config.cursor, config.currentSubmachine, config.enablePriorAction)
+            }
+        config.visitors.forEach { it.onPathFork(id, childIds) }
     }
 
+    /**
+     * Creates a child path for [transition], inheriting this path's stack,
+     * actions, topology and visitor chain.
+     *
+     * @return the identifier of the newly created child path
+     */
     private fun fork(
         transition: TransitionEdge,
         curState: State?,
         curCursor: Int,
         curSubmachine: String?,
         enablePrior: Boolean,
-    ) {
+    ): Int {
         val k =
             PathExecutor(
                 config =
@@ -327,6 +363,7 @@ class PathExecutor(
                     enablePriorAction = enablePrior,
                     currentSubmachine = curSubmachine,
                     mainSubmachine = mainSubmachine,
+                    visitors = config.visitors.toMutableList(),
                 ),
                 threads = threads,
                 paths = paths,
@@ -334,6 +371,7 @@ class PathExecutor(
         paths[k.id] = paths[id]?.addStep(transition.toString()) ?: RecognitionPath().addStep(transition.toString())
         threads.add(k)
         logger.debug("[Path $id] Forked path ${k.id} for transition ${transition.id}.")
+        return k.id
     }
 
     private fun accept(state: State?, cursor: Int) {

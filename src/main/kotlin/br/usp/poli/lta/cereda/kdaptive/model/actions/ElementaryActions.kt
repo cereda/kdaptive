@@ -18,8 +18,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
-import kotlin.contracts.ExperimentalContracts
-import kotlin.contracts.contract
 
 /**
  * A reference to an action with optional arguments.
@@ -74,14 +72,9 @@ inline fun <reified S : Symbol> Any?.asSymbol(): S = castOrThrow<S>()
 /**
  * Throws [IllegalArgumentException] if [value] is null.
  *
- * Useful as a contract-enabled precondition check: after a successful call,
- * the compiler knows the value is non-null via smart cast.
+ * Useful as a precondition check.
  */
-@OptIn(ExperimentalContracts::class)
-inline fun <T : Any> requireNonNull(value: T?): T {
-    contract { returns() implies (value != null) }
-    return value ?: throw IllegalArgumentException("Value must not be null")
-}
+fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentException("Value must not be null")
 
 /**
  * Elementary actions: query, insert and removal of transitions according to a
