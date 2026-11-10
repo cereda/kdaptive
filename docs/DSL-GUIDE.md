@@ -181,6 +181,7 @@ What the handler gets:
 | `state(name)` | a **read-only** lookup of a state of the automaton by name; an unknown name is an error, never a new state |
 | `freshState(prefix = "g")` | a new state named `prefix` plus a number, unique within the run, restarting at zero for every recognition and skipping names the automaton already uses |
 | `ref(name, args...)` | an `ActionRef` built at runtime, for arguments only known while running |
+| `observe(fact)` | publishes a fact about this action to the consumer observing the run |
 | `transition` (parameter) | the edge that triggered the action |
 | `args` (parameter) | the argument list bound in the `ActionRef` that fired |
 
@@ -252,6 +253,25 @@ runtime by a handler are outside it.
 > automaton instance, so each recognition run starts from zero, two automata
 > built from the same spec never share names, and a generated name never collides
 > with a state the specification already declares.
+
+#### Publishing facts from a handler
+
+`observe(fact)` publishes something only the action knows — the projection of a query
+result, a domain size, a counter — to whoever is observing the run. The fact travels
+through the instrumentation facility to the consumer, which decides what it is worth;
+the library never interprets it.
+
+```kotlin
+data class DomainSize(val count: Int) : Observation
+
+action("Reshape") { _, _ ->
+    val matched = ea.query(state("q0"), CharSymbol('b'), null)
+    observe(DomainSize(matched.map { it.source }.distinct().size))
+}
+```
+
+`Observation` is an open marker interface, so the fact type is yours to define. See
+§7.3 of the [adaptive actions guide](ADAPTIVE-ACTIONS-GUIDE.md) for the whole facility.
 
 ### Fluent step chain (optional)
 

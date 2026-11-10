@@ -136,6 +136,19 @@ class PathExecutor(
             config.visitors.forEach { it.onEdgeRemoved(id, edge, config.transitions, config.submachines) }
         }
 
+        // Wire the operation channel, so visitors observe the elementary
+        // operations performed on this path's mapping, including the reads
+        // that change nothing and would otherwise be invisible.
+        config.transitions.onOperation = { operation ->
+            config.visitors.forEach { it.onMappingOperation(id, operation) }
+        }
+
+        // Wire the fact channel, so visitors observe what action code
+        // publishes about this path.
+        config.transitions.onObservation = { observation ->
+            config.visitors.forEach { it.onObservation(id, observation) }
+        }
+
         config.visitors.forEach { it.onPathStart(id, config.input) }
 
         var tr = config.transition ?: return
@@ -328,18 +341,18 @@ class PathExecutor(
     }
 
     private fun forkAll(query: List<TransitionEdge>) {
-        val childIds =
+        val children =
             query.map { alt ->
                 fork(alt, config.currentState, config.cursor, config.currentSubmachine, config.enablePriorAction)
             }
-        config.visitors.forEach { it.onPathFork(id, childIds) }
+        config.visitors.forEach { it.onPathFork(id, children) }
     }
 
     /**
      * Creates a child path for [transition], inheriting this path's stack,
      * actions, topology and visitor chain.
      *
-     * @return the identifier of the newly created child path
+     * @return the child path, carrying the edge it was created for
      */
     private fun fork(
         transition: TransitionEdge,
@@ -347,7 +360,7 @@ class PathExecutor(
         curCursor: Int,
         curSubmachine: String?,
         enablePrior: Boolean,
-    ): Int {
+    ): ForkedPath {
         val k =
             PathExecutor(
                 config =
@@ -371,7 +384,7 @@ class PathExecutor(
         paths[k.id] = paths[id]?.addStep(transition.toString()) ?: RecognitionPath().addStep(transition.toString())
         threads.add(k)
         logger.debug("[Path $id] Forked path ${k.id} for transition ${transition.id}.")
-        return k.id
+        return ForkedPath(k.id, transition)
     }
 
     private fun accept(state: State?, cursor: Int) {

@@ -201,7 +201,7 @@ ka.recognize(convert("ab"))
 | `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
 | `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
-| `onPathFork(pathId, childPathIds)` | a path forks: it reaches no verdict, its children carry on |
+| `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse(pathId, edge)` / `onAfterTraverse(pathId, edge)` | around each edge traversal |
 | `onBeforeAction(pathId, actionRef, isPrior)` / `onAfterAction(pathId, actionRef, isPrior)` | around each adaptive action handler |
 | `onEdgeAdded(...)` / `onEdgeRemoved(...)` | after each insertion/deletion in the path's mapping, together with the full mapping and submachines |
@@ -251,6 +251,103 @@ A runnable example lives in `br.usp.poli.lta.cereda.kdaptive.examples.GraphVizEx
 ```bash
 ./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExampleKt
 ```
+
+---
+
+## Instrumentation: measuring what you want
+
+The visitor pattern observes **what happened**. The instrumentation facility goes one step
+further and exposes **what the elementary actions did to the topology** — including the
+reads, which change nothing and would otherwise be invisible.
+
+The design rule is one sentence: **the library reports facts; the consumer decides what
+they are worth.** There is no cost model in the engine, no `TimeAnalysis`, no metric to
+configure. A consumer that wants a different metric writes a different visitor.
+
+### Three channels, three questions
+
+| Channel | Question | Events |
+|---|---|---|
+| **Topology** | *What changed in the mapping?* | `onEdgeAdded` / `onEdgeRemoved`, once per edge that entered or left |
+| **Operation** | *What did the elementary actions do?* | `onMappingOperation`, once per elementary operation |
+| **Fact** | *What did the action itself compute?* | `onObservation`, once per fact published by action code |
+
+The topology and operation channels answer different questions, and the counts differ:
+a removal of three edges produces **one** `MappingOperation.Remove` and **three**
+`onEdgeRemoved` events. Count removals on the operation channel and edges removed on the
+topology channel — but do not sum them.
+
+### Operations
+
+`MappingOperation` is a sealed, symmetric hierarchy of the three things an elementary
+action can do to the mapping:
+
+```kotlin
+sealed interface MappingOperation {
+    val edges: List<TransitionEdge>
+    val mappingSizeBefore: Int
+    val mappingSizeAfter: Int
+
+    data class Query(val pattern: TransitionPattern, /* ... */) : MappingOperation
+    data class Remove(val pattern: TransitionPattern, /* ... */) : MappingOperation
+    data class Add(val pattern: TransitionPattern, val edge: TransitionEdge, /* ... */) : MappingOperation
+}
+```
+
+- a **`Query`** carries the pattern that was matched and the edges it selected — the only
+  way to observe a read;
+- a **`Remove`** carries the pattern, the edges it took out, and the mapping size before
+  and after. A removal that matched **nothing** is still reported: it scanned the mapping
+  even though it changed nothing, and a metric that cannot see it is blind to exactly the
+  case it exists to catch;
+- an **`Add`** carries the edge it inserted and the mapping size before and after.
+
+The `pattern` says what was *asked for*, not what was found. Its nullable filters are
+documented per family: `TransitionPatternKind.SYMBOL` and `TransitionPatternKind.SUBMACHINE`
+disagree on what a null submachine filter means, which is why the kind is part of the
+pattern.
+
+### Facts published by an action
+
+The engine cannot see inside an action. When an action computes something only it knows —
+the projection of a query result, say — it publishes a fact, and the consumer decides
+whether it is worth anything:
+
+```kotlin
+data class DomainSize(val count: Int) : Observation
+
+action("Reshape") { _, _ ->
+    val matched = ea.query(q0, sym('b'), null)
+    observe(DomainSize(matched.map { it.source }.distinct().size))
+    ea.remove(k, sym('a'), null)
+    ea.add(k, sym('a'), k)
+}
+```
+
+`Observation` is an open marker interface, so a consumer defines its own fact types; the
+library never has to learn about them. The imperative API reaches the same channel through
+`transitions.observe(fact)`.
+
+### A consumer, end to end
+
+Nothing here is known to the engine. `br.usp.poli.lta.cereda.kdaptive.examples.CostVisitor`
+prices the work — a query and a removal scan the mapping, an addition inserts one edge:
+
+```kotlin
+val visitor = CostVisitor()
+ka.visitors.add(visitor)
+ka.recognize(convert("aab"))
+
+println(visitor.cost)        // the metric
+println(visitor.costPerPath())
+println(visitor.report())
+```
+
+```bash
+./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.CostExampleKt
+```
+
+Changing that cost model means changing `CostVisitor` and nothing else.
 
 ---
 
@@ -329,17 +426,18 @@ by design (fail fast instead of returning "no paths yet").
 kdaptive/                    the library (root module)
   src/main/kotlin/br/usp/poli/lta/cereda/kdaptive/
     model/                   State, Symbol, CharSymbol, Transition, TransitionEdge,
-                             Submachine, Action, Stack + predicates/ + sets/ + actions/
+                             Submachine, Action, Stack + Observation, MappingOperation,
+                             TransitionPattern + predicates/ + sets/ + actions/
     execution/               AdaptiveAutomaton (the public entry), PathExecutor, PathExecutorConfig,
-                             ExecutionVisitor (the recognition-event interface)
+                             ExecutionVisitor (the recognition-event interface), ForkedPath
     dot/                     DotExporter, GraphVizVisitor (GraphViz DOT export)
     dsl/                     AutomatonDsl.kt: automaton { } / specToAutomaton
     logging/                 SLF4J facade (`val <T> Any.logger`)
   src/test/kotlin/           mirrors main, with unit, error-path and coverage tests
-examples/                    :examples, 15 executable examples, depends on the root module
+examples/                    :examples, 16 executable examples, depends on the root module
 ```
 
-The **15 examples** double as the living documentation: each is small, prints its result,
+The **16 examples** double as the living documentation: each is small, prints its result,
 and has a test that keeps it honest:
 
 | Example | Language / behaviour |
@@ -359,6 +457,7 @@ and has a test that keeps it honest:
 | `SubstringExampleKt` | `{ w \| w contains "ab" }` over `{a, b}` |
 | `DslShowcaseExampleKt` | dynamic edge insertion (`ElementaryActions.add`) |
 | `GraphVizExampleKt` | GraphViz DOT snapshots of the topology, taken on every mutation |
+| `CostExampleKt` | a cost model computed by a consumer, with no change to the library |
 
 Run any of them:
 
@@ -408,6 +507,18 @@ All commands assume the Gradle wrapper:
 - No Android-specific code; it should run on the JVM and in Android modules that ship
   Java 11+ or desugared Kotlin stdlib.
 - Choose any SLF4J backend you like (`slf4j-simple` is prewired for tests/examples).
+
+### Changes in 1.2.0
+
+- **`ExecutionVisitor.onPathFork` changed signature**, from
+  `onPathFork(pathId: Int, childPathIds: List<Int>)` to
+  `onPathFork(pathId: Int, children: List<ForkedPath>)`. Each child now carries the
+  transition edge it was created for, so a consumer no longer has to infer it from the
+  child's first traversal. Implementations of `ExecutionVisitor` written against 1.1.0
+  need this one method updated.
+- New: `MappingOperation`, `Observation`, `TransitionPattern`, `ForkedPath`, the
+  `onMappingOperation` and `onObservation` visitor events, and the `observe()` helpers on
+  `TransitionMapping`, `ElementaryActions` and the DSL action context. All additive.
 
 ## License
 

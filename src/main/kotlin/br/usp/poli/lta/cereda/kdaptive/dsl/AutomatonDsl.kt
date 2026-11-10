@@ -5,6 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
@@ -63,6 +64,21 @@ class DslActionContext internal constructor(
      * through unchanged (they are values known only during execution).
      */
     fun ref(name: String, vararg args: Any): ActionRef = ActionRef(name = name, args = args.toList())
+
+    /**
+     * Publishes a fact about this action to the observation sink of the
+     * mapping currently being executed.
+     *
+     * The engine reports what it does on its own channel; this is how an
+     * action reports what it computed and what the engine cannot observe on
+     * its own. The library never interprets the fact: consumers decide what
+     * it means.
+     *
+     * @param observation the fact to publish
+     */
+    fun observe(observation: Observation) {
+        ea.observe(observation)
+    }
 }
 
 /**

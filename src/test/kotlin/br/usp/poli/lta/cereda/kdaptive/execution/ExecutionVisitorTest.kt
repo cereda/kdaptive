@@ -304,8 +304,8 @@ class ExecutionVisitorTest {
     fun `visitor receives fork events with the child path identifiers`() {
         val forks = mutableListOf<Pair<Int, List<Int>>>()
         val visitor = object : ExecutionVisitor {
-            override fun onPathFork(pathId: Int, childPathIds: List<Int>) {
-                forks.add(pathId to childPathIds)
+            override fun onPathFork(pathId: Int, children: List<ForkedPath>) {
+                forks.add(pathId to children.map { it.pathId })
             }
         }
 
@@ -320,6 +320,47 @@ class ExecutionVisitorTest {
         assertEquals(childIds.distinct().size, childIds.size)
         assertTrue(parentId != childIds.first())
         assertTrue(parentId != childIds.last())
+    }
+
+    @Test
+    fun `fork events carry the edge each child was created for`() {
+        val forks = mutableListOf<Pair<Int, List<ForkedPath>>>()
+        val visitor = object : ExecutionVisitor {
+            override fun onPathFork(pathId: Int, children: List<ForkedPath>) {
+                forks.add(pathId to children)
+            }
+        }
+
+        val a = specToAutomaton(forkSpec())
+        a.visitors.add(visitor)
+
+        assertTrue(a.recognize(listOf(CharSymbol('a'))))
+
+        val (parentId, children) = forks.first()
+        assertEquals(2, children.size)
+
+        // Each child carries the alternative it was created for, and the
+        // alternatives are distinct from one another.
+        val edges = children.map { it.edge }
+        assertEquals(edges.distinct().size, edges.size)
+
+        // The edge of a child is the first edge that child traverses.
+        val traversed = mutableMapOf<Int, TransitionEdge>()
+        val tracer = object : ExecutionVisitor {
+            override fun onBeforeTraverse(pathId: Int, edge: TransitionEdge) {
+                traversed.putIfAbsent(pathId, edge)
+            }
+        }
+        val b = specToAutomaton(forkSpec())
+        b.visitors.add(visitor)
+        b.visitors.add(tracer)
+        assertTrue(b.recognize(listOf(CharSymbol('a'))))
+
+        val second = forks.last()
+        second.second.forEach { child ->
+            assertEquals(child.edge, traversed[child.pathId])
+        }
+        assertTrue(parentId != second.first)
     }
 
     @Test

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model.sets
 
+import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
+import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
@@ -26,6 +28,25 @@ class TransitionMapping {
 
     /** Callback invoked after a transition edge is removed from this mapping. */
     var onEdgeRemoved: ((TransitionEdge) -> Unit)? = null
+
+    /** Callback invoked after an elementary operation is performed on this mapping. */
+    var onOperation: ((MappingOperation) -> Unit)? = null
+
+    /** Callback invoked when instrumentation-aware code publishes a fact about this mapping. */
+    var onObservation: ((Observation) -> Unit)? = null
+
+    /**
+     * Publishes a fact to the [onObservation] callback, if one is registered.
+     *
+     * This is the channel through which action code reports what it computed
+     * and what the engine cannot observe on its own. Publishing a fact never
+     * changes the mapping.
+     *
+     * @param observation the fact to publish
+     */
+    fun observe(observation: Observation) {
+        onObservation?.invoke(observation)
+    }
 
     /** Returns (building if needed) the index of transitions grouped by source state. */
     private fun sourceIndex(): Map<State, List<TransitionEdge>> {

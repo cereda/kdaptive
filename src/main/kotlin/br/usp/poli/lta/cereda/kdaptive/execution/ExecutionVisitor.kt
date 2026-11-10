@@ -2,6 +2,8 @@
 package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
+import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
@@ -57,10 +59,11 @@ interface ExecutionVisitor {
      * tracks open paths must handle both terminations.
      *
      * @param pathId the identifier of the forking (parent) path
-     * @param childPathIds the identifiers of the paths created by the fork, in
-     *   the order the alternatives were considered
+     * @param children the paths created by the fork, in the order the
+     *   alternatives were considered, each carrying the transition edge it
+     *   was created for
      */
-    fun onPathFork(pathId: Int, childPathIds: List<Int>) = Unit
+    fun onPathFork(pathId: Int, children: List<ForkedPath>) = Unit
 
     // -----------------------------------------------------------------------
     // Traversal
@@ -107,6 +110,42 @@ interface ExecutionVisitor {
      */
     fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, transitions: TransitionMapping, submachines: SubmachinesSet) =
         Unit
+
+    // -----------------------------------------------------------------------
+    // Operations over the transition mapping
+    // -----------------------------------------------------------------------
+
+    /**
+     * Called after an elementary action performs an operation on this path's
+     * transition mapping.
+     *
+     * The operation channel is distinct from the topology channel above: the
+     * topology events report what changed, once per edge, while this event
+     * reports what was attempted, once per elementary operation. A removal of
+     * three edges therefore produces one operation event and three topology
+     * events; count removals here and edges removed there, but do not sum
+     * them.
+     *
+     * @param operation the operation that was performed
+     */
+    fun onMappingOperation(pathId: Int, operation: MappingOperation) = Unit
+
+    // -----------------------------------------------------------------------
+    // Published facts
+    // -----------------------------------------------------------------------
+
+    /**
+     * Called when instrumentation-aware code publishes a fact about the
+     * execution.
+     *
+     * The engine reports what it does on the operation channel above; this
+     * channel carries the facts that only action code can produce, such as
+     * the size of a domain the action computed. The library never interprets
+     * an observation: the consumer decides what it means.
+     *
+     * @param observation the fact that was published
+     */
+    fun onObservation(pathId: Int, observation: Observation) = Unit
 
     // -----------------------------------------------------------------------
     // Submachine discipline

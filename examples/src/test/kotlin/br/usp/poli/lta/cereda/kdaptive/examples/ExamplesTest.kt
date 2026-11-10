@@ -636,4 +636,87 @@ class ExamplesTest {
         assertTrue(frames.all { frame -> frame.second.startsWith("digraph Automaton {") })
         assertTrue(frames.any { frame -> frame.second.contains("subgraph cluster_M") })
     }
+
+    // -----------------------------------------------------------------------
+    // CostExample: a* b, priced by a consumer of the instrumentation facility
+    // -----------------------------------------------------------------------
+    @Test
+    fun `cost example accepts b`() {
+        assertTrue(CostExample().recognize("b"))
+    }
+
+    @Test
+    fun `cost example accepts ab`() {
+        assertTrue(CostExample().recognize("ab"))
+    }
+
+    @Test
+    fun `cost example accepts aab`() {
+        assertTrue(CostExample().recognize("aab"))
+    }
+
+    @Test
+    fun `cost example rejects aabb`() {
+        assertFalse(CostExample().recognize("aabb"))
+    }
+
+    @Test
+    fun `cost example rejects empty string`() {
+        assertFalse(CostExample().recognize(""))
+    }
+
+    @Test
+    fun `cost visitor counts the operations performed by the adaptive action`() {
+        val visitor = CostVisitor()
+        val example = CostExample()
+        example.visitors.add(visitor)
+
+        assertTrue(example.recognize("ab"))
+
+        // One 'a' consumed: one query, one removal, one addition, one fact.
+        assertEquals(1, visitor.queries)
+        assertEquals(1, visitor.removals)
+        assertEquals(1, visitor.additions)
+        assertEquals(1, visitor.facts)
+
+        // The removal matched nothing, so it took no edge out of the mapping.
+        assertEquals(0, visitor.edgesRemoved)
+        assertEquals(1, visitor.edgesAdded)
+    }
+
+    @Test
+    fun `cost visitor prices the work of a longer recognition`() {
+        val visitor = CostVisitor()
+        val example = CostExample()
+        example.visitors.add(visitor)
+
+        assertTrue(example.recognize("aab"))
+
+        // Two 'a's consumed: two of each operation, and the second removal
+        // retires the marker edge installed by the first.
+        assertEquals(2, visitor.queries)
+        assertEquals(2, visitor.removals)
+        assertEquals(2, visitor.additions)
+        assertEquals(2, visitor.facts)
+        assertEquals(1, visitor.edgesRemoved)
+        assertEquals(2, visitor.edgesAdded)
+
+        // The cost grows with the input: each firing scans a larger mapping.
+        assertTrue(visitor.cost > 0.0)
+        assertEquals(1, visitor.costPerPath().size)
+    }
+
+    @Test
+    fun `cost visitor keeps the paths apart`() {
+        val visitor = CostVisitor()
+        val example = CostExample()
+        example.visitors.add(visitor)
+
+        example.recognize("ab")
+        example.recognize("aab")
+
+        // Two recognitions, two paths.
+        assertEquals(2, visitor.costPerPath().size)
+        assertEquals(2, visitor.paths)
+    }
 }

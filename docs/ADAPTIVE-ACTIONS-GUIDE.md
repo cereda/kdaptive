@@ -458,7 +458,7 @@ The events, and when they fire:
 | `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
 | `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
-| `onPathFork(pathId, childPathIds)` | a path forks: it reaches no verdict, its children carry on |
+| `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse` / `onAfterTraverse` | around each edge traversal |
 | `onBeforeAction` / `onAfterAction` | around each action handler (`isPrior` tells prior from post) |
 | `onEdgeAdded` / `onEdgeRemoved` | after each insertion/deletion in the path's mapping, with the full mapping and submachines |
@@ -500,6 +500,94 @@ Runnable example: `examples/GraphVizExampleKt`
 ./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExampleKt
 ```
 
+### 7.3 Measuring the work: the instrumentation facility
+
+§7.1 shows how to watch the automaton mutate. The instrumentation facility goes one step
+further and exposes **what the elementary actions did to the topology** — including the
+reads, which change nothing and would otherwise be invisible.
+
+The rule: **the library reports facts; the consumer decides what they are worth.** There
+is no cost model in the engine, no metric to configure, and nothing to fork the source
+tree for. A consumer that wants a different metric writes a different visitor.
+
+#### Three channels, three questions
+
+| Channel | Question | Event |
+|---|---|---|
+| **Topology** | *What changed in the mapping?* | `onEdgeAdded` / `onEdgeRemoved` — once per edge |
+| **Operation** | *What did the elementary actions do?* | `onMappingOperation` — once per elementary operation |
+| **Fact** | *What did the action itself compute?* | `onObservation` — once per fact published by action code |
+
+The topology and operation channels answer different questions, and their counts differ:
+a removal of three edges produces **one** `MappingOperation.Remove` and **three**
+`onEdgeRemoved` events. Count removals on the operation channel and edges removed on the
+topology channel — but do not sum them.
+
+#### Operations
+
+`MappingOperation` is a sealed, symmetric hierarchy of the three things an elementary
+action can do to the mapping:
+
+| Operation | Carries | Why it matters |
+|---|---|---|
+| `Query` | the pattern, the edges it selected, the mapping size | the only way to observe a **read** |
+| `Remove` | the pattern, the edges it took out, the sizes before and after | shows a removal that **matched nothing** |
+| `Add` | the pattern, the edge inserted, the sizes before and after | shows the cost of an insertion |
+
+A removal that matched nothing is still reported: it scanned the whole mapping even
+though it changed nothing. A metric that cannot see it is blind to exactly the case it
+exists to catch.
+
+The `pattern` describes what was **asked for**, not what was found. Its nullable filters
+are read per family, and the family is part of the pattern because the two disagree:
+`TransitionPatternKind.SYMBOL` and `TransitionPatternKind.SUBMACHINE` treat a null
+submachine filter differently.
+
+#### Facts published by an action
+
+The engine cannot see inside an action. When an action computes something only it knows —
+the projection of a query result, say — it publishes a fact, and the consumer decides
+whether it is worth anything:
+
+```kotlin
+data class DomainSize(val count: Int) : Observation
+
+action("Reshape") { _, _ ->
+    val matched = ea.query(q0, sym('b'), null)
+    observe(DomainSize(matched.map { it.source }.distinct().size))
+    ea.remove(k, sym('a'), null)
+    ea.add(k, sym('a'), k)
+}
+```
+
+`Observation` is an **open** marker interface, so a consumer defines its own fact types
+and the library never has to learn about them. The imperative API reaches the same
+channel through `transitions.observe(fact)`.
+
+#### A consumer, end to end
+
+`br.usp.poli.lta.cereda.kdaptive.examples.CostVisitor` is a complete example of a
+consumer: it prices a query and a removal as a scan of the mapping, and an addition as
+one unit.
+
+```kotlin
+val visitor = CostVisitor()
+automaton.visitors.add(visitor)
+automaton.recognize(input)
+
+println(visitor.cost)          // the metric
+println(visitor.costPerPath()) // the metric, per path
+println(visitor.report())
+```
+
+Runnable example: `examples/CostExampleKt`
+
+```bash
+./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.CostExampleKt
+```
+
+Changing the cost model means changing `CostVisitor` and nothing else.
+
 ---
 
 ## 8. Catalogue of pitfalls and warnings
@@ -530,6 +618,12 @@ Runnable example: `examples/GraphVizExampleKt`
     from the first one's leftovers.
 11. **Visitors run synchronously** (§7.1): a slow, blocking or throwing visitor slows
     down — or breaks — the recognition it is observing.
+12. **The topology and operation channels count different things** (§7.3): a removal of
+    three edges is one `MappingOperation.Remove` and three `onEdgeRemoved` events. Count
+    removals on one channel and edges removed on the other, but do not sum them.
+13. **A published fact is the action's own claim** (§7.3). The engine relays it verbatim;
+    it does not validate or interpret it. A consumer that prices facts is trusting the
+    action that published them.
 
 ---
 

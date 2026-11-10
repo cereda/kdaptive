@@ -2,10 +2,14 @@
 package br.usp.poli.lta.cereda.kdaptive.model.actions
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
+import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.allOf
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.anyOf
@@ -88,6 +92,20 @@ fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentExcep
  * wildcard `null`s behind named fields.
  */
 class ElementaryActions(private val transitions: TransitionMapping) {
+
+    /**
+     * Publishes a fact about the running action to the observation sink of the
+     * underlying mapping.
+     *
+     * The engine cannot observe what an action computes internally; this is
+     * how action code reports it, so that a consumer can take it into account.
+     *
+     * @param observation the fact to publish
+     */
+    fun observe(observation: Observation) {
+        transitions.observe(observation)
+    }
+
     // -----------------------------------------------------------------------
     // query: source, symbol, target
     // -----------------------------------------------------------------------
@@ -105,9 +123,14 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val symbolPred = if (symbol == null) { _: TransitionEdge -> true } else anyOf(listOf(symbol(symbol), isEpsilon))
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        return transitions
-            .getTransitions()
-            .filter(allOf(listOf(sourcePred, symbolPred, targetPred)))
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+            )
+        return performQuery(pattern, allOf(listOf(sourcePred, symbolPred, targetPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -149,9 +172,14 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val submachinePred = if (submachine == null) isSubmachineCall else submachineCall(submachine)
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        return transitions
-            .getTransitions()
-            .filter(allOf(listOf(sourcePred, submachinePred, targetPred)))
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                target = target,
+                submachine = submachine,
+            )
+        return performQuery(pattern, allOf(listOf(sourcePred, submachinePred, targetPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -173,9 +201,15 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
         val postActionPred = actionRefPredicate(postAction, isPost = true)
 
-        return transitions
-            .getTransitions()
-            .filter(allOf(listOf(sourcePred, submachinePred, targetPred, postActionPred)))
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                target = target,
+                submachine = submachine,
+                post = postAction,
+            )
+        return performQuery(pattern, allOf(listOf(sourcePred, submachinePred, targetPred, postActionPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -197,9 +231,15 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val submachinePred = if (submachine == null) isSubmachineCall else submachineCall(submachine)
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        return transitions
-            .getTransitions()
-            .filter(allOf(listOf(sourcePred, submachinePred, targetPred, priorActionPred)))
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                target = target,
+                submachine = submachine,
+                prior = priorAction,
+            )
+        return performQuery(pattern, allOf(listOf(sourcePred, submachinePred, targetPred, priorActionPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -230,9 +270,17 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val submachinePred = if (submachine == null) isSubmachineCall else submachineCall(submachine)
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        return transitions
-            .getTransitions()
-            .filter(allOf(listOf(sourcePred, submachinePred, targetPred, priorActionPred, postActionPred)))
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                target = target,
+                submachine = submachine,
+                prior = priorAction,
+                post = postAction,
+            )
+        val predicates = listOf(sourcePred, submachinePred, targetPred, priorActionPred, postActionPred)
+        return performQuery(pattern, allOf(predicates))
     }
 
     // -----------------------------------------------------------------------
@@ -251,13 +299,14 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val symbolPred = if (symbol == null) { _: TransitionEdge -> true } else anyOf(listOf(symbol(symbol), isEpsilon))
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        val ids =
-            transitions
-                .getTransitions()
-                .filter(allOf(listOf(sourcePred, symbolPred, targetPred)))
-                .map { it.id }
-
-        ids.forEach { transitions.removeFromIdentifier(it) }
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+            )
+        performRemove(pattern, allOf(listOf(sourcePred, symbolPred, targetPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -310,13 +359,15 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val symbolPred = if (symbol == null) { _: TransitionEdge -> true } else anyOf(listOf(symbol(symbol), isEpsilon))
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
 
-        val ids =
-            transitions
-                .getTransitions()
-                .filter(allOf(listOf(sourcePred, symbolPred, targetPred, priorActionPred)))
-                .map { it.id }
-
-        ids.forEach { transitions.removeFromIdentifier(it) }
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+                prior = priorAction,
+            )
+        performRemove(pattern, allOf(listOf(sourcePred, symbolPred, targetPred, priorActionPred)))
     }
 
     // -----------------------------------------------------------------------
@@ -331,13 +382,20 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * @param target the target state
      */
     fun add(source: State, symbol: Symbol, target: State) {
-        transitions.add(
+        val edge =
             TransitionEdge(
                 source = source,
                 target = target,
                 transition = Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target),
-            ),
-        )
+            )
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+            )
+        performAdd(pattern, edge)
     }
 
     // -----------------------------------------------------------------------
@@ -353,14 +411,22 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * @param priorAction the prior action reference
      */
     fun add(source: State, symbol: Symbol, target: State, priorAction: ActionRef) {
-        transitions.add(
+        val edge =
             TransitionEdge(
                 source = source,
                 target = target,
                 transition = Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target),
                 prior = priorAction,
-            ),
-        )
+            )
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+                prior = priorAction,
+            )
+        performAdd(pattern, edge)
     }
 
     // -----------------------------------------------------------------------
@@ -381,18 +447,65 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val targetPred = if (target == null) { _: TransitionEdge -> true } else targetState(target)
         val priorActionPred = actionRefPredicate(priorAction, isPost = false)
 
-        val ids =
-            transitions
-                .getTransitions()
-                .filter(allOf(listOf(sourcePred, symbolPred, targetPred, priorActionPred)))
-                .map { it.id }
-
-        ids.forEach { transitions.removeFromIdentifier(it) }
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SYMBOL,
+                source = source,
+                symbol = symbol,
+                target = target,
+                prior = priorAction,
+            )
+        performRemove(pattern, allOf(listOf(sourcePred, symbolPred, targetPred, priorActionPred)))
     }
 
     // -----------------------------------------------------------------------
     // helpers
     // -----------------------------------------------------------------------
+
+    /**
+     * Matches [predicate] against the mapping and reports the outcome as a
+     * [MappingOperation.Query].
+     *
+     * A query changes nothing, so it produces no topology event: this is the
+     * only way a consumer can observe a read.
+     */
+    private fun performQuery(pattern: TransitionPattern, predicate: TransitionPredicate): List<TransitionEdge> {
+        val before = transitions.size()
+        val matched = transitions.getTransitions().filter(predicate)
+        transitions.onOperation?.invoke(MappingOperation.Query(pattern, matched, before))
+        return matched
+    }
+
+    /**
+     * Removes the edges matching [predicate] and reports the outcome as a
+     * [MappingOperation.Remove].
+     *
+     * The operation is reported after the edges have left the mapping, so the
+     * resulting size is observed rather than predicted. A removal that matched
+     * nothing is still reported: it scanned the mapping even though it changed
+     * nothing.
+     */
+    private fun performRemove(pattern: TransitionPattern, predicate: TransitionPredicate) {
+        val before = transitions.size()
+        val matched = transitions.getTransitions().filter(predicate)
+        matched.forEach { transitions.removeFromIdentifier(it.id) }
+        val after = transitions.size()
+        transitions.onOperation?.invoke(MappingOperation.Remove(pattern, matched, before, after))
+    }
+
+    /**
+     * Adds [edge] to the mapping and reports the outcome as a
+     * [MappingOperation.Add].
+     *
+     * The operation is reported after the edge has entered the mapping, so the
+     * resulting size is observed rather than predicted.
+     */
+    private fun performAdd(pattern: TransitionPattern, edge: TransitionEdge) {
+        val before = transitions.size()
+        transitions.add(edge)
+        val after = transitions.size()
+        transitions.onOperation?.invoke(MappingOperation.Add(pattern, edge, before, after))
+    }
 
     private fun actionRefPredicate(aq: ActionRef?, isPost: Boolean): TransitionPredicate {
         if (aq == null) return { _: TransitionEdge -> true }
