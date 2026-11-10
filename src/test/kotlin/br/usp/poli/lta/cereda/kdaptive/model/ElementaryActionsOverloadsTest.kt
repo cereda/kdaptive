@@ -24,8 +24,8 @@ private object P2 : State() {
 
 /**
  * Coverage tests for [ElementaryActions]' remaining overloads: the five-part
- * submachine query and zero-argument action references (the wildcard-arity
- * branch of the argument matcher).
+ * call query and zero-argument action references (the wildcard-arity branch of
+ * the argument matcher).
  */
 class ElementaryActionsOverloadsTest {
     private fun sym(c: Char) = CharSymbol(c)
@@ -69,19 +69,19 @@ class ElementaryActionsOverloadsTest {
         val ea = ElementaryActions(mapping)
 
         // Prior AND post must both match (only t1 carries both references).
-        val both = ea.query(actionRef("A"), null, "M", null, actionRef("B"))
+        val both = ea.queryCall(actionRef("A"), null, "M", null, actionRef("B"))
         assertEquals(setOf(P1), both.map { it.target }.toSet())
 
         // Prior-only filter, wildcard source.
-        val priorOnly = ea.query(actionRef("A"), null, "M", null)
+        val priorOnly = ea.queryCall(actionRef("A"), null, "M", null)
         assertEquals(setOf(P1, P2), priorOnly.map { it.target }.toSet())
 
         // Post-only filter, wildcard submachine name.
-        val postOnly = ea.query(null, null, null, null, actionRef("B"))
+        val postOnly = ea.queryCall(null, null, null, null, actionRef("B"))
         assertEquals(setOf(P1, P2), postOnly.map { it.target }.toSet())
 
         // Nothing matches a never-registered combination.
-        val none = ea.query(actionRef("X"), null, "M", null, actionRef("Z"))
+        val none = ea.queryCall(actionRef("X"), null, "M", null, actionRef("Z"))
         assertTrue(none.isEmpty())
     }
 
@@ -125,7 +125,7 @@ class ElementaryActionsOverloadsTest {
 
         // A zero-arg reference checks the name only, matching edges whose prior
         // action carries any number of arguments.
-        ea.remove(null, null, null, actionRef("A"))
+        ea.remove(actionRef("A"), null, null, null)
         assertFalse(mapping.hasIdentifier(t1.id))
         assertFalse(mapping.hasIdentifier(t2.id))
         assertFalse(mapping.hasIdentifier(t3.id))

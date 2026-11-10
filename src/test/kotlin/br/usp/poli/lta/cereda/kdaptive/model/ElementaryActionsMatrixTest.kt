@@ -98,27 +98,51 @@ class ElementaryActionsMatrixTest {
     }
 
     @Test
-    fun `submachine query overload matrix`() {
+    fun `call query overload matrix`() {
         val ea = ElementaryActions(mapping())
 
         // With a null submachine filter the family is still call-kind-limited.
-        assertEquals(1, ea.query(source = null, submachine = null, target = null).size)
-        assertEquals(1, ea.query(source = null, submachine = null, target = S2).size)
-        assertEquals(1, ea.query(S1, "M", null).size)
-        assertEquals(0, ea.query(S1, "N", null).size)
-        assertEquals(0, ea.query(S0, "M", null).size)
+        assertEquals(1, ea.queryCall(source = null, submachine = null, target = null).size)
+        assertEquals(1, ea.queryCall(source = null, submachine = null, target = S2).size)
+        assertEquals(1, ea.queryCall(S1, "M", null).size)
+        assertEquals(0, ea.queryCall(S1, "N", null).size)
+        assertEquals(0, ea.queryCall(S0, "M", null).size)
 
         // Post action filtered by name and by exact argument shape.
-        assertEquals(1, ea.query(null, null, null, actionRef("PB")).size)
-        assertEquals(1, ea.query(null, null, S2, actionRef("PB")).size)
-        assertEquals(1, ea.query(null, "M", null, actionRef("PB")).size)
+        assertEquals(1, ea.queryCall(null, null, null, null, actionRef("PB")).size)
+        assertEquals(1, ea.queryCall(null, null, null, S2, actionRef("PB")).size)
+        assertEquals(1, ea.queryCall(null, null, "M", null, actionRef("PB")).size)
         // The concrete post filter also requires the exact argument list shape.
-        assertEquals(0, ea.query(null, null, null, actionRef("PB", S1)).size)
-        assertEquals(0, ea.query(null, null, null, actionRef("PB", S2)).size)
-        assertEquals(0, ea.query(null, null, null, actionRef("PB", S1, S2)).size)
-        assertEquals(0, ea.query(null, null, null, actionRef("nope")).size)
+        assertEquals(0, ea.queryCall(null, null, null, null, actionRef("PB", S1)).size)
+        assertEquals(0, ea.queryCall(null, null, null, null, actionRef("PB", S2)).size)
+        assertEquals(0, ea.queryCall(null, null, null, null, actionRef("PB", S1, S2)).size)
+        assertEquals(0, ea.queryCall(null, null, null, null, actionRef("nope")).size)
         // A non-null but never-registered name matches nothing.
-        assertEquals(0, ea.query(null, null, null, actionRef("")).size)
+        assertEquals(0, ea.queryCall(null, null, null, null, actionRef("")).size)
+    }
+
+    @Test
+    fun `symbol query with prior and post filters`() {
+        val ea = ElementaryActions(mapping())
+
+        // The symbol family filters on prior and post actions too. A zero-arg
+        // reference matches by name, whatever arity the reference-site carries.
+        assertEquals(1, ea.query(actionRef("PA"), null, null, null).size)
+        assertEquals(1, ea.query(actionRef("PA2"), null, null, null).size)
+        assertEquals(2, ea.query(null, null, null, null, actionRef("PB")).size)
+        // An exact argument list narrows the post filter down to one edge.
+        assertEquals(1, ea.query(null, null, null, null, actionRef("PB", S1)).size)
+
+        // Prior AND post must both match.
+        assertEquals(1, ea.query(actionRef("PA"), null, null, null, actionRef("PB")).size)
+        assertEquals(0, ea.query(actionRef("PA2"), null, null, null, actionRef("PB")).size)
+
+        // A wildcard (null-name) reference matches any edge with such an action.
+        assertEquals(2, ea.query(null, null, null, null, ActionRef(name = null)).size)
+
+        // The transition filters keep working alongside the action filters.
+        assertEquals(1, ea.query(actionRef("PA"), S0, X, S1).size)
+        assertEquals(0, ea.query(actionRef("PA"), S1, X, S1).size)
     }
 
     @Test
@@ -128,31 +152,30 @@ class ElementaryActionsMatrixTest {
         // The prior/post query family is call-kind-limited: priors attached to
         // symbol edges (PA, PA2) are never returned by these overloads.
         assertTrue(
-            ea.query(priorAction = actionRef("PA"), source = null, submachine = null, target = null, postAction = null)
+            ea.queryCall(actionRef("PA"), null, null, null, null).isEmpty(),
+        )
+        assertTrue(
+            ea.queryCall(actionRef("PA2", S1, "str"), null, null, null)
                 .isEmpty(),
         )
         assertTrue(
-            ea.query(priorAction = actionRef("PA2", S1, "str"), source = null, submachine = null, target = null)
-                .isEmpty(),
-        )
-        assertTrue(
-            ea.query(priorAction = null, source = null, submachine = "M", target = null, postAction = actionRef("PB"))
+            ea.queryCall(null, null, "M", null, actionRef("PB"))
                 .isNotEmpty(),
         )
         // Zero-argument prior reference: name-only match on the call edge.
         assertTrue(
-            ea.query(priorAction = actionRef("PA3"), source = null, submachine = null, target = null, postAction = null)
+            ea.queryCall(actionRef("PA3"), null, null, null, null)
                 .isNotEmpty(),
         )
         // Argument list shape must match the reference's arity.
         assertTrue(
-            ea.query(priorAction = actionRef("PA3", S1), source = null, submachine = null, target = null).isEmpty(),
+            ea.queryCall(priorAction = actionRef("PA3", S1), source = null, submachine = null, target = null).isEmpty(),
         )
         assertTrue(
-            ea.query(actionRef("PA3", S1, S1), null, null, null).isEmpty(),
+            ea.queryCall(actionRef("PA3", S1, S1), null, null, null).isEmpty(),
         )
         // The four-argument prior-only overload with a zero-arg reference.
-        assertEquals(1, ea.query(actionRef("PA3"), null, null, null).size)
+        assertEquals(1, ea.queryCall(actionRef("PA3"), null, null, null).size)
     }
 
     @Test
@@ -177,12 +200,12 @@ class ElementaryActionsMatrixTest {
         assertEquals(1, m4.withSymbol(Y).size)
 
         val m5 = mapping()
-        ElementaryActions(m5).remove(null, null, null, actionRef("PA2", S1, "str"))
+        ElementaryActions(m5).remove(actionRef("PA2", S1, "str"), null, null, null)
         assertEquals(0, m5.withSymbol(Y).size)
 
         val m6 = mapping()
-        // Positional call: 'Y' is not a State, so only the (source..prior) overload applies.
-        ElementaryActions(m6).remove(null, Y, null, actionRef("nope"))
+        // Positional call: 'Y' is not a State, so only the (prior..target) overload applies.
+        ElementaryActions(m6).remove(actionRef("nope"), null, Y, null)
         assertEquals(1, m6.withSymbol(Y).size)
 
         val m7 = mapping()
@@ -201,5 +224,72 @@ class ElementaryActionsMatrixTest {
         // Prior name PA removes only the s0 -x-> s1 edge.
         assertEquals(0, m9.withPriorAction("PA").size)
         assertEquals(3, m9.size())
+    }
+
+    @Test
+    fun `remove with prior and post filters`() {
+        val m1 = mapping()
+        // A post filter alone removes both edges carrying a post named "PB".
+        ElementaryActions(m1).remove(null, null, null, null, actionRef("PB"))
+        assertEquals(2, m1.size())
+
+        val m2 = mapping()
+        // Prior AND post must both match: only the s0 -x-> s1 edge carries both.
+        ElementaryActions(m2).remove(actionRef("PA"), null, null, null, actionRef("PB"))
+        assertEquals(3, m2.size())
+
+        val m3 = mapping()
+        // The transition filters keep working alongside the action filters.
+        ElementaryActions(m3).remove(actionRef("PA2", S1, "str"), S2, Y, S0, null)
+        assertEquals(3, m3.size())
+        assertEquals(0, m3.withSymbol(Y).size)
+
+        val m4 = mapping()
+        // The builder routes a post-only filter to the five-part removal.
+        ElementaryActions(m4).remove { post = actionRef("PB") }
+        assertEquals(2, m4.size())
+
+        val m5 = mapping()
+        // The builder routes a prior-and-post filter to the five-part removal.
+        ElementaryActions(m5).remove {
+            prior = actionRef("PA")
+            post = actionRef("PB")
+        }
+        assertEquals(3, m5.size())
+    }
+
+    @Test
+    fun `builder blocks cover both families and both action filters`() {
+        val ea = ElementaryActions(mapping())
+
+        // Symbol family, no action filter.
+        assertEquals(2, ea.query { symbol = Y }.size)
+        // Symbol family, prior filter only.
+        assertEquals(1, ea.query { prior = actionRef("PA") }.size)
+        // Symbol family, post filter only.
+        assertEquals(2, ea.query { post = actionRef("PB") }.size)
+        // Symbol family, both action filters.
+        assertEquals(
+            1,
+            ea.query {
+                prior = actionRef("PA")
+                post = actionRef("PB")
+            }.size,
+        )
+
+        // Call family, no action filter.
+        assertEquals(1, ea.queryCall { submachine = "M" }.size)
+        // Call family, prior filter only.
+        assertEquals(1, ea.queryCall { prior = actionRef("PA3") }.size)
+        // Call family, post filter only.
+        assertEquals(1, ea.queryCall { post = actionRef("PB") }.size)
+        // Call family, both action filters.
+        assertEquals(
+            1,
+            ea.queryCall {
+                prior = actionRef("PA3")
+                post = actionRef("PB")
+            }.size,
+        )
     }
 }

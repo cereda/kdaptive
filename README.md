@@ -516,6 +516,21 @@ All commands assume the Gradle wrapper:
   transition edge it was created for, so a consumer no longer has to infer it from the
   child's first traversal. Implementations of `ExecutionVisitor` written against 1.1.0
   need this one method updated.
+- **`ElementaryActions` no longer has ambiguous overloads.** The API is split into two
+  families — `query`/`remove`/`add` for symbol transitions, `queryCall` for
+  submachine-call transitions — with **at most one overload per arity** in each. The
+  prior-action filter comes **first** and the post-action filter comes **last**. What
+  this breaks:
+  - the submachine query overloads moved from `query` to **`queryCall`**;
+  - `remove(source, symbol, target, priorAction)` is **gone** — write
+    `remove(priorAction, source, symbol, target)` instead (the two spellings used to
+    declare the same parameter names in a different order, which made even a fully named
+    call ambiguous);
+  - the post-only submachine query is now `queryCall(null, source, submachine, target,
+    postAction)`.
+  What this adds: prior/post filters on symbol queries and removals, `queryCall { }`,
+  and `prior`/`post` fields on the builder specs. See §4 of the
+  [adaptive actions guide](docs/ADAPTIVE-ACTIONS-GUIDE.md).
 - New: `MappingOperation`, `Observation`, `TransitionPattern`, `ForkedPath`, the
   `onMappingOperation` and `onObservation` visitor events, and the `observe()` helpers on
   `TransitionMapping`, `ElementaryActions` and the DSL action context. All additive.

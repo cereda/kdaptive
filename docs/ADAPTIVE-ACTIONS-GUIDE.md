@@ -196,11 +196,41 @@ This is the single most important runtime-model fact:
 Signatures are grouped; `null` **always means wildcard** ("match anything") and a
 non-null parameter always acts as a filter.
 
+The API is organised in two **families**, one per kind of transition:
+
+| Family | Methods | Works on |
+|---|---|---|
+| symbol | `query`, `remove`, `add` | symbol-consuming transitions |
+| call | `queryCall` | submachine-call transitions |
+
+Each family offers **at most one overload per arity**, and the filters are always laid
+out the same way:
+
+```
+prior-action filter → source → transition filter → target → post-action filter
+```
+
+The prior-action filter comes **first** and the post-action filter comes **last**,
+bracketing the transition filters the way the actions themselves fire. Because there is
+exactly one overload per arity, **no call is ever ambiguous** — not positionally, and
+not with named arguments.
+
 ### 4.1 Symbol queries/removals
 
 ```kotlin
 fun query(source: State?, symbol: Symbol?, target: State?): List<TransitionEdge>
+fun query(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?): List<TransitionEdge>
+fun query(
+    priorAction: ActionRef?, source: State?, symbol: Symbol?,
+    target: State?, postAction: ActionRef?,
+): List<TransitionEdge]
+
 fun remove(source: State?, symbol: Symbol?, target: State?)
+fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?)
+fun remove(
+    priorAction: ActionRef?, source: State?, symbol: Symbol?,
+    target: State?, postAction: ActionRef?,
+)
 ```
 
 and, using the builder block (unset fields stay wildcards):
@@ -215,6 +245,12 @@ ea.remove {
     symbol = CharSymbol('b')
     target = p1
 }
+
+ea.query {
+    symbol = CharSymbol('b')
+    prior = actionRef("A")     // the prior filter comes first in the positional form
+    post = actionRef("B")      // ... and the post filter last
+}
 ```
 
 > **Non-obvious, faithful to the original**: the "symbol" filters also match **epsilon**
@@ -224,36 +260,41 @@ ea.remove {
 > the result yourself: `.filter { it.transition is Transition.SymbolTransition }`, or use
 > the predicates API (§5).
 
-### 4.2 Submachine queries (the matrix)
+### 4.2 Call queries (the matrix)
 
-Overloads, from the leanest to the fullest filter; note the *positional* shape of each
-(the position of `source` / `submachine` / `target` is fixed; the optional `priorAction`
-and `postAction` bookend the positional triple). When in doubt, use named arguments:
+Submachine-call edges have their own family, under the name `queryCall`. A `null`
+`submachine` matches any `Call` edge (`isSubmachineCall` predicate); a given name
+matches only calls to that submachine. `null` prior/post references are wildcards too.
 
 ```kotlin
 // source, submachine, target
-fun query(source: State?, submachine: String?, target: State?): List<TransitionEdge>
-
-// source, submachine, target, post reference
-fun query(source: State?, submachine: String?, target: State?, postAction: ActionRef?): List<TransitionEdge>
+fun queryCall(source: State?, submachine: String?, target: State?): List<TransitionEdge>
 
 // prior reference, source, submachine, target
-fun query(priorAction: ActionRef?, source: State?, submachine: String?, target: State?): List<TransitionEdge>
+fun queryCall(priorAction: ActionRef?, source: State?, submachine: String?, target: State?): List<TransitionEdge>
 
 // prior reference, source, submachine, target, post reference
-fun query(
+fun queryCall(
     priorAction: ActionRef?, source: State?, submachine: String?,
     target: State?, postAction: ActionRef?,
 ): List<TransitionEdge>
 ```
 
-A `null` `submachine` matches any `Call` edge (`isSubmachineCall` predicate); a given
-name matches only calls to that submachine. `null` prior/post references are wildcards
-too.
+or, using the builder block:
 
-> **Hint**: when the overloads get confusing, write the call with named arguments, e.g.
-> `ea.query(priorAction = actionRef("A"), submachine = "M", target = p2)`. The overload
-> matrix collapses to one readable call.
+```kotlin
+val results = ea.queryCall {
+    submachine = "M"
+    target = p2
+    prior = actionRef("A")
+}
+```
+
+> **Note**: `queryCall` is a separate method, not an overload of `query`. The two
+> families used to share the name `query`, which made `ea.query(null, null, null)`
+> ambiguous — the compiler could not tell a symbol query from a call query when every
+> filter was a wildcard. Splitting the families is what makes the wildcard calls usable
+> at all.
 
 ### 4.3 Action-reference matching rules (the argument algebra)
 
@@ -272,14 +313,18 @@ Matching a **prior/post reference filter** against an edge works like this
 > `Letter('a')` even if conceptually the same letter. Use your own value-equality
 > symbols/states (so their `equals` is sane) and be deliberate about argument order.
 
-### 4.4 Removals with prior-action filters
+### 4.4 Removals with action filters
 
 ```kotlin
 fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?)
+fun remove(
+    priorAction: ActionRef?, source: State?, symbol: Symbol?,
+    target: State?, postAction: ActionRef?,
+)
 ```
 
-Same semantics as §4.1 with an extra prior-action filter. There is no builder block for
-this form beyond the `SymbolRemoveSpec` shortcut:
+Same semantics as §4.1 with extra action filters. The builder block covers every
+combination:
 
 ```kotlin
 ea.remove {
@@ -288,7 +333,17 @@ ea.remove {
     target = q1
     prior = actionRef("A", p1, p2)     // setting `prior` routes to the 4-part removal
 }
+
+ea.remove {
+    symbol = CharSymbol('a')
+    post = actionRef("B")              // setting `post` routes to the 5-part removal
+}
 ```
+
+> **Note**: the prior-action filter comes **first**. The four-argument removal used to
+> accept the prior filter both first and last; the two spellings declared the same
+> parameter names in a different order, so even a fully named call was ambiguous. Only
+> one survives.
 
 ### 4.5 Adding edges
 
@@ -605,23 +660,27 @@ Changing the cost model means changing `CostVisitor` and nothing else.
 6. **"Symbol" filters also match epsilon edges** (§4.1); filter by kind if you care.
 7. **Argument matching compares position-by-position with `equals` and requires equal
    arity** (§4.3); use value-equality types on both sides.
-8. **The `remove`-matching pattern uses wildcard `null` fields**: an over-broad pattern
+8. **The prior-action filter comes first** (§4.1, §4.2, §4.4): write
+   `remove(priorAction = ..., source = ..., symbol = ..., target = ...)`, never
+   `remove(source = ..., symbol = ..., target = ..., priorAction = ...)`. The latter
+   spelling no longer exists; it used to be ambiguous with the former.
+9. **The `remove`-matching pattern uses wildcard `null` fields**: an over-broad pattern
    (e.g. all wildcards) removes MORE than you intended, including edges you didn't mean
    to touch. Compose the narrowest filter that expresses the intent.
-9. **Ids are engine-internal counters** (`IdentifierUtils`); never fabricate them, and
-   they reset per-process (see `IdentifierUtils.reset()` for tests).
-10. **`recognize()` runs `setup()` on a clone**, so setup-side effects repeat per call.
+10. **Ids are engine-internal counters** (`IdentifierUtils`); never fabricate them, and
+    they reset per-process (see `IdentifierUtils.reset()` for tests).
+11. **`recognize()` runs `setup()` on a clone**, so setup-side effects repeat per call.
     The top-level `counter` in the context-sensitive example never resets: it keeps
     minting fresh, unique state names across calls, which is harmless. But mutable
     *semantic* state (buffers, counts that mean something) should be reset inside
     `setup()` itself or not captured at all, otherwise the second `recognize()` starts
     from the first one's leftovers.
-11. **Visitors run synchronously** (§7.1): a slow, blocking or throwing visitor slows
+12. **Visitors run synchronously** (§7.1): a slow, blocking or throwing visitor slows
     down — or breaks — the recognition it is observing.
-12. **The topology and operation channels count different things** (§7.3): a removal of
+13. **The topology and operation channels count different things** (§7.3): a removal of
     three edges is one `MappingOperation.Remove` and three `onEdgeRemoved` events. Count
     removals on one channel and edges removed on the other, but do not sum them.
-13. **A published fact is the action's own claim** (§7.3). The engine relays it verbatim;
+14. **A published fact is the action's own claim** (§7.3). The engine relays it verbatim;
     it does not validate or interpret it. A consumer that prices facts is trusting the
     action that published them.
 

@@ -177,7 +177,7 @@ What the handler gets:
 
 | Member | Effect |
 |---|---|
-| `ea` | the `ElementaryActions` facade over the mapping currently being executed (queries, removals, insertions) |
+| `ea` | the `ElementaryActions` facade over the mapping currently being executed (queries, removals, insertions). `ea.query`/`ea.remove` work on symbol transitions, `ea.queryCall` on submachine-call edges |
 | `state(name)` | a **read-only** lookup of a state of the automaton by name; an unknown name is an error, never a new state |
 | `freshState(prefix = "g")` | a new state named `prefix` plus a number, unique within the run, restarting at zero for every recognition and skipping names the automaton already uses |
 | `ref(name, args...)` | an `ActionRef` built at runtime, for arguments only known while running |
