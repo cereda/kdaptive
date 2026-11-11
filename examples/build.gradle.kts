@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "3.0.0"
+version = "4.0.0"
 
 tapmoc {
     java(11)

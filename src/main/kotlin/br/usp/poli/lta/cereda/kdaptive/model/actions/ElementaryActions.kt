@@ -7,22 +7,13 @@ import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.StateDomain
 import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.SymbolDomain
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.allOf
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.sourceState
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCallIn
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
  * Builds a concrete reference to the action named [name], called with [args].
@@ -100,19 +91,12 @@ inline fun <reified T> Any?.castOrThrow(): T = this as T
 /**
  * Convenience alias for [castOrThrow] when extracting [State] parameters.
  */
-inline fun <reified S : State> Any?.asState(): S = castOrThrow<S>()
+inline fun <reified S : State> Any.asState(): S = castOrThrow<S>()
 
 /**
  * Convenience alias for [castOrThrow] when extracting [Symbol] parameters.
  */
-inline fun <reified S : Symbol> Any?.asSymbol(): S = castOrThrow<S>()
-
-/**
- * Throws [IllegalArgumentException] if [value] is null.
- *
- * Useful as a precondition check.
- */
-fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentException("Value must not be null")
+inline fun <reified S : Symbol> Any.asSymbol(): S = castOrThrow<S>()
 
 /**
  * Elementary actions: query, insertion and removal of transitions according to
@@ -143,8 +127,13 @@ fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentExcep
  *
  * Builder-style DSL is available through the `query`, `remove`, `queryCall`
  * and `removeCall` lambdas, which hide the wildcards behind named fields.
+ *
+ * @param transitions the mapping the operations are performed on
+ * @param submachines the submachines of the automaton; an addition of a call
+ *   checks the submachine it names against them, so that a typo fails where
+ *   it is written instead of at recognition time
  */
-class ElementaryActions(private val transitions: TransitionMapping) {
+class ElementaryActions(private val transitions: TransitionMapping, private val submachines: Submachines) {
 
     /**
      * Publishes a fact about the running action to the observation sink of the
@@ -195,15 +184,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
                 prior = prior,
                 post = post,
             )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                symbolPredicate(symbol),
-                targetPredicate(target),
-                actionPredicate(prior, isPost = false),
-                actionPredicate(post, isPost = true),
-            )
-        return performQuery(pattern, allOf(predicates))
+        return performQuery(pattern)
     }
 
     /**
@@ -261,15 +242,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
                 prior = prior,
                 post = post,
             )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                symbolPredicate(symbol),
-                targetPredicate(target),
-                actionPredicate(prior, isPost = false),
-                actionPredicate(post, isPost = true),
-            )
-        performRemove(pattern, allOf(predicates))
+        performRemove(pattern)
     }
 
     /**
@@ -411,15 +384,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
                 prior = prior,
                 post = post,
             )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                submachinePredicate(submachine),
-                targetPredicate(target),
-                actionPredicate(prior, isPost = false),
-                actionPredicate(post, isPost = true),
-            )
-        return performQuery(pattern, allOf(predicates))
+        return performQuery(pattern)
     }
 
     /**
@@ -475,15 +440,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
                 prior = prior,
                 post = post,
             )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                submachinePredicate(submachine),
-                targetPredicate(target),
-                actionPredicate(prior, isPost = false),
-                actionPredicate(post, isPost = true),
-            )
-        performRemove(pattern, allOf(predicates))
+        performRemove(pattern)
     }
 
     /**
@@ -521,6 +478,8 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * @throws IllegalArgumentException if a wildcard state is given, or if the
      *   submachine filter is [SubmachineRef.Any] or [SubmachineRef.None],
      *   which name no concrete submachine
+     * @throws IllegalArgumentException if a named submachine is not declared
+     *   in the automaton
      */
     fun addCall(
         source: State,
@@ -530,6 +489,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         post: ActionRef = ActionRef.None,
     ) {
         val names = concreteSubmachines(submachine)
+        requireDeclared(names)
         val sources = concreteStates(source, "source")
         val targets = concreteStates(target, "target")
         for (from in sources) {
@@ -537,6 +497,29 @@ class ElementaryActions(private val transitions: TransitionMapping) {
                 for (to in targets) {
                     addCallOne(from, name, to, prior, post)
                 }
+            }
+        }
+    }
+
+    /**
+     * Checks that every named submachine is declared in the automaton.
+     *
+     * A call to a submachine that does not exist fails at recognition time,
+     * with a message about a missing submachine — far from the addition that
+     * caused it. The check happens where the addition is written instead.
+     *
+     * An automaton that declares no submachine at all has nothing to check the
+     * names against, and the names are let through.
+     *
+     * @param names the names of the submachines the call names
+     */
+    private fun requireDeclared(names: List<String>) {
+        if (submachines.size == 0) return
+        val declared = submachines.map { it.name }
+        names.forEach { name ->
+            require(name in declared) {
+                "Call to undeclared submachine '$name'. " +
+                    "Declared submachines: ${declared.joinToString(", ")}."
             }
         }
     }
@@ -570,21 +553,21 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     // -----------------------------------------------------------------------
 
     /**
-     * Matches [predicate] against the mapping and reports the outcome as a
+     * Matches [pattern] against the mapping and reports the outcome as a
      * [MappingOperation.Query].
      *
      * A query changes nothing, so it produces no topology event: this is the
      * only way a consumer can observe a read.
      */
-    private fun performQuery(pattern: TransitionPattern, predicate: TransitionPredicate): List<TransitionEdge> {
-        val before = transitions.size()
-        val matched = transitions.getTransitions().filter(predicate)
+    private fun performQuery(pattern: TransitionPattern): List<TransitionEdge> {
+        val before = transitions.size
+        val matched = transitions.transitions.filter(pattern::matches)
         transitions.onOperation(MappingOperation.Query(pattern, matched, before))
         return matched
     }
 
     /**
-     * Removes the edges matching [predicate] and reports the outcome as a
+     * Removes the edges matching [pattern] and reports the outcome as a
      * [MappingOperation.Remove].
      *
      * The operation is reported after the edges have left the mapping, so the
@@ -592,11 +575,11 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * nothing is still reported: it scanned the mapping even though it changed
      * nothing.
      */
-    private fun performRemove(pattern: TransitionPattern, predicate: TransitionPredicate) {
-        val before = transitions.size()
-        val matched = transitions.getTransitions().filter(predicate)
+    private fun performRemove(pattern: TransitionPattern) {
+        val before = transitions.size
+        val matched = transitions.transitions.filter(pattern::matches)
         matched.forEach { transitions.removeFromIdentifier(it.id) }
-        val after = transitions.size()
+        val after = transitions.size
         transitions.onOperation(MappingOperation.Remove(pattern, matched, before, after))
     }
 
@@ -608,66 +591,10 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * resulting size is observed rather than predicted.
      */
     private fun performAdd(pattern: TransitionPattern, edge: TransitionEdge) {
-        val before = transitions.size()
+        val before = transitions.size
         transitions.add(edge)
-        val after = transitions.size()
+        val after = transitions.size
         transitions.onOperation(MappingOperation.Add(pattern, edge, before, after))
-    }
-
-    /**
-     * The source-state filter: [State.Any] matches any source state, a domain
-     * matches any state it names, and a concrete state matches only itself.
-     */
-    private fun sourcePredicate(source: State): TransitionPredicate = when {
-        source === State.Any -> { _: TransitionEdge -> true }
-        source is StateDomain -> { edge: TransitionEdge -> edge.source in source.members }
-        else -> sourceState(source)
-    }
-
-    /**
-     * The target-state filter: [State.Any] matches any target state, a domain
-     * matches any state it names, and a concrete state matches only itself.
-     */
-    private fun targetPredicate(target: State): TransitionPredicate = when {
-        target === State.Any -> { _: TransitionEdge -> true }
-        target is StateDomain -> { edge: TransitionEdge -> edge.target in target.members }
-        else -> targetState(target)
-    }
-
-    /**
-     * The symbol filter: [Symbol.Epsilon] selects the epsilon transitions,
-     * [Symbol.Any] selects every symbol-consuming transition, a domain
-     * selects the transitions consuming any of its members — epsilon included
-     * — and any other symbol selects the transitions consuming it.
-     */
-    private fun symbolPredicate(filter: Symbol): TransitionPredicate = when {
-        filter === Symbol.Epsilon -> isEpsilon
-
-        filter === Symbol.Any -> isSymbolConsumption
-
-        filter is SymbolDomain -> { edge: TransitionEdge ->
-            filter.members.any { member ->
-                if (member === Symbol.Epsilon) {
-                    edge.transition is Transition.Epsilon
-                } else {
-                    edge.transition is Transition.SymbolTransition && edge.transition.symbol == member
-                }
-            }
-        }
-
-        else -> symbol(filter)
-    }
-
-    /**
-     * The submachine filter: the wildcard matches any submachine-call edge, a
-     * named filter matches the calls to that submachine only, and a domain
-     * matches the calls to any of the submachines it names.
-     */
-    private fun submachinePredicate(filter: SubmachineRef): TransitionPredicate = when (filter) {
-        SubmachineRef.Any -> isSubmachineCall
-        is SubmachineRef.Named -> submachineCall(filter.name)
-        is SubmachineRef.Domain -> submachineCallIn(filter.names)
-        SubmachineRef.None -> { _: TransitionEdge -> false }
     }
 
     /**
@@ -732,40 +659,6 @@ class ElementaryActions(private val transitions: TransitionMapping) {
             "The submachine of an added call must name a submachine, but '$filter' is a filter.",
         )
     }
-
-    /**
-     * The action-slot filter, applied to the prior or the post action of the
-     * edge.
-     *
-     * @param filter the constraint on the slot
-     * @param isPost whether the constraint applies to the post action
-     */
-    private fun actionPredicate(filter: ActionRef, isPost: Boolean): TransitionPredicate {
-        val slot = { edge: TransitionEdge -> if (isPost) edge.post else edge.prior }
-        return when (filter) {
-            is ActionRef.Free -> { _: TransitionEdge -> true }
-            is ActionRef.Any -> { edge: TransitionEdge -> slot(edge) is ActionRef.Bound }
-            is ActionRef.None -> { edge: TransitionEdge -> slot(edge) === ActionRef.None }
-            is ActionRef.Named -> { edge: TransitionEdge -> (slot(edge) as? ActionRef.Bound)?.name == filter.name }
-            is ActionRef.Bound -> { edge: TransitionEdge -> matchesBinding(slot(edge), filter) }
-        }
-    }
-
-    /**
-     * Checks the actual binding of an action slot against the expected one.
-     *
-     * The expected binding fixes the arity; an expected argument equal to
-     * [ActionRef.Free] leaves that position unconstrained.
-     */
-    private fun matchesBinding(actual: ActionRef, expected: ActionRef.Bound): Boolean {
-        if (actual !is ActionRef.Bound) return false
-        if (actual.name != expected.name) return false
-        if (actual.args.size != expected.args.size) return false
-        return expected.args.indices.all { index ->
-            val wanted = expected.args[index]
-            wanted === ActionRef.Free || actual.args[index] == wanted
-        }
-    }
 }
 
 /** Type-safe check: is this edge a transition of type [T]? */
@@ -773,4 +666,4 @@ inline fun <reified T : Transition> TransitionEdge.isType(): Boolean = transitio
 
 /** Type-safe filter: transitions of type [T]. */
 inline fun <reified T : Transition> TransitionMapping.withType(): List<TransitionEdge> =
-    getTransitions().filter { it.transition is T }.toList()
+    transitions.filter { it.transition is T }.toList()

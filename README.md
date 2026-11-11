@@ -12,8 +12,6 @@ The library is the modern successor to a 2016 Java implementation of the same mo
 original Java implementation is merged with modern tooling (Gradle, Kotlin 2.4, detekt,
 Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 
----
-
 ## Toolchain at a glance
 
 | Piece | Choice |
@@ -21,22 +19,20 @@ Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 | Language | Kotlin 2.4 (language/api level 2.4.0) |
 | Bytecode | Java 11 (major version 55) |
 | Build | Gradle wrapper 9.8.2, Kotlin DSL build script |
-| Tests | `kotlin("test")` over JUnit 5 (295 tests: 182 library, 113 examples) |
+| Tests | `kotlin("test")` over JUnit 5 (510 tests: 381 library, 129 examples) |
 | Static analysis | detekt 1.23.8, **zero-tolerance** config |
 | Format / style | Spotless, ktlint rules, 120-col, SPDX license header |
 | Docs | Dokka HTML (`./gradlew dokkaGenerateHtml`, fail-on-warning) |
 | Coverage | Kover: line ≥ 95%, branch ≥ 78% enforced on `check` |
 | Logging | SLF4J API only (backend chosen by the consumer) |
 
-Coordinates: `br.usp.poli.lta.cereda:kdaptive:1.1.0`.
+Coordinates: `br.usp.poli.lta.cereda:kdaptive:4.0.0`.
 
 > **Remark**: the build currently **does not ship a publishing plugin**. The library jar
-> lands in `./build/libs/kdaptive-1.1.0.jar` after `./gradlew build`, and `:examples`
+> lands in `./build/libs/kdaptive-4.0.0.jar` after `./gradlew build`, and `:examples`
 > consumes `:kdaptive` (the root module) from the same multi-module build. To use the
 > library in another project, either include it (composite build / `includeBuild`) or
 > install the jar into a local repository of your choice.
-
----
 
 ## What is an adaptive automaton?
 
@@ -65,8 +61,6 @@ needed. A classic theoretical result: aⁿbⁿcⁿ is recognizable from an inset
 state and no transitions at all**, because the first adaptive action bootstraps the
 expansion. Our companion example takes the safer, practical route: a small explicit
 inset of four states that its action `A` grows and prunes while the cursor advances.
-
----
 
 ## Two ways to build an automaton
 
@@ -127,9 +121,15 @@ submachines, the `from { }` group block, infix `on`/`to` operators, pitfalls).
 ### Running it
 
 ```kotlin
-val accepted = ka.recognize(convert("aaaa"))   // convert(): String -> List<Symbol>
-println(accepted)                              // true
+val result = ka.recognize(convert("aaaa"))   // convert(): String -> List<Symbol>
+println(result.accepted)                     // true
+println(result.acceptedPaths)                // the paths that accepted the input
 ```
+
+`recognize()` answers with a **result object**, not with a bare `Boolean`: the verdict
+*and* the paths it was made of. `result.accepted` is the verdict; `result.paths` holds
+every path that reached a verdict, and `result.acceptedPaths` / `result.rejectedPaths` /
+`result.cutPaths` split them by outcome.
 
 > **Hint**: `convert()` is the examples-module helper that maps `String` to
 > `List<Symbol>`; the library itself takes a list of `Symbol`s (so a *lexer-like* input
@@ -139,8 +139,6 @@ println(accepted)                              // true
 > ka.recognize(listOf(CharSymbol('a'), CharSymbol('a')))
 > ```
 
----
-
 ## The adaptive-actions engine
 
 Actions are what turn a bare automaton into an *adaptive* one. The engine,
@@ -149,7 +147,7 @@ transition mapping, driven from inside your action handlers:
 
 ```kotlin
 actions.add(Action(name = "A") { transitions, transition, parameters ->
-    val ea = ElementaryActions(transitions)
+    val ea = ElementaryActions(transitions, submachines)
     // Remove the 'a'-edge I am currently traversing (one-shot), then re-insert
     // a fresh copy elsewhere so the automaton can explode on demand.
     val p1: State = parameters[0].asState()
@@ -159,12 +157,14 @@ actions.add(Action(name = "A") { transitions, transition, parameters ->
 })
 ```
 
+`ElementaryActions` takes the live mapping **and** the declared submachines: the second
+argument is what lets `addCall` reject a call to a submachine that does not exist, at
+the place where the addition is written.
+
 See **[docs/ADAPTIVE-ACTIONS-GUIDE.md](docs/ADAPTIVE-ACTIONS-GUIDE.md)** for the full
 guide: firing order (prior/post), the per-path mutation-isolation model, argument
 matching rules, the DSL-style `query { }` / `remove { }` blocks, transition predicates,
 and a catalogue of pitfalls and warnings.
-
----
 
 ## Observing recognition: the visitor pattern
 
@@ -182,8 +182,7 @@ val visitor = object : ExecutionVisitor {
     override fun onEdgeAdded(
         pathId: Int,
         edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
+        topology: Topology,
     ) {
         events.add("path $pathId added $edge")
     }
@@ -200,18 +199,18 @@ ka.recognize(convert("ab"))
 | `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
 | `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
-| `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
+| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, or was cut |
 | `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse(pathId, edge)` / `onAfterTraverse(pathId, edge)` | around each edge traversal |
 | `onBeforeAction(pathId, actionRef, isPrior)` / `onAfterAction(pathId, actionRef, isPrior)` | around each adaptive action handler |
-| `onEdgeAdded(...)` / `onEdgeRemoved(...)` | after each insertion/deletion in the path's mapping, together with the full mapping and submachines |
+| `onEdgeAdded(...)` / `onEdgeRemoved(...)` | after each insertion/deletion in the path's mapping, together with an immutable `Topology` snapshot |
 | `onCall(pathId, submachine)` / `onReturn(pathId)` | entering or leaving a submachine |
 
 Two rules are worth remembering:
 
-- **A path terminates exactly once**, either with `onPathEnd` (accept or reject) or with
-  `onPathFork` (the path was replaced by its children). A visitor that tracks open paths
-  must handle both.
+- **A path terminates exactly once**, either with `onPathEnd` (accept, reject, or cut) or
+  with `onPathFork` (the path was replaced by its children). A visitor that tracks open
+  paths must handle both.
 - **Callbacks are synchronous**, on the recognition thread: a slow visitor slows
   recognition down. With no visitor registered the engine skips every callback, so the
   feature costs nothing when unused.
@@ -220,7 +219,10 @@ Two rules are worth remembering:
 
 Forked paths own independent copies of the transition mapping, so a mutation on one path
 never shows up on a sibling. The `onEdgeAdded` / `onEdgeRemoved` events carry the
-`pathId` of the path that mutated, so the streams of different paths stay apart.
+`pathId` of the path that mutated, so the streams of different paths stay apart. What
+they carry is a `Topology` — an **immutable snapshot**, not the live mapping: a visitor
+can inspect the automaton, but it cannot reach into the running recognition and change
+it behind the engine's back.
 
 ### GraphViz export
 
@@ -243,7 +245,7 @@ ka.recognize(convert("ab"))
 The output is plain text: there is **no dependency on the `dot` binary** nor on any
 GraphViz library. Save a frame as `frame.dot` and render it with
 `dot -Tpng frame.dot -o frame.png`, or feed it to any GraphViz-compatible tool.
-`DotExporter.toDot(transitions, submachines)` is public too, so a topology can also be
+`DotExporter.toDot(topology: Topology)` is public too, so a topology can also be
 snapshotted on demand.
 
 A runnable example lives in `br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExample`:
@@ -251,8 +253,6 @@ A runnable example lives in `br.usp.poli.lta.cereda.kdaptive.examples.GraphVizEx
 ```bash
 ./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.GraphVizExampleKt
 ```
-
----
 
 ## Instrumentation: measuring what you want
 
@@ -313,9 +313,11 @@ value — a wildcard is `State.Any`, `Symbol.Any`, `SubmachineRef.Any` or
 
 The pattern also reports **how many values each filter may select**:
 `sourceDomainSize`, `symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`,
-`priorDomainSize` and `postDomainSize`. A concrete filter reports `1`, a **domain**
-reports the number of its members, and a wildcard reports `null` — unbounded. These are
-facts, not costs.
+`priorDomainSize` and `postDomainSize`. Each is a `DomainSize`: a concrete filter
+reports `DomainSize.Bounded(1)`, a **domain** reports `DomainSize.Bounded(n)` with the
+number of its members, and a wildcard reports `DomainSize.Unbounded` — which names an
+unbounded number of values, and is *not* the same as "empty". These are facts, not
+costs: what an unbounded filter is worth is the consumer's decision.
 
 ### Facts published by an action
 
@@ -324,11 +326,11 @@ the projection of a query result, say — it publishes a fact, and the consumer 
 whether it is worth anything:
 
 ```kotlin
-data class DomainSize(val count: Int) : Observation
+data class DomainCount(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
     val matched = ea.query(q0, sym('b'), State.Any)
-    observe(DomainSize(matched.map { it.source }.distinct().size))
+    observe(DomainCount(matched.map { it.source }.distinct().size))
     ea.remove(k, sym('a'), State.Any)
     ea.add(k, sym('a'), k)
 }
@@ -361,8 +363,6 @@ println(visitor.report())
 
 Changing that cost model means changing `CostVisitor` and nothing else.
 
----
-
 ## Model API tour
 
 | Type | Role |
@@ -375,14 +375,18 @@ Changing that cost model means changing `CostVisitor` and nothing else.
 | `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and the prior/post action slots — an `ActionRef.Bound` or the empty slot `ActionRef.None`. |
 | `Submachine` | A named automaton fragment with its own initial/accepting states; called via `call(...)` and returning via a synthetic return transition. |
 | `Action` / `ActionRef` / `ActionHandler` | A named action with its Kotlin handler; `ActionRef.Bound(name, args)` references it with arguments on an edge, `ActionRef.None` is the empty slot, while `Free`/`Any`/`Named` filter an action slot in a query or a removal. |
+| `Arity` | How many arguments an action is called with: `Arity.Any` or `Arity.Exactly(n)`. |
+| `DomainSize` | How many values a filter may select: `DomainSize.Bounded(count)` or `DomainSize.Unbounded`. |
 | `Stack` | The call stack backing submachine call/return discipline. |
-| `TransitionMapping` | The mutable set of edges; O(1) filtered lookups via `withSourceState` and friends. |
-| `RecognitionPath` | The trail of one recognizer path: transition `toString()`s, termination cursor/state, and the `PathOutcome` verdict (`PENDING`, `ACCEPTED` or `REJECTED`). |
-| `AdaptiveAutomaton` | The automaton itself, plus the recognition driver. |
+| `Actions` / `Submachines` | The collections of an automaton's actions and submachines. Both are iterable, and both answer `size` and `contains` directly. |
+| `TransitionMapping` | The **live** set of edges: `val transitions`, `val size`, `contains(id)`, and the mutation sinks. |
+| `Topology` | The **immutable snapshot** of a topology: its edges, its submachines, and the queries (`edgesFrom`, `edgesConsuming`, `matching`, …). |
+| `TransitionPattern` | The single implementation of what a filter means: `matches(edge)` answers it, edge by edge. |
+| `RecognitionPath` | One recognizer path: the trail of `TransitionEdge`s it walked, its cursor, its state, and the `PathOutcome` verdict (`PENDING`, `ACCEPTED`, `REJECTED` or `CUT`). |
+| `RecognitionResult` | What `recognize()` returns: the verdict (`accepted`) and the paths it was made of. |
+| `AdaptiveAutomaton` | The automaton itself, plus the recognition driver, the `stopOnFirstAcceptance` flag and the `limits` backstop. |
 | `ExecutionVisitor` | The recognition-event interface: no-op defaults for every event, registered through `AdaptiveAutomaton.visitors`. |
 | `DotExporter` / `GraphVizVisitor` | GraphViz DOT rendering of a topology, and the visitor that emits a snapshot on every mutation. |
-
----
 
 ## The recognition model, precisely
 
@@ -405,51 +409,90 @@ These semantics come straight from the original Java implementation and are pres
    isolated per path. Input is shared (read-only).
 6. `recognize()` **clones the automaton before running** it: your configured original is
    never mutated, and repeated `recognize()` calls are completely independent.
+7. **Acceptance is tested only when the path is stuck.** A path that is accepting but
+   still has a move available keeps moving: an accepting state with an outgoing epsilon
+   edge does **not** accept, because the path never comes to rest there.
+8. **A path that re-enters a configuration it already left is cut.** The engine proves
+   that such a branch cannot reach a verdict — acceptance is only ever tested from a
+   stuck position — and prunes it, reporting `PathOutcome.CUT`. The cut is neither an
+   acceptance nor a rejection.
 
 > **Call-out**: because forked paths get copies, an adaptive action executed on one path
 > cannot undo a mutation performed on a sibling path. Effects are per-path, which is
 > precisely what gives the device its expressive power (a path can "check" a hypothesis
 > without leaving traces on the others).
 
----
-
 ## Non-determinism and path control
 
-Anything ambiguous forks paths. Use `stopAtFirstFinishedRecognitionPath = true` (or
-`setStopAtFirstResult(true)`) to stop as soon as **one path terminates (accepted OR
-rejected**. That is *not* an "exists an accepting path" oracle: a fast rejection also
-halts everything. Use it when only one path is expected to complete anyway (e.g.
-deterministic automata), or when you deliberately want first-outcome semantics.
-The default is exhaustive: every path runs to completion.
-
-After `recognize()` you can inspect every path:
+Anything ambiguous forks paths. The default is **exhaustive**: every path runs to
+completion, and the result carries them all.
 
 ```kotlin
 val result = ka.recognize(convert("abab"))
-val paths = ka.getRecognitionPaths()   // List<RecognitionPath>
-println(paths.joinToString("\n"))      // e.g. RecognitionPath(id=1, result=true) { ... }
+println(result.accepted)                       // the verdict
+println(result.paths)                          // every path that reached a verdict
+println(result.acceptedPaths)                  // the ones that accepted
+println(result.rejectedPaths)                  // the ones that rejected
+println(result.cutPaths)                       // the ones the engine pruned
 ```
-Calling `getRecognitionPaths()` *before* `recognize()` throws `IllegalStateException`
-by design (fail fast instead of returning "no paths yet").
 
----
+Set `stopOnFirstAcceptance = true` to stop as soon as **one path accepts**:
+
+```kotlin
+ka.stopOnFirstAcceptance = true
+val result = ka.recognize(convert("abab"))
+```
+
+Only an acceptance is decisive. Under the existence semantics of the automaton, a
+*rejecting* path says nothing about the branches still in flight, so stopping on one
+would answer "rejected" for an input the automaton does accept. The old
+`stopAtFirstFinishedRecognitionPath` flag did exactly that, and could return a wrong
+`false`; it is gone, and its replacement fires on acceptance only.
+
+> **Hint**: the flag is a property, not a method: `stopOnFirstAcceptance = true`. The
+> Java-style `setStopAtFirstResult(true)` setter was deleted — it was a second way to
+> set the same thing.
+
+### Epsilon cycles: rejected, warned, or cut
+
+An epsilon cycle (a cycle of transitions that consume nothing) makes a path run forever.
+v4.0.0 answers it in two layers:
+
+- **Statically**, the validator looks for a *reachable* epsilon-only cycle. If the
+  automaton registers **no** adaptive actions, nothing can change the topology during the
+  run, so the cycle is provably non-terminating: the automaton is **rejected** at
+  `recognize()` time. With actions present the cycle is **warned** about (SLF4J), because
+  an action may legitimately break it.
+- **At runtime**, a path that re-enters a configuration it already left is **cut**: its
+  outcome becomes `PathOutcome.CUT`, and the exploration carries on with the other
+  branches. A cut discards no verdict, because acceptance is only ever tested from a
+  stuck position, and a path that revisits a configuration was never stuck there.
+
+The cut is guarded by an **action epoch**: if an action fired since the ancestor visit,
+the future is not provably identical, so no cut happens and the action gets its chance.
+That is what keeps the one-shot idiom (a prior action that removes its own edge) working.
+
+For the topologies the engine cannot *prove* to be bounded — those whose configuration
+never repeats because an action keeps changing it — a structural backstop applies:
+`limits` bounds the live paths, the steps per path and the call depth. When a bound
+trips, the engine **throws** `IllegalStateException`: the answer there is "unknown", not
+"rejected". There is no wall-clock timeout anywhere in the engine.
+
+```kotlin
+aa.limits = RecognitionLimits(maxLivePaths = 10_000, maxStepsPerPath = 10_000, maxCallDepth = 1_000)
+```
 
 ## Module layout
 
-```
-kdaptive/                    the library (root module)
-  src/main/kotlin/br/usp/poli/lta/cereda/kdaptive/
-    model/                   State, Symbol, CharSymbol, Transition, TransitionEdge,
-                             Submachine, Action, Stack + Observation, MappingOperation,
-                             TransitionPattern + predicates/ + sets/ + actions/
-    execution/               AdaptiveAutomaton (the public entry), PathExecutor, PathExecutorConfig,
-                             ExecutionVisitor (the recognition-event interface), ForkedPath
-    dot/                     DotExporter, GraphVizVisitor (GraphViz DOT export)
-    dsl/                     AutomatonDsl.kt: automaton { } / specToAutomaton
-    logging/                 SLF4J facade (`val <T> Any.logger`)
-  src/test/kotlin/           mirrors main, with unit, error-path and coverage tests
-examples/                    :examples, 16 executable examples, depends on the root module
-```
+| Path | Contents |
+|---|---|
+| `kdaptive/src/main/kotlin/…/model/` | `State`, `Symbol`, `CharSymbol`, `Transition`, `TransitionEdge`, `Submachine`, `Action`, `Stack`, plus `Observation`, `MappingOperation`, `TransitionPattern`, `Topology`, `DomainSize`, `Arity`, and the `Actions`, `Submachines` and `TransitionMapping` collections, with the `predicates/` and `actions/` packages |
+| `kdaptive/src/main/kotlin/…/execution/` | `AdaptiveAutomaton` (the public entry point), `PathExecutor`, `PathExecutorConfig`, `ExecutionVisitor` (the recognition-event interface), `RecognitionResult`, `RecognitionLimits`, `ForkedPath` |
+| `kdaptive/src/main/kotlin/…/dot/` | `DotExporter`, `GraphVizVisitor` (the GraphViz DOT export) |
+| `kdaptive/src/main/kotlin/…/dsl/` | `AutomatonDsl.kt`: the `automaton { }` builder and `specToAutomaton` |
+| `kdaptive/src/main/kotlin/…/logging/` | the SLF4J facade (`val <T> Any.logger`) |
+| `kdaptive/src/test/kotlin/` | mirrors the main source set, with unit, error-path and coverage tests |
+| `examples/` | the `:examples` module: 16 executable examples, depending on the root module |
 
 The **16 examples** double as the living documentation: each is small, prints its result,
 and has a test that keeps it honest:
@@ -479,8 +522,6 @@ Run any of them:
 ./gradlew :examples:run -Pmain=br.usp.poli.lta.cereda.kdaptive.examples.RegularLanguageExampleKt
 ```
 
----
-
 ## Build & develop
 
 All commands assume the Gradle wrapper:
@@ -488,7 +529,9 @@ All commands assume the Gradle wrapper:
 ```bash
 ./gradlew build                 # compile + test + detekt + Spotless check + Kover verify
 ./gradlew clean build           # full rebuild
-./gradlew test                  # library tests only
+./gradlew test                  # tests of every module (library + examples)
+./gradlew :test                 # library tests only
+./gradlew :examples:test        # example tests only
 ./gradlew dokkaGenerateHtml     # API docs in ./build/dokka/html, warnings fail the build
 ./gradlew koverHtmlReport       # coverage report → build/reports/kover/html/index.html
 ./gradlew :examples:run -Pmain=<FullyQualifiedMainKt>   # run an example
@@ -513,14 +556,102 @@ All commands assume the Gradle wrapper:
   (the library claims Kotlin api/language 2.4.0 and Java 11 bytecode, and it means it).
 - **Spotless**: license header + ktlint on every file.
 
----
-
 ## Compatibility
 
 - The bytecode is Java 11; Kotlin language/api level 2.4.0. Kotlin 2.4.21 is the compiler.
 - No Android-specific code; it should run on the JVM and in Android modules that ship
   Java 11+ or desugared Kotlin stdlib.
 - Choose any SLF4J backend you like (`slf4j-simple` is prewired for tests/examples).
+
+### The null-free doctrine
+
+**No public member of the library has a nullable type.** Not a filter, not a value, not a
+marker, not a configuration slot. "Not configured yet" is a real state, but it is a
+private one: it surfaces as an exception, never as a `null` the consumer has to guard
+against.
+
+```kotlin
+aa.mainSubmachine = "M"        // fine
+aa.mainSubmachine               // IllegalStateException: Main submachine cannot be null.
+```
+
+The doctrine is enforced by a test that sweeps the compiled library with reflection and
+fails on any public nullable type, so it cannot regress silently. The only nulls left in
+the library are private implementation details (the lazy by-source index, the private
+"not configured yet" slots) and the standard `equals(other: Any?)` override the language
+itself mandates.
+
+### Changes in 4.0.0
+
+This is a **breaking** release. It answers the epsilon-cycle question, turns the
+recognition into a result object, completes the null-demotion sweep, and brings the
+API to Kotlin idiom.
+
+- **The epsilon cycle question has an answer.** A reachable epsilon-only cycle is now
+  **rejected at validation time** when the automaton registers no adaptive actions
+  (nothing can then change the topology, so the cycle is provably non-terminating), and
+  **warned about** when actions are present (an action may legitimately break it). At
+  runtime, a path that re-enters a configuration it already left is **cut**: its outcome
+  becomes the new `PathOutcome.CUT`, and the other branches carry on. A cut discards no
+  verdict: acceptance is only ever tested from a stuck position, and a path that
+  revisits a configuration was never stuck there. The cut is guarded by an **action
+  epoch**, so an action that fires in between keeps its chance to break the cycle.
+- **A structural backstop replaces the hang.** `AdaptiveAutomaton.limits` carries
+  `RecognitionLimits(maxLivePaths, maxStepsPerPath, maxCallDepth)`. When a bound trips,
+  the engine **throws** `IllegalStateException` — the answer there is "unknown", not
+  "rejected". There is **no wall-clock timeout** anywhere in the engine.
+- **`recognize()` returns a `RecognitionResult`** instead of a `Boolean`. It carries
+  `accepted` and `paths`, plus `acceptedPaths`, `rejectedPaths` and `cutPaths`.
+- **`getRecognitionMap()` and `getRecognitionPaths()` are deleted.** The result carries
+  the paths, and the "call `recognize()` first" exception is gone with them. Two
+  recognitions running concurrently on one automaton no longer share any state.
+- **`stopAtFirstFinishedRecognitionPath` → `stopOnFirstAcceptance`**, and its semantics
+  are fixed: it fires on an **acceptance only**. The old flag stopped on any finished
+  path, including a rejection, and could therefore answer a wrong `false`.
+- **`RecognitionPath.path` is a `List<TransitionEdge>`** and now records **every**
+  traversal, for every path — including the synthesised `Transition.Return` edges. It
+  used to be a list of renderings, and it used to stay empty on deterministic runs.
+- **`PathOutcome` gains `CUT`**, and `ExecutionVisitor.onPathEnd` takes a `PathOutcome`
+  instead of a `Boolean`: a cut is neither an acceptance nor a rejection, and the
+  visitor can tell them apart.
+- **`ExecutionVisitor.onEdgeAdded` / `onEdgeRemoved` hand out an immutable `Topology`**
+  instead of the live mutable mapping. A visitor can no longer reach into the running
+  recognition and change it.
+- **`DotExporter.toDot` takes a `Topology`.**
+- **`TransitionPattern.matches(edge)`** is the single implementation of what a filter
+  means. The 14 `TransitionMapping.withX(...)` filter methods are **deleted**: plain
+  topology queries live on `Topology` (`edgesFrom`, `edgesConsuming`, `callsTo`,
+  `epsilonEdges`, `edgesWithPrior`, …), and pattern queries live on the pattern.
+- **`DomainSize` is a sealed type.** The six `*DomainSize` properties of
+  `TransitionPattern` are `DomainSize.Bounded(count)` or `DomainSize.Unbounded` instead
+  of `Int?`, so "unbounded" is no longer conflated with "empty".
+- **`Arity` replaces the nullable arity.** `action("A", arity = n)` becomes
+  `action("A", arity = Arity.Exactly(n))`; the wildcard is `Arity.Any`.
+- **The public API is null-free.** `RecognitionPath.state` is a `State`;
+  `AutomatonSpec.main` is a required `String`; `TopologyValidator.validate` takes a
+  non-null main; `AdaptiveAutomaton.mainSubmachine` and `AutomatonBuilder.main` are
+  non-null properties over private slots, with fail-fast getters.
+- **`model.actions.requireNonNull` is deleted**, and `asState()` / `asSymbol()` take
+  their receiver as `Any` instead of `Any?`.
+- **`addCall` validates the names of a `SubmachineRef.Domain`** against the declared
+  submachines and throws naming the offender, instead of failing later at runtime.
+- **The Kotlin-idiom pass renames the accessors:**
+
+  | Before (3.0.0) | After (4.0.0) |
+  |---|---|
+  | `TransitionMapping.getTransitions()` | `val transitions` |
+  | `TransitionMapping.size()` | `val size` |
+  | `TransitionMapping.hasIdentifier(id)` | `fun contains(id)` |
+  | `ActionsSet.getActions()` / `.setActions(x)` / `.size()` | the `Actions` collection itself: iterate it, `val size`, `fun replaceAll(x)` |
+  | `SubmachinesSet.getSubmachines()` / `.setSubmachines(x)` / `.size()` | the `Submachines` collection itself: iterate it, `val size`, `fun replaceAll(x)` |
+  | `SubmachinesSet.getFromName(n)` / `.getFromState(s)` | `fun fromName(n)` / `fun fromState(s)` |
+  | `ActionsSet` / `SubmachinesSet` (in the `model.sets` package) | `Actions` / `Submachines` (in the `model` package) |
+  | `Stack.isEmpty()` / `.elementsList()` / `.top()` | `val isEmpty` / `val elements` / `fun peek()` |
+  | `AdaptiveAutomaton.setStopAtFirstResult(flag)` | deleted — the property is the only way |
+
+  `Actions` and `Submachines` are now **iterable collections**: there is no second,
+  more official way to reach their contents, so `aa.submachines.submachines` no longer
+  exists.
 
 ### Changes in 3.0.0
 

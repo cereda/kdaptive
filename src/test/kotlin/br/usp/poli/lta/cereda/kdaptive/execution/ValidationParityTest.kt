@@ -294,6 +294,6 @@ class ValidationParityTest {
                 automaton.consume(V0, 'a', V1)
                 automaton.mainSubmachine = "M"
             }
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
     }
 }

@@ -85,7 +85,7 @@ class ThreadSafetyTest {
         // The configured automaton owns the topology; the recognitions run on
         // clones and never touch it.
         aa.setup()
-        val configured = aa.transitions.size()
+        val configured = aa.transitions.size
         val inputs = listOf("a", "b", "a", "b", "a", "b", "a", "b")
         val gate = StartGate()
         // Every thread writes to its own slot: the results are gathered when
@@ -96,7 +96,7 @@ class ThreadSafetyTest {
             inputs.mapIndexed { index, input ->
                 thread {
                     gate.await()
-                    results[index] = aa.recognize(input.map { CharSymbol(it) })
+                    results[index] = aa.recognize(input.map { CharSymbol(it) }).accepted
                 }
             }
         gate.open()
@@ -109,7 +109,7 @@ class ThreadSafetyTest {
         )
 
         // The configured automaton was never mutated by the recognitions.
-        assertEquals(configured, aa.transitions.size())
+        assertEquals(configured, aa.transitions.size)
     }
 
     @Test
@@ -162,7 +162,7 @@ class ThreadSafetyTest {
             },
         )
 
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
 
         assertTrue(seen.contains("start"))
         assertTrue(seen.contains("end"))
@@ -172,8 +172,9 @@ class ThreadSafetyTest {
     fun `the results of the last recognition are published when it is over`() {
         val aa = AcceptingAa()
 
-        assertFalse(aa.recognize(listOf(CharSymbol('b'))))
-        assertEquals(1, aa.getRecognitionPaths().size)
-        assertEquals(PathOutcome.REJECTED, aa.getRecognitionPaths().single().outcome)
+        val result = aa.recognize(listOf(CharSymbol('b')))
+        assertFalse(result.accepted)
+        assertEquals(1, result.paths.size)
+        assertEquals(PathOutcome.REJECTED, result.paths.single().outcome)
     }
 }

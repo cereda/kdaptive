@@ -4,10 +4,9 @@ package br.usp.poli.lta.cereda.kdaptive.dot
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
  * Exports an automaton topology to GraphViz DOT format.
@@ -28,18 +27,17 @@ import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 class DotExporter {
 
     /**
-     * Renders [transitions] and [submachines] as a DOT document.
+     * Renders [topology] as a DOT document.
      *
      * The rendering is deterministic: the same topology always yields the same
      * document, which makes consecutive snapshots diffable.
      *
-     * @param transitions the transition mapping to render
-     * @param submachines the submachines defining clusters and accepting states
+     * @param topology the topology to render
      * @return a DOT-formatted string
      */
-    fun toDot(transitions: TransitionMapping, submachines: SubmachinesSet): String {
-        val allTransitions = transitions.getTransitions().toList()
-        val allSubmachines = submachines.getSubmachines().sortedBy { it.name }
+    fun toDot(topology: Topology): String {
+        val allTransitions = topology.edges.toList()
+        val allSubmachines = topology.submachines.sortedBy { it.name }
         val stateIndex = indexStates(allTransitions, allSubmachines)
         val ownerOf = ownersOf(allSubmachines)
         val (internalEdges, externalEdges) = allTransitions.partition { edge -> isInternal(edge, ownerOf) }

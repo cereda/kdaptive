@@ -5,6 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.automaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -64,7 +65,7 @@ class GraphVizVisitorTest {
         val a = specToAutomaton(addingSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertEquals(1, frames.size)
         val (_, dot) = frames.first()
@@ -96,9 +97,10 @@ class GraphVizVisitorTest {
         val a = specToAutomaton(addingSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        val result = a.recognize(listOf(CharSymbol('a'), CharSymbol('a')))
+        assertTrue(result.accepted)
 
-        val pathIds = a.getRecognitionMap().keys
+        val pathIds = result.paths.map { it.id }.toSet()
         assertFalse(frames.isEmpty())
         assertTrue(frames.all { frame -> frame.first in pathIds })
     }
@@ -121,10 +123,10 @@ class GraphVizVisitorTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val edge = a.transitions.getTransitions().first()
+        val edge = a.transitions.transitions.first()
 
-        visitor.onEdgeAdded(7, edge, a.transitions, a.submachines)
-        visitor.onEdgeRemoved(7, edge, a.transitions, a.submachines)
+        visitor.onEdgeAdded(7, edge, Topology.of(a.transitions, a.submachines))
+        visitor.onEdgeRemoved(7, edge, Topology.of(a.transitions, a.submachines))
 
         assertEquals(2, frames.size)
         assertTrue(frames.all { frame -> frame.first == 7 })

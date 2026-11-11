@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -88,7 +85,7 @@ class ModelEqualityTest {
         mapping.add(edge)
         mapping.add(edge.copy())
 
-        assertEquals(1, mapping.size())
+        assertEquals(1, mapping.size)
         // The observer saw one insertion, not two.
         assertEquals(1, added.size)
     }
@@ -106,8 +103,8 @@ class ModelEqualityTest {
 
         val copy = mapping.copy()
 
-        assertEquals(mapping.size(), copy.size())
-        val copied = copy.getTransitions().single()
+        assertEquals(mapping.size, copy.size)
+        val copied = copy.transitions.single()
         assertEquals(edge, copied)
         assertNotEquals(edge.id, copied.id)
     }
@@ -125,11 +122,11 @@ class ModelEqualityTest {
 
     @Test
     fun `the set of actions holds one action per name`() {
-        val set = ActionsSet()
+        val set = Actions()
         set.add(Action(name = "A") { _, _, _ -> })
         set.add(Action(name = "A") { _, _, _ -> error("replaced") })
 
-        assertEquals(1, set.size())
+        assertEquals(1, set.size)
         assertEquals("A", set.fromName("A").name)
     }
 
@@ -144,12 +141,12 @@ class ModelEqualityTest {
 
     @Test
     fun `the set of submachines holds one submachine per name`() {
-        val set = SubmachinesSet()
+        val set = Submachines()
         set.add(Submachine(name = "M", states = setOf(E0), initialState = E0, acceptingStates = setOf(E0)))
         set.add(Submachine(name = "M", states = setOf(E0), initialState = E0, acceptingStates = setOf(E0)))
 
-        assertEquals(1, set.size())
-        assertTrue(set.getFromName("M").states.contains(E0))
+        assertEquals(1, set.size)
+        assertTrue(set.fromName("M").states.contains(E0))
     }
 
     @Test

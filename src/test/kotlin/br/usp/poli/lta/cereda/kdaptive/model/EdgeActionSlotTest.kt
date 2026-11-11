@@ -3,7 +3,6 @@ package br.usp.poli.lta.cereda.kdaptive.model
 
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -81,7 +80,7 @@ class EdgeActionSlotTest {
         val m = TransitionMapping()
         m.add(edge(prior = actionRef("A")))
         m.add(edge(post = actionRef("B")))
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         // The empty slot is the "no action" value, not a missing one.
         assertEquals(1, ea.query(symbol = Symbol.Epsilon, prior = ActionRef.None).size)

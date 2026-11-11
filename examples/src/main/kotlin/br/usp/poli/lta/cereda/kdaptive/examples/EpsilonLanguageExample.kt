@@ -33,7 +33,7 @@ class EpsilonLanguageExample : AdaptiveAutomaton() {
         consume(q1, 'b', q1)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

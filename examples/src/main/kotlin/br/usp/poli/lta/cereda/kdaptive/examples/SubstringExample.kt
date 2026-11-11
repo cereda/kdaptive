@@ -51,7 +51,7 @@ class SubstringExample : AdaptiveAutomaton() {
         consume(q2, CharSymbol('b'), q2)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

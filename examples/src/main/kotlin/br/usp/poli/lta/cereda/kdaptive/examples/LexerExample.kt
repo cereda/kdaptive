@@ -50,9 +50,9 @@ class LexerExample : AdaptiveAutomaton() {
         var compare = 0
         do {
             symbols = symbols.subList(compare, size)
-            recognize(symbols)
+            val result = recognize(symbols)
             size = symbols.size
-            val paths = getRecognitionPaths()
+            val paths = result.paths
             if (paths.isEmpty()) break
             val cursor = paths[0].cursor
             compare = if (cursor == compare) compare + 1 else cursor

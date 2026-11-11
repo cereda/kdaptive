@@ -53,23 +53,35 @@ class TransitionPatternKindTest {
 
     @Test
     fun `the submachine filter drives the domain size`() {
-        assertEquals(null, TransitionPattern(submachine = SubmachineRef.Any).submachineDomainSize)
-        assertEquals(1, TransitionPattern(submachine = SubmachineRef.Named("M")).submachineDomainSize)
-        assertEquals(2, TransitionPattern(submachine = SubmachineRef.anyOf("M", "N")).submachineDomainSize)
-        assertEquals(1, TransitionPattern().submachineDomainSize)
+        assertEquals(
+            DomainSize.Unbounded,
+            TransitionPattern(submachine = SubmachineRef.Any).submachineDomainSize,
+        )
+        assertEquals(
+            DomainSize.Bounded(1),
+            TransitionPattern(submachine = SubmachineRef.Named("M")).submachineDomainSize,
+        )
+        assertEquals(
+            DomainSize.Bounded(2),
+            TransitionPattern(submachine = SubmachineRef.anyOf("M", "N")).submachineDomainSize,
+        )
+        assertEquals(DomainSize.Bounded(1), TransitionPattern().submachineDomainSize)
     }
 
     @Test
     fun `the symbol filter does not apply to the call family`() {
         val call = TransitionPattern(submachine = SubmachineRef.Any)
 
-        assertEquals(1, call.symbolDomainSize)
+        assertEquals(DomainSize.Bounded(1), call.symbolDomainSize)
     }
 
     @Test
     fun `the symbol filter drives the domain size in the symbol family`() {
-        assertEquals(null, TransitionPattern().symbolDomainSize)
-        assertEquals(1, TransitionPattern(symbol = CharSymbol('a')).symbolDomainSize)
-        assertEquals(2, TransitionPattern(symbol = Symbol.anyOf(CharSymbol('a'), CharSymbol('b'))).symbolDomainSize)
+        assertEquals(DomainSize.Unbounded, TransitionPattern().symbolDomainSize)
+        assertEquals(DomainSize.Bounded(1), TransitionPattern(symbol = CharSymbol('a')).symbolDomainSize)
+        assertEquals(
+            DomainSize.Bounded(2),
+            TransitionPattern(symbol = Symbol.anyOf(CharSymbol('a'), CharSymbol('b'))).symbolDomainSize,
+        )
     }
 }

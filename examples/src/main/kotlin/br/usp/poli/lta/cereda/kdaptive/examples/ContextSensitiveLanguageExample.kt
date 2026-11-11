@@ -3,6 +3,7 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.dsl.automaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
+import br.usp.poli.lta.cereda.kdaptive.model.Arity
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.actions.asState
@@ -34,7 +35,7 @@ class ContextSensitiveLanguageExample {
             // The adaptive action 'A': rewires the 'b' and 'c' edges through
             // fresh states, so the counts of 'a's, 'b's and 'c's must match.
             // Both references bind two arguments, which the arity contract checks.
-            action("A", arity = 2) { _, args ->
+            action("A", arity = Arity.Exactly(2)) { _, args ->
                 val p1: State = args[0].asState()
                 val p2: State = args[1].asState()
                 val g1 = freshState()
@@ -86,11 +87,18 @@ class ContextSensitiveLanguageExample {
 
     private val aa = specToAutomaton(spec)
 
+    /** The paths of the last recognition. */
+    private var lastPaths: List<RecognitionPath> = emptyList()
+
     /** Recognises [input] over the alphabet {a, b, c}. */
-    fun recognize(input: String): Boolean = aa.recognize(convert(input))
+    fun recognize(input: String): Boolean {
+        val result = aa.recognize(convert(input))
+        lastPaths = result.paths
+        return result.accepted
+    }
 
     /** Returns the recognition paths collected during the last recognition. */
-    fun getRecognitionPaths(): List<RecognitionPath> = aa.getRecognitionPaths()
+    fun getRecognitionPaths(): List<RecognitionPath> = lastPaths
 }
 
 fun main() {

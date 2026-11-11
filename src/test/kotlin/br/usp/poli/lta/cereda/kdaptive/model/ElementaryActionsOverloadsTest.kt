@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
@@ -36,11 +34,11 @@ class ElementaryActionsOverloadsTest {
     @Test
     fun `add installs an edge carrying the prior and the post action`() {
         val mapping = TransitionMapping()
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.add(P0, sym('a'), P1, actionRef("A", "x"), actionRef("B", 1))
 
-        val edge = mapping.getTransitions().single()
+        val edge = mapping.transitions.single()
         assertEquals(ActionRef.Bound("A", listOf("x")), edge.prior)
         assertEquals(ActionRef.Bound("B", listOf(1)), edge.post)
     }
@@ -48,11 +46,11 @@ class ElementaryActionsOverloadsTest {
     @Test
     fun `add installs an epsilon transition`() {
         val mapping = TransitionMapping()
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.add(P0, Symbol.Epsilon, P1)
 
-        val edge = mapping.getTransitions().single()
+        val edge = mapping.transitions.single()
         assertTrue(edge.transition is Transition.Epsilon)
         assertEquals(ActionRef.None, edge.prior)
         assertEquals(ActionRef.None, edge.post)
@@ -61,11 +59,11 @@ class ElementaryActionsOverloadsTest {
     @Test
     fun `addCall installs a submachine call`() {
         val mapping = TransitionMapping()
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.addCall(P0, SubmachineRef.Named("M"), P1, actionRef("A"), actionRef("B"))
 
-        val edge = mapping.getTransitions().single()
+        val edge = mapping.transitions.single()
         assertEquals(Transition.Call(submachine = "M"), edge.transition)
         assertEquals(ActionRef.Bound("A"), edge.prior)
         assertEquals(ActionRef.Bound("B"), edge.post)
@@ -73,7 +71,7 @@ class ElementaryActionsOverloadsTest {
 
     @Test
     fun `add refuses the wildcards`() {
-        val ea = ElementaryActions(TransitionMapping())
+        val ea = ElementaryActions(TransitionMapping(), Submachines())
 
         assertThrows<IllegalArgumentException> { ea.add(State.Any, sym('a'), P1) }
         assertThrows<IllegalArgumentException> { ea.add(P0, Symbol.Any, P1) }
@@ -109,7 +107,7 @@ class ElementaryActionsOverloadsTest {
         mapping.add(t1)
         mapping.add(t2)
         mapping.add(t3)
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         // A named filter checks the name only.
         assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Named("A")).size)
@@ -118,9 +116,9 @@ class ElementaryActionsOverloadsTest {
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, actionRef("A", "x")).size)
 
         ea.remove(State.Any, Symbol.Any, State.Any, ActionRef.Named("A"))
-        assertFalse(mapping.hasIdentifier(t1.id))
-        assertFalse(mapping.hasIdentifier(t2.id))
-        assertTrue(mapping.hasIdentifier(t3.id))
+        assertFalse(mapping.contains(t1.id))
+        assertFalse(mapping.contains(t2.id))
+        assertTrue(mapping.contains(t3.id))
     }
 
     @Test
@@ -142,7 +140,7 @@ class ElementaryActionsOverloadsTest {
                 prior = actionRef("A", "y", 2),
             ),
         )
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         // The marker fixes the arity, but leaves the position unconstrained.
         val loose = ActionRef.Bound("A", listOf(ActionRef.Free, 1))

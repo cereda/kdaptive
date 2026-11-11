@@ -2,12 +2,14 @@
 package br.usp.poli.lta.cereda.kdaptive.dsl
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.Arity
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.asState
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -99,8 +101,8 @@ class DslGapsTest {
         val aa = specToAutomaton(spec)
         val input = { chars: String -> chars.map { CharSymbol(it) } }
 
-        assertTrue(aa.recognize(input("abc")))
-        assertTrue(input("ab").let { !aa.recognize(it) })
+        assertTrue(aa.recognize(input("abc")).accepted)
+        assertTrue(input("ab").let { !aa.recognize(it).accepted })
     }
 
     @Test
@@ -125,7 +127,7 @@ class DslGapsTest {
         val aa = specToAutomaton(spec)
         val input = { chars: String -> chars.map { CharSymbol(it) } }
 
-        assertTrue(aa.recognize(input("abc")))
+        assertTrue(aa.recognize(input("abc")).accepted)
         assertEquals(1, seen.size)
         assertEquals(3, seen[0].size)
         assertTrue(seen[0][0] is State)
@@ -241,7 +243,7 @@ class DslGapsTest {
                         state("q1")
                         accepting("q2")
                     }
-                    action("A", arity = 2) { _, _ -> }
+                    action("A", arity = Arity.Exactly(2)) { _, _ -> }
                     on("q0").on('a').to("q1", post = ref("A", "q1"))
                     main("M")
                 }
@@ -259,7 +261,7 @@ class DslGapsTest {
                     state("q1")
                     accepting("q2")
                 }
-                action("A", arity = 2) { _, _ -> }
+                action("A", arity = Arity.Exactly(2)) { _, _ -> }
                 on("q0").on('a').to("q1", post = ref("A", "q1", "q2"))
                 main("M")
             }
@@ -269,7 +271,7 @@ class DslGapsTest {
     @Test
     fun `a negative arity is rejected`() {
         val builder = AutomatonBuilder()
-        assertThrows<IllegalArgumentException> { builder.action("A", arity = -1) { _, _ -> } }
+        assertThrows<IllegalArgumentException> { builder.action("A", arity = Arity.Exactly(-1)) { _, _ -> } }
     }
 
     @Test
@@ -280,7 +282,7 @@ class DslGapsTest {
                     initial("q0")
                     accepting("q1")
                 }
-                action("Unused", arity = 2) { _, _ -> }
+                action("Unused", arity = Arity.Exactly(2)) { _, _ -> }
                 on("q0").on('a').to("q1")
                 main("M")
             }
@@ -342,7 +344,7 @@ class DslGapsTest {
     @Test
     fun `local ref passes arguments through unchanged`() {
         val context =
-            DslActionContext(ElementaryActions(TransitionMapping()), emptyMap()) { prefix ->
+            DslActionContext(ElementaryActions(TransitionMapping(), Submachines()), emptyMap()) { prefix ->
                 object : State() {
                     override fun toString(): String = prefix
                 }

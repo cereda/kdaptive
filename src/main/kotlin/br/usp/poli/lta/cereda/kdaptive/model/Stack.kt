@@ -6,11 +6,11 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * can be manipulated.
  */
 class Stack {
-    private val elements = ArrayDeque<State>()
+    private val entries = ArrayDeque<State>()
 
     /** Pushes [entry] onto the top of the stack. */
     fun push(entry: State) {
-        elements.addFirst(entry)
+        entries.addFirst(entry)
     }
 
     /**
@@ -19,8 +19,8 @@ class Stack {
      * @throws IllegalStateException if the stack is empty.
      */
     fun pop(): State {
-        check(elements.isNotEmpty()) { "Stack is empty." }
-        return elements.removeFirst()
+        check(entries.isNotEmpty()) { "Stack is empty." }
+        return entries.removeFirst()
     }
 
     /**
@@ -28,35 +28,35 @@ class Stack {
      *
      * @throws IllegalStateException if the stack is empty.
      */
-    fun top(): State {
-        check(elements.isNotEmpty()) { "Stack is empty." }
-        return elements.first()
+    fun peek(): State {
+        check(entries.isNotEmpty()) { "Stack is empty." }
+        return entries.first()
     }
 
-    /** Returns true if this stack contains no elements. */
-    fun isEmpty(): Boolean = elements.isEmpty()
+    /** True if this stack contains no elements. */
+    val isEmpty: Boolean get() = entries.isEmpty()
 
     /** Removes all elements from the stack. */
     fun clear() {
-        elements.clear()
+        entries.clear()
     }
 
     /** Creates a copy of this stack with the same top-to-bottom order. */
     fun copy(): Stack {
         val c = Stack()
-        for (e in elements.toList().reversed()) {
+        for (e in entries.toList().reversed()) {
             c.push(e)
         }
         return c
     }
 
-    /** Returns the elements in top-to-bottom order (without exposing the deque). */
-    fun elementsList(): List<State> = elements.toList()
+    /** The elements of the stack in top-to-bottom order. */
+    val elements: List<State> get() = entries.toList()
 
     /** Returns a human-readable representation of this stack. */
-    override fun toString(): String = if (isEmpty()) {
+    override fun toString(): String = if (isEmpty) {
         "Stack: {}"
     } else {
-        "Stack: { ${elements.joinToString(", ")}, top=${elements.first()} }"
+        "Stack: { ${elements.joinToString(", ")}, top=${entries.first()} }"
     }
 }

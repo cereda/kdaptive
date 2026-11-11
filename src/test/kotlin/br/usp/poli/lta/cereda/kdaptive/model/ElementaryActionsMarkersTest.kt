@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -56,7 +54,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the state wildcard matches any state`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any).size)
         assertEquals(1, ea.query(T0, Symbol.Any, State.Any).size)
@@ -65,7 +63,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the symbol wildcard selects the symbol-consuming edges only`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any).size)
         assertEquals(1, ea.query(State.Any, Symbol.Epsilon, State.Any).size)
@@ -74,7 +72,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the free action marker leaves the slot unconstrained`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         // The symbol edge carries a prior, the other edges do not: the free
         // marker selects them all.
@@ -84,7 +82,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the any action marker requires an action`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Any).size)
         assertEquals(0, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.None).size)
@@ -94,7 +92,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the none action marker requires the absence of an action`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         // The epsilon edge of the call family carries no action at all.
         assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.None).size)
@@ -103,7 +101,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the named action marker ignores the arguments`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Named("A")).size)
         assertEquals(0, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Named("B")).size)
@@ -111,7 +109,7 @@ class ElementaryActionsMarkersTest {
 
     @Test
     fun `the bound action marker fixes the arguments`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, actionRef("A", 1)).size)
         assertEquals(0, ea.query(State.Any, Symbol.Any, State.Any, actionRef("A", 2)).size)

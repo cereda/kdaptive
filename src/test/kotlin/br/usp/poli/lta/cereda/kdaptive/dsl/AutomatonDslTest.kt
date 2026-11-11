@@ -258,7 +258,7 @@ class AutomatonDslTest {
                 main("M")
             }
         val aa = specToAutomaton(spec)
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
     }
 
     @Test
@@ -273,7 +273,7 @@ class AutomatonDslTest {
                 main("M")
             }
         val aa = specToAutomaton(spec)
-        assertFalse(aa.recognize(listOf(CharSymbol('b'))))
+        assertFalse(aa.recognize(listOf(CharSymbol('b'))).accepted)
     }
 
     // -----------------------------------------------------------------------

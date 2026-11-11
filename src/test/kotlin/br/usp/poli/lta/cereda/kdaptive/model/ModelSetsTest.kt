@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
@@ -15,9 +13,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.sourceState
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
-import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -107,16 +102,17 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        assertEquals(2, mapping.size())
-        assertTrue(mapping.hasIdentifier(t1.id))
-        assertFalse(mapping.hasIdentifier(999))
+        assertEquals(2, mapping.size)
+        assertTrue(mapping.contains(t1.id))
+        assertFalse(mapping.contains(999))
 
-        assertEquals(listOf(t1), mapping.withSymbol(sym('a')))
-        assertEquals(listOf(t2), mapping.withEpsilonTransitions())
-        assertEquals(listOf(t1, t2), mapping.withSourceState(S0))
-        assertEquals(listOf(t1), mapping.withSourceStateAndSymbol(S0, sym('a')))
-        assertEquals(listOf(t2), mapping.withEpsilonFromSourceState(S0))
-        assertEquals(emptyList<TransitionEdge>(), mapping.withSourceState(S2))
+        val topology = Topology.of(mapping, Submachines())
+        assertEquals(listOf(t1), topology.edgesConsuming(sym('a')))
+        assertEquals(listOf(t2), topology.epsilonEdges)
+        assertEquals(listOf(t1, t2), topology.edgesFrom(S0))
+        assertEquals(listOf(t1), topology.matching(TransitionPattern(source = S0, symbol = sym('a'))))
+        assertEquals(listOf(t2), topology.epsilonEdgesFrom(S0))
+        assertEquals(emptyList<TransitionEdge>(), topology.edgesFrom(S2))
     }
 
     @Test
@@ -144,7 +140,7 @@ class ModelSetsTest {
         mapping.add(sub)
         mapping.add(sym)
 
-        val result = mapping.withEpsilonOrSubmachineFromSourceState(S0)
+        val result = Topology.of(mapping, Submachines()).epsilonOrCallEdgesFrom(S0)
         assertEquals(2, result.size)
         assertTrue(result.any { it.id == eps.id })
         assertTrue(result.any { it.id == sub.id })
@@ -183,7 +179,7 @@ class ModelSetsTest {
         mapping.add(symA)
         mapping.add(symB)
 
-        val result = mapping.withSymbolEpsilonOrSubmachineFromSourceState(S0, Sym('a'))
+        val result = Topology.of(mapping, Submachines()).applicableEdgesFrom(S0, Sym('a'))
         assertEquals(3, result.size)
         assertTrue(result.any { it.id == symA.id })
         assertFalse(result.any { it.id == symB.id })
@@ -208,42 +204,42 @@ class ModelSetsTest {
         mapping.add(t2)
 
         mapping.removeFromIdentifier(t1.id)
-        assertEquals(1, mapping.size())
-        assertFalse(mapping.hasIdentifier(t1.id))
-        assertTrue(mapping.hasIdentifier(t2.id))
+        assertEquals(1, mapping.size)
+        assertFalse(mapping.contains(t1.id))
+        assertTrue(mapping.contains(t2.id))
     }
 
     @Test
-    fun `actionsSet fromName and removeByName`() {
-        val actions = ActionsSet()
+    fun `actions fromName and removeByName`() {
+        val actions = Actions()
         val a1 = Action(name = "act1", handler = { _, _, _ -> })
         val a2 = Action(name = "act2", handler = { _, _, _ -> })
         actions.add(a1)
         actions.add(a2)
 
-        assertEquals(2, actions.size())
+        assertEquals(2, actions.size)
         assertSame(a1, actions.fromName("act1"))
         assertSame(a2, actions.fromName("act2"))
 
         assertThrows(IllegalStateException::class.java) { actions.fromName("missing") }
 
         actions.removeByName("act1")
-        assertEquals(1, actions.size())
+        assertEquals(1, actions.size)
         assertThrows(IllegalStateException::class.java) { actions.fromName("act1") }
     }
 
     @Test
-    fun `submachinesSet getFromName and getFromState`() {
-        val smachines = SubmachinesSet()
+    fun `submachines fromName and fromState`() {
+        val smachines = Submachines()
         val sm = Submachine(name = "M", states = setOf(S0, S1), initialState = S0, acceptingStates = setOf(S1))
         smachines.add(sm)
 
-        assertSame(sm, smachines.getFromName("M"))
-        assertSame(sm, smachines.getFromState(S0))
-        assertSame(sm, smachines.getFromState(S1))
+        assertSame(sm, smachines.fromName("M"))
+        assertSame(sm, smachines.fromState(S0))
+        assertSame(sm, smachines.fromState(S1))
 
-        assertThrows(IllegalStateException::class.java) { smachines.getFromName("missing") }
-        assertThrows(IllegalStateException::class.java) { smachines.getFromState(S2) }
+        assertThrows(IllegalStateException::class.java) { smachines.fromName("missing") }
+        assertThrows(IllegalStateException::class.java) { smachines.fromState(S2) }
     }
 
     @Test
@@ -264,7 +260,7 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         val result =
             ea.query {
@@ -294,7 +290,7 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         val result =
             ea.query {
@@ -317,7 +313,7 @@ class ModelSetsTest {
             )
         mapping.add(eps)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         val result =
             ea.query {
@@ -340,7 +336,7 @@ class ModelSetsTest {
             )
         mapping.add(call)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         val result = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any)
 
@@ -365,7 +361,7 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.remove {
             source = S0
@@ -373,9 +369,9 @@ class ModelSetsTest {
             target = S1
         }
 
-        assertEquals(1, mapping.size())
-        assertFalse(mapping.hasIdentifier(t1.id))
-        assertTrue(mapping.hasIdentifier(t2.id))
+        assertEquals(1, mapping.size)
+        assertFalse(mapping.contains(t1.id))
+        assertTrue(mapping.contains(t2.id))
     }
 
     @Test
@@ -397,7 +393,7 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.remove {
             source = S0
@@ -406,9 +402,9 @@ class ModelSetsTest {
             prior = actionRef("A", S0)
         }
 
-        assertEquals(1, mapping.size())
-        assertFalse(mapping.hasIdentifier(t1.id))
-        assertTrue(mapping.hasIdentifier(t2.id))
+        assertEquals(1, mapping.size)
+        assertFalse(mapping.contains(t1.id))
+        assertTrue(mapping.contains(t2.id))
     }
 
     @Test
@@ -423,12 +419,12 @@ class ModelSetsTest {
             )
         mapping.add(t1)
 
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         ea.add(S0, sym('a'), S1, actionRef("A", S0))
 
-        assertEquals(2, mapping.size())
-        assertTrue(mapping.hasIdentifier(t1.id))
+        assertEquals(2, mapping.size)
+        assertTrue(mapping.contains(t1.id))
     }
 
     @Test
@@ -451,26 +447,26 @@ class ModelSetsTest {
         mapping.add(t2)
 
         // Index built here must see both q0 edges.
-        assertEquals(listOf(t1, t2), mapping.withSourceState(q0))
+        assertEquals(listOf(t1, t2), mapping.edgesFrom(q0))
 
         mapping.add(t3)
         // Mutation invalidates the index; the rebuilt one must include the new edge.
-        assertEquals(listOf(t1, t2), mapping.withSourceState(q0))
-        assertEquals(listOf(t3), mapping.withSourceState(q1))
+        assertEquals(listOf(t1, t2), mapping.edgesFrom(q0))
+        assertEquals(listOf(t3), mapping.edgesFrom(q1))
 
         mapping.removeFromIdentifier(t1.id)
-        assertEquals(listOf(t2), mapping.withSourceState(q0))
-        assertEquals(emptyList<TransitionEdge>(), mapping.withSourceState(r0))
+        assertEquals(listOf(t2), mapping.edgesFrom(q0))
+        assertEquals(emptyList<TransitionEdge>(), mapping.edgesFrom(r0))
 
         val clone = mapping.copy()
         // The copy holds the same edges, with their own identifiers: the
         // identifier is bookkeeping, not identity.
         assertEquals(
-            clone.withSourceState(q0).map { it.transition },
-            mapping.withSourceState(q0).map { it.transition },
+            clone.edgesFrom(q0).map { it.transition },
+            mapping.edgesFrom(q0).map { it.transition },
         )
-        assertEquals(listOf(t3.transition), clone.withSourceState(q1).map { it.transition })
-        assertEquals(mapping.size(), clone.size())
+        assertEquals(listOf(t3.transition), clone.edgesFrom(q1).map { it.transition })
+        assertEquals(mapping.size, clone.size)
     }
 
     @Test
@@ -515,7 +511,7 @@ class ModelSetsTest {
             )
         mapping.add(t1)
         mapping.add(t2)
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         // Null submachine = wildcard: matches any submachine-call edge.
         val wildcard = ea.queryCall(S0, submachine = SubmachineRef.Any, target = State.Any)
@@ -544,7 +540,7 @@ class ModelSetsTest {
             )
         mapping.add(t1)
         mapping.add(t2)
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         val match = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any, ActionRef.Free, actionRef("B", "y"))
         assertEquals(setOf(S1), match.map { it.target }.toSet())
@@ -584,18 +580,18 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
         mapping.add(t3)
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         // Removing by (source, symbol, target, prior) with exact arguments only
         // removes the edge whose arguments and arity match.
         ea.remove(State.Any, Symbol.Any, State.Any, actionRef("A", "x", 1))
-        assertFalse(mapping.hasIdentifier(t1.id))
-        assertTrue(mapping.hasIdentifier(t2.id))
-        assertTrue(mapping.hasIdentifier(t3.id))
+        assertFalse(mapping.contains(t1.id))
+        assertTrue(mapping.contains(t2.id))
+        assertTrue(mapping.contains(t3.id))
 
         // An "any action" filter matches every edge carrying a prior action.
         ea.remove(State.Any, Symbol.Any, State.Any, ActionRef.Any)
-        assertFalse(mapping.hasIdentifier(t2.id))
-        assertFalse(mapping.hasIdentifier(t3.id))
+        assertFalse(mapping.contains(t2.id))
+        assertFalse(mapping.contains(t3.id))
     }
 }

@@ -43,7 +43,7 @@ class ModuloExample : AdaptiveAutomaton() {
         consume(q2, CharSymbol('a'), q0)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

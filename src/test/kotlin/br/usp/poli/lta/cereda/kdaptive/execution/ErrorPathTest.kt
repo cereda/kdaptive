@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 /**
- * Exercises the error paths of the execution engine: querying results before
- * [AdaptiveAutomaton.recognize], malformed action references, and unknown
- * action names.
+ * Exercises the error paths of the execution engine: malformed action
+ * references, unknown action names, and the fail-fast accessors of the
+ * null-free API.
  */
 class ErrorPathTest {
     /** Recognises the single symbol 'a'; its transition carries [fault]. */
@@ -50,17 +50,10 @@ class ErrorPathTest {
     }
 
     @Test
-    fun `getRecognitionMap before recognize throws`() {
-        val aa = FaultAa { it }
-        val ex = assertThrows<IllegalStateException> { aa.getRecognitionMap() }
-        assertTrue(ex.message!!.contains("recognize() must be called"))
-    }
-
-    @Test
-    fun `getRecognitionPaths before recognize throws`() {
-        val aa = FaultAa { it }
-        val ex = assertThrows<IllegalStateException> { aa.getRecognitionPaths() }
-        assertTrue(ex.message!!.contains("recognize() must be called"))
+    fun `an automaton without a main submachine fails fast`() {
+        val aa = PlainAa()
+        val ex = assertThrows<IllegalStateException> { aa.mainSubmachine }
+        assertTrue(ex.message!!.contains("Main submachine"))
     }
 
     /** An automaton exposing its states, so the edge-building guards can be exercised. */

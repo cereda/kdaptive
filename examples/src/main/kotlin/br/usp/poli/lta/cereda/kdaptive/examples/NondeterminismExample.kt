@@ -42,7 +42,7 @@ class NondeterminismExample : AdaptiveAutomaton() {
         consume(q2, 'c', q3)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

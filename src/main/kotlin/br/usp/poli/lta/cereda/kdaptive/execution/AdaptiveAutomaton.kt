@@ -2,21 +2,21 @@
 package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.Actions
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Stack
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TopologyValidator
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import kotlin.properties.Delegates
 
 /**
  * The adaptive automaton proper.
@@ -32,10 +32,10 @@ abstract class AdaptiveAutomaton {
     var transitions: TransitionMapping = TransitionMapping()
 
     /** The set of submachines of the adaptive automaton. */
-    var submachines: SubmachinesSet = SubmachinesSet()
+    var submachines: Submachines = Submachines()
 
     /** The set of actions of the adaptive automaton. */
-    var actions: ActionsSet = ActionsSet()
+    var actions: Actions = Actions()
 
     /**
      * The stack used during recognition.
@@ -46,11 +46,36 @@ abstract class AdaptiveAutomaton {
     var stack: Stack = Stack()
 
     /**
-     * Main submachine name. Changes are logged via [Delegates.observable].
+     * The slot holding the name of the main submachine.
+     *
+     * The slot is private: "not configured yet" is a real state, but it is
+     * not a state a consumer may observe. The public accessor fails fast
+     * instead of answering with a null.
      */
-    var mainSubmachine: String? by Delegates.observable(null) { prop, old, new ->
-        logger.debug("mainSubmachine changed: $old -> $new")
-    }
+    private var mainSubmachineSlot: String? = null
+
+    /**
+     * The name of the main submachine, where recognition starts.
+     *
+     * Reading it before it was declared fails with a clear message: a null
+     * would only spread the mistake.
+     *
+     * @throws IllegalStateException if no main submachine was declared
+     */
+    var mainSubmachine: String
+        get() = mainSubmachineSlot ?: error("Main submachine cannot be null.")
+        set(value) {
+            logger.debug("mainSubmachine changed: $mainSubmachineSlot -> $value")
+            mainSubmachineSlot = value
+        }
+
+    /**
+     * The structural bounds the engine enforces while it recognises.
+     *
+     * The bounds are a backstop for the topologies the engine cannot prove to
+     * be bounded; they never fire on an automaton that terminates.
+     */
+    var limits: RecognitionLimits = RecognitionLimits()
 
     // -----------------------------------------------------------------------
     // Ergonomic transition DSL (mirrors AutomatonBuilder for direct use in setup())
@@ -198,18 +223,14 @@ abstract class AdaptiveAutomaton {
     private val paths = mutableMapOf<Int, RecognitionPath>()
 
     /**
-     * The clone that ran the last recognition, published once that recognition
-     * is over.
+     * When true, recognition stops as soon as a path *accepts* the input.
      *
-     * The field is volatile: it is written by the thread that ran the
-     * recognition and read by whoever asks for the results, possibly from
-     * another thread.
+     * Only an acceptance is decisive: under the existence semantics of the
+     * automaton, a rejecting path says nothing about the other branches still
+     * in flight, so stopping on one would answer "rejected" for an input the
+     * automaton does accept.
      */
-    @Volatile
-    private var reference: AdaptiveAutomaton? = null
-
-    /** When true, recognition stops as soon as the first path finishes (whether accepted or rejected). */
-    var stopAtFirstFinishedRecognitionPath: Boolean = false
+    var stopOnFirstAcceptance: Boolean = false
 
     /** Visitors observing recognition lifecycle and path execution events. */
     var visitors: MutableList<ExecutionVisitor> = mutableListOf()
@@ -227,57 +248,20 @@ abstract class AdaptiveAutomaton {
     protected abstract fun newInstance(): AdaptiveAutomaton
 
     /**
-     * Returns the recognition paths collected during the last recognition,
-     * keyed by path ID.
-     *
-     * Only the paths that reached a verdict are reported: a path replaced by
-     * its children is not one of them.
-     *
-     * When several recognitions run concurrently on the same automaton, the
-     * paths of the most recent one are reported.
-     *
-     * @throws IllegalStateException if [recognize] has not been called yet.
-     */
-    fun getRecognitionMap(): Map<Int, RecognitionPath> = reference?.getRecognitionMapOnce()
-        ?: error("recognize() must be called before querying recognition paths.")
-
-    /**
-     * Returns the recognition paths collected during the last recognition.
-     *
-     * Only the paths that reached a verdict are reported: a path replaced by
-     * its children is not one of them.
-     *
-     * When several recognitions run concurrently on the same automaton, the
-     * paths of the most recent one are reported.
-     *
-     * @throws IllegalStateException if [recognize] has not been called yet.
-     */
-    fun getRecognitionPaths(): List<RecognitionPath> = reference?.getRecognitionPathsOnce()
-        ?: error("recognize() must be called before querying recognition paths.")
-
-    private fun getRecognitionMapOnce(): Map<Int, RecognitionPath> = paths.filterValues { it.done }
-
-    private fun getRecognitionPathsOnce(): List<RecognitionPath> = paths.values.filter { it.done }
-
-    /**
      * Recognises a list of symbols representing the input string.
      *
      * The recognition runs on a clone, so the automaton itself is never
      * mutated: several recognitions may run concurrently on the same
      * automaton, and each of them sees the topology the automaton had when it
-     * started.
+     * started. The result of one recognition therefore never depends on
+     * another one running at the same time.
      *
-     * @return true if the adaptive automaton recognised the input string.
+     * @param input the symbols to recognise
+     * @return the result of the recognition: the verdict, and the paths it was made of
      */
-    fun recognize(input: List<Symbol>): Boolean {
+    fun recognize(input: List<Symbol>): RecognitionResult {
         val ref = clone()
-        try {
-            return ref.recognizeOnce(input)
-        } finally {
-            // The results are published once the recognition is over, so a
-            // reader never sees a half-finished run.
-            reference = ref
-        }
+        return ref.recognizeOnce(input)
     }
 
     private fun clone(): AdaptiveAutomaton {
@@ -287,28 +271,32 @@ abstract class AdaptiveAutomaton {
         instance.submachines = submachines.copy()
         instance.actions = actions.copy()
         instance.stack = stack.copy()
-        instance.mainSubmachine = mainSubmachine
-        instance.stopAtFirstFinishedRecognitionPath = stopAtFirstFinishedRecognitionPath
+        instance.mainSubmachineSlot = mainSubmachineSlot
+        instance.stopOnFirstAcceptance = stopOnFirstAcceptance
+        instance.limits = limits
         instance.visitors = visitors.toMutableList()
         return instance
     }
 
-    private fun recognizeOnce(input: List<Symbol>): Boolean {
+    private fun recognizeOnce(input: List<Symbol>): RecognitionResult {
         setup()
+
+        // The main submachine must exist before recognition starts. Checking it
+        // here guarantees that the lifecycle events always pair: no start
+        // without an end, and no end without a start.
+        val mainSub =
+            mainSubmachineSlot ?: throw IllegalArgumentException(
+                "The automaton does not declare a main submachine.",
+            )
 
         // The topology follows the same rules as the one the builder DSL
         // produces: the imperative API and the declarative API accept exactly
         // the same automata.
         TopologyValidator.validate(
-            edges = transitions.getTransitions(),
-            submachines = submachines.getSubmachines(),
-            mainSubmachine = mainSubmachine,
+            topology = Topology.of(transitions, submachines),
+            mainSubmachine = mainSub,
+            actionNames = actions.map { it.name },
         )
-
-        // The main submachine must exist before recognition starts. Checking it
-        // here guarantees that the lifecycle events always pair: no start
-        // without an end, and no end without a start.
-        val mainSub = requireNotNull(mainSubmachine) { "Main submachine cannot be null." }
 
         // The lifecycle events fire on the clone, after setup() materialised its
         // topology, so a visitor sees the automaton it is about to execute.
@@ -317,10 +305,16 @@ abstract class AdaptiveAutomaton {
         threads.clear()
         paths.clear()
 
-        val k =
+        // The path starts at the initial state of the main submachine; there
+        // is no synthetic edge to traverse before the first real move.
+        val initialState = submachines.fromName(mainSub).initialState
+        val root =
             PathExecutor(
                 config =
                 PathExecutorConfig(
+                    currentState = initialState,
+                    currentSubmachine = mainSub,
+                    mainSubmachine = mainSub,
                     stack = stack.copy(),
                     actions = actions.copy(),
                     transitions = transitions.copy(),
@@ -328,28 +322,17 @@ abstract class AdaptiveAutomaton {
                     input = input,
                     cursor = 0,
                     enablePriorAction = true,
-                    currentSubmachine = mainSub,
-                    mainSubmachine = mainSub,
+                    limits = limits,
                     visitors = visitors.toMutableList(),
                 ),
                 threads = threads,
                 paths = paths,
             )
 
-        val initialState = submachines.getFromName(mainSub).initialState
-        val t =
-            TransitionEdge(
-                source = initialState,
-                target = initialState,
-                transition = Transition.Epsilon,
-            )
-        k.config.transition = t
-        k.config.currentState = null
+        paths[root.id] = RecognitionPath(id = root.id, state = initialState)
+        threads.add(root)
 
-        paths[k.id] = RecognitionPath(id = k.id)
-        threads.add(k)
-
-        while (threads.isNotEmpty() && !atLeastOneRecognitionPathIsDone()) {
+        while (threads.isNotEmpty() && !anAcceptanceHappened()) {
             var i = threads.size - 1
             while (i >= 0) {
                 try {
@@ -358,14 +341,18 @@ abstract class AdaptiveAutomaton {
                     failPath(threads[i], e)
                 }
                 // When run() returns, the path is finished (accepted, rejected,
-                // or forked). Remove it from the worklist.
+                // cut, or forked). Remove it from the worklist.
                 threads.removeAt(i)
                 i--
             }
         }
 
-        val result = paths.values.any { it.outcome == PathOutcome.ACCEPTED }
-        visitors.toList().forEach { it.onRecognizeEnd(result) }
+        val result =
+            RecognitionResult(
+                accepted = paths.values.any { it.outcome == PathOutcome.ACCEPTED },
+                paths = paths.values.filter { it.done },
+            )
+        visitors.toList().forEach { it.onRecognizeEnd(result.accepted) }
         return result
     }
 
@@ -380,7 +367,7 @@ abstract class AdaptiveAutomaton {
      * @param cause the exception that killed it
      */
     private fun failPath(failed: PathExecutor, cause: Exception): Nothing {
-        visitors.toList().forEach { it.onPathEnd(failed.id, accepted = false, cursor = failed.cursor) }
+        visitors.toList().forEach { it.onPathEnd(failed.id, PathOutcome.REJECTED, failed.cursor) }
         visitors.toList().forEach { it.onRecognizeEnd(false) }
         // Surface path failures to the caller instead of killing the JVM.
         throw IllegalStateException(
@@ -389,9 +376,15 @@ abstract class AdaptiveAutomaton {
         )
     }
 
-    private fun atLeastOneRecognitionPathIsDone(): Boolean {
-        if (!stopAtFirstFinishedRecognitionPath) return false
-        return paths.values.any { it.done }
+    /**
+     * Tells whether an acceptance has already happened.
+     *
+     * Only an acceptance stops the recognition: a rejecting path says nothing
+     * about the branches still in flight.
+     */
+    private fun anAcceptanceHappened(): Boolean {
+        if (!stopOnFirstAcceptance) return false
+        return paths.values.any { it.outcome == PathOutcome.ACCEPTED }
     }
 
     /** Returns a human-readable representation of this automaton, with labeled sections. */
@@ -399,17 +392,12 @@ abstract class AdaptiveAutomaton {
         fun String.indented() = lineSequence().joinToString("\n  ")
         return buildString {
             append("Adaptive automaton {\n")
-            append("  main: ").append(mainSubmachine ?: "undefined").append("\n")
+            append("  main: ").append(mainSubmachineSlot ?: "undefined").append("\n")
             append("  submachines: ").append(submachines.toString().indented()).append("\n")
             append("  transitions: ").append(transitions.toString().indented()).append("\n")
             append("  actions: ").append(actions.toString().indented()).append("\n")
             append("  stack: ").append(stack).append("\n")
             append("}")
         }
-    }
-
-    /** Sets whether recognition should stop when the first path finishes (see [stopAtFirstFinishedRecognitionPath]). */
-    fun setStopAtFirstResult(flag: Boolean) {
-        this.stopAtFirstFinishedRecognitionPath = flag
     }
 }

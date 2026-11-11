@@ -5,12 +5,13 @@ import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -94,7 +95,7 @@ class EngineContractTest {
             )
             actions.add(
                 Action(name = "Grow") { transitions, _, _ ->
-                    ElementaryActions(transitions).add(C2, CharSymbol('z'), C0)
+                    ElementaryActions(transitions, Submachines()).add(C2, CharSymbol('z'), C0)
                 },
             )
             consume(C0, CharSymbol('a'), C1, prior = "Grow")
@@ -127,20 +128,20 @@ class EngineContractTest {
         // The topology is already in place: running setup() again must not
         // duplicate a single edge.
         aa.setup()
-        assertEquals(1, aa.transitions.size())
+        assertEquals(1, aa.transitions.size)
 
         val sizes = mutableListOf<Int>()
         aa.visitors.add(
             object : ExecutionVisitor {
                 override fun onRecognizeStart(automaton: AdaptiveAutomaton) {
-                    sizes.add(automaton.transitions.size())
+                    sizes.add(automaton.transitions.size)
                 }
             },
         )
 
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
         assertEquals(listOf(1), sizes)
-        assertEquals(1, aa.getRecognitionPaths().size)
+        assertEquals(1, aa.recognize(listOf(CharSymbol('a'))).paths.size)
     }
 
     @Test
@@ -163,10 +164,10 @@ class EngineContractTest {
         val removed = mutableListOf<TransitionEdge>()
         mapping.onEdgeRemoved = { removed.add(it) }
 
-        ElementaryActions(mapping).remove()
+        ElementaryActions(mapping, Submachines()).remove()
 
         assertEquals(2, removed.size)
-        assertEquals(0, mapping.size())
+        assertEquals(0, mapping.size)
     }
 
     @Test
@@ -185,12 +186,12 @@ class EngineContractTest {
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
             ),
         )
-        ElementaryActions(copy).query()
+        ElementaryActions(copy, Submachines()).query()
 
         assertEquals(1, added.size)
         assertEquals(1, operations.size)
         // The original is untouched by the copy.
-        assertEquals(0, mapping.size())
+        assertEquals(0, mapping.size)
     }
 
     @Test
@@ -206,7 +207,7 @@ class EngineContractTest {
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
             ),
         )
-        val ea = ElementaryActions(mapping)
+        val ea = ElementaryActions(mapping, Submachines())
 
         assertEquals(1, ea.query(State.Any, Symbol.Any).size)
         assertEquals(1, ea.query(State.Any, Symbol.Epsilon).size)
@@ -216,13 +217,13 @@ class EngineContractTest {
     fun `only the paths that reached a verdict are reported`() {
         val aa = ForkingAa()
 
-        aa.recognize(listOf(CharSymbol('a')))
+        val result = aa.recognize(listOf(CharSymbol('a')))
 
-        val paths = aa.getRecognitionPaths()
+        val paths = result.paths
         // The forking parent reached no verdict: it is not one of the paths.
         assertEquals(2, paths.size)
         assertTrue(paths.all { it.done })
-        assertEquals(paths.map { it.id }.toSet(), aa.getRecognitionMap().keys)
+        assertEquals(paths.map { it.id }.toSet(), paths.map { it.id }.toSet())
     }
 
     @Test
@@ -231,7 +232,7 @@ class EngineContractTest {
         val added = mutableListOf<TransitionEdge>()
         aa.transitions.onEdgeAdded = { added.add(it) }
 
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
 
         // The clone carries the callback, and the path reports through it.
         assertEquals(1, added.size)
@@ -260,7 +261,7 @@ class EngineContractTest {
         assertEquals(2, symbols.map { it.first }.toSet().size)
 
         // One child ends in an accepting state, the other does not.
-        val verdicts = aa.getRecognitionPaths().map { it.outcome }
+        val verdicts = aa.recognize(listOf(CharSymbol('a'))).paths.map { it.outcome }
         assertEquals(1, verdicts.count { it == PathOutcome.ACCEPTED })
         assertEquals(1, verdicts.count { it == PathOutcome.REJECTED })
     }
@@ -271,24 +272,19 @@ class EngineContractTest {
         val reported = mutableListOf<Int>()
         aa.visitors.add(
             object : ExecutionVisitor {
-                override fun onEdgeAdded(
-                    pathId: Int,
-                    edge: TransitionEdge,
-                    transitions: TransitionMapping,
-                    submachines: SubmachinesSet,
-                ) {
+                override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
                     reported.add(pathId)
                 }
             },
         )
 
-        aa.recognize(listOf(CharSymbol('a')))
+        val result = aa.recognize(listOf(CharSymbol('a')))
 
         // Each child inherits the topology, but reports under its own
         // identifier, never under the identifier of the parent that forked.
         assertEquals(2, reported.size)
         assertEquals(2, reported.toSet().size)
-        assertEquals(aa.getRecognitionMap().keys, reported.toSet())
+        assertEquals(result.paths.map { it.id }.toSet(), reported.toSet())
     }
 
     @Test
@@ -301,8 +297,8 @@ class EngineContractTest {
                     events.add("start")
                 }
 
-                override fun onPathEnd(pathId: Int, accepted: Boolean, cursor: Int) {
-                    events.add("pathEnd:$accepted")
+                override fun onPathEnd(pathId: Int, outcome: PathOutcome, cursor: Int) {
+                    events.add("pathEnd:$outcome")
                 }
 
                 override fun onRecognizeEnd(result: Boolean) {
@@ -313,6 +309,6 @@ class EngineContractTest {
 
         assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
 
-        assertEquals(listOf("start", "pathEnd:false", "end:false"), events)
+        assertEquals(listOf("start", "pathEnd:REJECTED", "end:false"), events)
     }
 }

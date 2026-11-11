@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
@@ -86,22 +85,22 @@ class ModelTest {
     @Test
     fun `stack push pop top`() {
         val stack = Stack()
-        assertTrue(stack.isEmpty())
+        assertTrue(stack.isEmpty)
         stack.push(Q0)
         stack.push(Q1)
-        assertFalse(stack.isEmpty())
-        assertEquals(Q1, stack.top())
+        assertFalse(stack.isEmpty)
+        assertEquals(Q1, stack.peek())
         assertEquals(Q1, stack.pop())
-        assertEquals(Q0, stack.top())
+        assertEquals(Q0, stack.peek())
         assertEquals(Q0, stack.pop())
-        assertTrue(stack.isEmpty())
+        assertTrue(stack.isEmpty)
     }
 
     @Test
     fun `stack pop on empty throws`() {
         val stack = Stack()
         assertThrows(IllegalStateException::class.java) { stack.pop() }
-        assertThrows(IllegalStateException::class.java) { stack.top() }
+        assertThrows(IllegalStateException::class.java) { stack.peek() }
     }
 
     @Test
@@ -129,7 +128,7 @@ class ModelTest {
 
     @Test
     fun `recognition path done flag`() {
-        val rp = RecognitionPath()
+        val rp = RecognitionPath(state = Q0)
         assertFalse(rp.done)
         val rp2 = rp.copy(outcome = PathOutcome.ACCEPTED)
         assertTrue(rp2.done)

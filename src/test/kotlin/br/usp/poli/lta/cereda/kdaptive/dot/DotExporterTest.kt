@@ -6,6 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
@@ -51,7 +52,7 @@ class DotExporterTest {
     fun `dot output contains submachine cluster`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("subgraph cluster_M"))
         assertTrue(dot.contains("label = \"M\""))
@@ -61,7 +62,7 @@ class DotExporterTest {
     fun `dot output contains all states as nodes`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"q0\""))
         assertTrue(dot.contains("label=\"q1\""))
@@ -71,7 +72,7 @@ class DotExporterTest {
     fun `dot output contains all edges with symbol labels`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"a\""))
         assertTrue(dot.contains("label=\"b\""))
@@ -81,7 +82,7 @@ class DotExporterTest {
     fun `accepting state gets doublecircle shape`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("shape=doublecircle"))
         assertTrue(dot.contains("shape=circle"))
@@ -102,7 +103,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"\u03B5\""))
     }
@@ -131,7 +132,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"call S\""))
     }
@@ -140,11 +141,11 @@ class DotExporterTest {
     fun `return edge is labeled with return`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val initial = a.submachines.getFromName("M").initialState
+        val initial = a.submachines.fromName("M").initialState
         a.transitions.add(
             TransitionEdge(source = initial, target = initial, transition = Transition.Return),
         )
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"return\""))
     }
@@ -166,7 +167,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("prior=A"))
         assertTrue(dot.contains("post=B"))
@@ -176,7 +177,7 @@ class DotExporterTest {
     fun `action arguments are rendered in the edge label`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val initial = a.submachines.getFromName("M").initialState
+        val initial = a.submachines.fromName("M").initialState
         a.transitions.add(
             TransitionEdge(
                 source = initial,
@@ -185,7 +186,7 @@ class DotExporterTest {
                 prior = ActionRef.Bound(name = "A", args = listOf("x", 1)),
             ),
         )
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("prior=A(x,1)"))
     }
@@ -194,7 +195,7 @@ class DotExporterTest {
     fun `edges inside a submachine are drawn within its cluster`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         val cluster = clusterLines(dot, "M").joinToString("\n")
         assertTrue(cluster.contains("n0 -> n1 [label=\"a\"];"))
@@ -224,7 +225,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         val crossing = dot.lines().first { line -> line.contains("[label=\"x\"]") }
         val internal = dot.lines().first { line -> line.contains("[label=\"y\"]") }
@@ -246,7 +247,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         val ids = dot.lines().mapNotNull { line -> NODE_PATTERN.find(line)?.groupValues?.get(1) }
         assertEquals((0 until 12).map { "n$it" }, ids)
@@ -268,7 +269,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.contains("label=\"q\\\"0\""))
         assertTrue(dot.contains("label=\"q\\\\0\""))
@@ -298,7 +299,7 @@ class DotExporterTest {
         }
         val a = specToAutomaton(spec)
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         val clusters = dot.lines().filter { line -> line.startsWith("  subgraph cluster_") }
         assertEquals(2, clusters.size)
@@ -309,8 +310,8 @@ class DotExporterTest {
     fun `dot output is deterministic for same topology`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot1 = exporter.toDot(a.transitions, a.submachines)
-        val dot2 = exporter.toDot(a.transitions, a.submachines)
+        val dot1 = exporter.toDot(Topology.of(a.transitions, a.submachines))
+        val dot2 = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertEquals(dot1, dot2)
     }
@@ -319,7 +320,7 @@ class DotExporterTest {
     fun `dot output is non-empty and well-formed`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val dot = exporter.toDot(a.transitions, a.submachines)
+        val dot = exporter.toDot(Topology.of(a.transitions, a.submachines))
 
         assertTrue(dot.startsWith("digraph Automaton {"))
         assertTrue(dot.endsWith("}\n"))

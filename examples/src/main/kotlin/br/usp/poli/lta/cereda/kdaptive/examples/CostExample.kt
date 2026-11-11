@@ -68,7 +68,7 @@ class CostExample : AdaptiveAutomaton() {
         // consumer can price them.
         actions.add(
             Action(name = "Reshape") { transitions, _, _ ->
-                val ea = ElementaryActions(transitions)
+                val ea = ElementaryActions(transitions, submachines)
                 val matched =
                     ea.query(
                         source = State.anyOf(q0, q1),
@@ -87,7 +87,7 @@ class CostExample : AdaptiveAutomaton() {
         consume(q0, 'b', q1)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 /** Entry point for `./gradlew :examples:run -Pmain=...CostExampleKt`. */

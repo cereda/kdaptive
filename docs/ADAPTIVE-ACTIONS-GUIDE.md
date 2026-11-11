@@ -11,8 +11,6 @@ Everything below is faithful to the original 2016 Java implementation; the Kotli
 reorganized the pieces but did not change the semantics. Precision matters here, so this
 guide is deliberately thorough and filled with warnings earned the hard way.
 
----
-
 ## 1. The three primitives
 
 An adaptive action can do one of exactly three things to the transition mapping:
@@ -33,8 +31,6 @@ val ea = ElementaryActions(transitions)   // wrap the mapping you were handed
 > It wraps an existing `TransitionMapping` so every call operates in place. Always
 > construct it with the mapping **given to your handler**, not some cached copy;
 > see §2 for who owns what.
-
----
 
 ## 2. Actions, references, and who runs what
 
@@ -96,9 +92,9 @@ name and throws when the name is unknown, so a handler can never invent a state.
 
 The builder DSL adds several build-time checks on top of that: `ref(name, "q2")`
 rejects a state name that is not part of the automaton (typos fail loudly instead of
-creating a phantom state), `action(name, arity = n)` rejects references that bind a
-different number of arguments, and `toSpec()` rejects an edge endpoint owned by no
-submachine, a call naming an unknown submachine, a call returning to a state of
+creating a phantom state), `action(name, arity = Arity.Exactly(n))` rejects references
+that bind a different number of arguments, and `toSpec()` rejects an edge endpoint owned
+by no submachine, a call naming an unknown submachine, a call returning to a state of
 another submachine and a missing main submachine. The full rules are in the
 [DSL guide](DSL-GUIDE.md#adaptive-actions-in-style-b).
 
@@ -159,8 +155,6 @@ Two subtle behavioural consequences worth memorizing:
 > original exception attached. A throwing action kills the whole `recognize()` call.
 > Handle your own errors inside the handler.
 
----
-
 ## 3. Mutation isolation: per-path, per-call
 
 This is the single most important runtime-model fact:
@@ -189,8 +183,6 @@ This is the single most important runtime-model fact:
 > `onEdgeAdded` / `onEdgeRemoved` report the `pathId` of the path that mutated, so a
 > debugger can watch one path's topology evolve without confusing it with a sibling's.
 > See §7.1.
-
----
 
 ## 4. `ElementaryActions`, the complete API
 
@@ -230,6 +222,13 @@ null symbol.
 
 The same doctrine holds for the **values** the model carries: the action slots of an
 edge hold an `ActionRef` — `ActionRef.None` for the empty slot — and never a `null`.
+
+> **Changed in 4.0.0**: the doctrine was extended to the **whole public API**. No
+> public member of the library has a nullable type: not a filter, not a value, not a
+> marker, and not a configuration slot. "Not configured yet" is a real state, but it is
+> a private one — it surfaces as an exception, never as a `null` the consumer has to
+> guard against. The last public nulls went with `Arity` (the wildcard for an action's
+> argument count) and `DomainSize` (the wildcard for a filter's domain).
 
 > **Note**: an edge fires one concrete action, so an edge carries an `ActionRef.Bound` or
 > the empty slot `ActionRef.None`; the filter cases (`Free`, `Any`, `Named`) are rejected
@@ -274,8 +273,9 @@ ea.addCall(State.anyOf(q0, q1), SubmachineRef.anyOf("M", "N"), p0)
 ```
 
 > **Pitfall**: a domain that names `Symbol.Epsilon` inserts an epsilon edge for that
-> member. An epsilon self-loop makes the query-for-next-step loop forever (see the DSL
-> guide, §4).
+> member. An epsilon **cycle** is no longer a hang (see §6.1), but it is still a
+> modelling mistake: the validator rejects it outright when the automaton registers no
+> adaptive actions.
 
 The size of every domain is reported on the pattern of the operation, so a consumer can
 price an operation without knowing anything about the filters: see §7.3.
@@ -383,6 +383,13 @@ call family: a call operation always has a submachine filter. `addCall` rejects
 `SubmachineRef.Any` as well — an addition names what it adds — and accepts a
 `SubmachineRef.Domain`, adding one edge per submachine of the domain.
 
+> **Changed in 4.0.0**: `addCall` **validates** the names of a domain against the
+> declared submachines and throws naming the offender ("Call to undeclared submachine
+> 'Typo'. Declared submachines: M, N."), instead of failing later, at recognition time,
+> with a message about a missing submachine. This is why `ElementaryActions` takes the
+> submachines alongside the mapping:
+> `ElementaryActions(transitions, submachines)`.
+
 > **Note**: `queryCall` is a separate method, not an overload of `query`. The two
 > families used to share the name `query`, which made `ea.query(null, null, null)`
 > ambiguous — the compiler could not tell a symbol query from a call query when every
@@ -476,8 +483,10 @@ ea.addCall(State.anyOf(p0, p1), SubmachineRef.Named("M"), q0)      // two edges
 ea.addCall(p0, SubmachineRef.anyOf("M", "N"), q0)                  // two edges
 ```
 
-> **Pitfall**: an epsilon self-loop makes the query-for-next-step loop forever (see the
-> DSL guide, §4).
+> **Pitfall**: an epsilon **cycle** is a modelling mistake (see the DSL guide, §4).
+> Since 4.0.0 it is no longer a hang: the validator rejects a reachable epsilon-only
+> cycle when the automaton has no adaptive actions, and the engine cuts a path that
+> re-enters a configuration it already left.
 
 ### 4.6 Removal is by identity, id-verified
 
@@ -487,8 +496,6 @@ Removals obtain the matching edges' **ids** first, then call
 
 > **Warning**: `removeFromIdentifier` silently does nothing if the id is no longer
 > present. Ids come from the `IdentifierUtils` singleton; do NOT invent them.
-
----
 
 ## 5. Predicates, the raw filter layer
 
@@ -509,19 +516,27 @@ hasPriorAction, hasPostAction
 sourceState(s), targetState(t), symbol(sym), submachineCall(name), submachineCallIn(names)
 ```
 
-And `TransitionMapping` exposes the same idea ready-made:
+And `Topology` exposes the same idea ready-made, over an **immutable snapshot** of the
+automaton:
 
 ```kotlin
-val edges = transitions.withSourceState(q1)                  // O(1) via lazy index
-val callEdges = transitions.withSubmachine("M")
-val prior = transitions.withPriorAction("A")
-val eps = transitions.withEpsilonFromSourceState(q0)
+val topology = Topology.of(transitions, submachines)
+val edges = topology.edgesFrom(q1)              // the edges leaving q1
+val callEdges = topology.callsTo("M")           // the edges calling M
+val prior = topology.edgesWithPrior("A")        // the edges whose prior is A
+val eps = topology.epsilonEdgesFrom(q0)         // the epsilon edges leaving q0
+val matching = topology.matching(TransitionPattern(source = q1, symbol = sym('a')))
 ```
 
-> **Hint**: a lazy by-source index (`withSourceState`) is invalidated automatically on
-> add/remove; nothing for you to manage. It is also what forks of `PathExecutor` rely on.
+`TransitionPattern.matches(edge)` is the **single implementation** of what a filter
+means: the pattern owns the semantics, and the public predicates are expressed in terms
+of it, so "a domain means the union of its members" has exactly one implementation.
 
----
+> **Changed in 4.0.0**: the 14 `TransitionMapping.withX(...)` filter methods were
+> deleted. They were a second vocabulary for filtering, expressed in terms of the live
+> mapping; the queries now live on `Topology` (a snapshot) and on the pattern (the
+> meaning of a filter). The engine keeps its private lazy by-source index, which is
+> invalidated automatically on add/remove — nothing for you to manage.
 
 ## 6. Working idioms
 
@@ -530,11 +545,23 @@ val eps = transitions.withEpsilonFromSourceState(q0)
 ```kotlin
 // The edge carries prior = actionRef("A"); after firing once, the edge disappears.
 actions.add(Action(name = "A") { transitions, _, _ ->
-    val ea = ElementaryActions(transitions)
+    val ea = ElementaryActions(transitions, submachines)
     // Wildcard everything but my own name: "Named" ignores the arguments.
     ea.remove { prior = ActionRef.Named("A") }
 })
 ```
+
+> **The action-epoch guard.** Since 4.0.0 the engine prunes a path that re-enters a
+> configuration it already left (an epsilon cycle, say). The cut is guarded by an
+> **action epoch**: the engine remembers whether an action fired since the ancestor
+> visit, and only cuts when nothing did. So an action that breaks the cycle — the
+> one-shot idiom above — keeps working: the removal changes the topology, the epoch
+> moves, and the repeat is no longer provably identical.
+>
+> The converse also holds: an action that fires on *every* pass (a counter, say) keeps
+> the configuration from repeating, so the path is never cut. The engine gives the
+> action its chance, and the structural backstop (`limits`) catches the topologies that
+> never settle.
 
 ### 6.2 Language growth, the aⁿbⁿcⁿ pattern
 
@@ -575,18 +602,17 @@ actions.add(Action(name = "Lexer") { _, transition, _ ->
 > bookkeeping *in the mapping* (edges you can query), keep global bookkeeping only when
 > the process is single-pathed or read-mostly.
 
----
-
 ## 7. Debugging
 
 - `TransitionEdge.toString()` renders arrows: `TransitionEdge(id=2, q1 -[call Sub]-> q2, prior=A, post=B)`,
   `q1 --> q2` for epsilon, `q0 -[a]-> q1` for characters. `TransitionMapping.toString()`
   and `AdaptiveAutomaton.toString()` render labeled, indented dumps, safe to print from
   any point inside actions (they only read, never mutate).
-- `RecognitionPath(id=..., result=true) { step-1, step-2 }` logs the transitions a
-  terminating path took. After `recognize()`, `getRecognitionPaths()` returns the paths
-  that **reached a verdict** — a path replaced by its children is not one of them;
-  before `recognize()`, calls throw (fail fast).
+- `RecognitionPath(id=..., outcome=ACCEPTED) { step-1, step-2 }` logs the transitions a
+  terminating path took. The trail is a list of `TransitionEdge`s and records **every**
+  traversal, including the synthesised return edges. `recognize()` returns a
+  `RecognitionResult`: `result.paths` holds the paths that **reached a verdict**, and a
+  path replaced by its children is not one of them.
 - SLF4J debug logging in `PathExecutor` reports path starts, prior/post firings, forks
   and accept/reject: use your backend's level knobs, not printlns, inside the engine.
 
@@ -602,15 +628,14 @@ import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
 val trace = mutableListOf<String>()
 
 val visitor = object : ExecutionVisitor {
-    override fun onBeforeAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) {
+    override fun onBeforeAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) {
         trace.add("path $pathId is about to fire ${actionRef.name}")
     }
 
     override fun onEdgeAdded(
         pathId: Int,
         edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
+        topology: Topology,
     ) {
         trace.add("path $pathId gained $edge")
     }
@@ -626,17 +651,17 @@ The events, and when they fire:
 | `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
 | `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
-| `onPathEnd(pathId, accepted, cursor)` | a path accepts or rejects |
+| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, or was cut |
 | `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse` / `onAfterTraverse` | around each edge traversal |
 | `onBeforeAction` / `onAfterAction` | around each action handler (`isPrior` tells prior from post) |
-| `onEdgeAdded` / `onEdgeRemoved` | after each insertion/deletion in the path's mapping, with the full mapping and submachines |
+| `onEdgeAdded` / `onEdgeRemoved` | after each insertion/deletion in the path's mapping, with an immutable `Topology` snapshot |
 | `onCall` / `onReturn` | entering or leaving a submachine |
 
-> **Pitfall**: a path terminates **exactly once**, either with `onPathEnd` (accept or
-> reject) or with `onPathFork` (the path was replaced by its children). A visitor that
-> keeps a set of open paths must close the path on both events, otherwise every forked
-> path leaks in the bookkeeping.
+> **Pitfall**: a path terminates **exactly once**, either with `onPathEnd` (accept,
+> reject, or cut) or with `onPathFork` (the path was replaced by its children). A visitor
+> that keeps a set of open paths must close the path on both events, otherwise every
+> forked path leaks in the bookkeeping.
 
 > **Call-out**: the callbacks are **synchronous**, on the recognition thread. A slow
 > visitor slows recognition down. With no visitor registered the engine skips every
@@ -660,7 +685,7 @@ The output is plain text — **no `dot` binary and no GraphViz library required*
 frame as `frame.dot` and render it with `dot -Tpng frame.dot -o frame.png`, or feed it to
 any GraphViz-compatible tool. Each submachine becomes a cluster, accepting states are
 drawn as `doublecircle`, and edges are labeled with the symbol (or ε / call / return) plus
-the prior and post action references. `DotExporter.toDot(transitions, submachines)` is
+the prior and post action references. `DotExporter.toDot(topology: Topology)` is
 public too, so a topology can also be snapshotted on demand.
 
 Runnable example: `examples/GraphVizExampleKt`
@@ -713,14 +738,15 @@ per family, and the family is part of the pattern because the two disagree:
 `TransitionPatternKind.MIXED` (a symbol domain that names the empty word among its
 members) and `TransitionPatternKind.SUBMACHINE` give the same filter different meanings.
 Every filter is an explicit value — a wildcard is `State.Any`, `Symbol.Any` or
-`ActionRef.Free`, never a null; the only null left is the `submachine` filter of the
-call family, where it means "any call".
+`ActionRef.Free`, never a null; the `submachine` filter of the call family is a
+`SubmachineRef`, whose `Any` means "any call".
 
 The pattern also reports **how many values each filter may select**: `sourceDomainSize`,
 `symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`, `priorDomainSize` and
-`postDomainSize`. A concrete filter reports `1`, a domain reports the number of its
-members, and a wildcard reports `null` — it names an unbounded number of values. These
-are facts, not costs: what they are worth is the consumer's business.
+`postDomainSize`. Each is a `DomainSize`: `DomainSize.Bounded(1)` for a concrete
+filter, `DomainSize.Bounded(n)` for a domain of `n` members, and `DomainSize.Unbounded`
+for a wildcard — it names an unbounded number of values, which is *not* the same as
+"empty". These are facts, not costs: what they are worth is the consumer's business.
 
 #### Facts published by an action
 
@@ -729,11 +755,11 @@ the projection of a query result, say — it publishes a fact, and the consumer 
 whether it is worth anything:
 
 ```kotlin
-data class DomainSize(val count: Int) : Observation
+data class DomainCount(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
     val matched = ea.query(q0, sym('b'), State.Any)
-    observe(DomainSize(matched.map { it.source }.distinct().size))
+    observe(DomainCount(matched.map { it.source }.distinct().size))
     ea.remove(k, sym('a'), State.Any)
     ea.add(k, sym('a'), k)
 }
@@ -753,7 +779,9 @@ size of every filter domain:
 - the **product** of a pattern is the number of edge shapes its filters may select: the
   product of the six domain sizes. A wildcard has an unbounded domain, and an unbounded
   domain contributes zero to the product — the number of combinations it admits is not a
-  finite number, so the model does not price it;
+  finite number, so the model does not price it. (`DomainSize.Unbounded` is priced as
+  zero, `DomainSize.Bounded(n)` as `n`: the library reports the size, the consumer
+  decides what it means.)
 - a **query** costs `ω(size)`;
 - a **removal** costs `product·ω(size) − product`;
 - an **addition** costs `product·ω(size) + product`.
@@ -781,8 +809,6 @@ Runnable example: `examples/CostExampleKt`
 
 Changing the cost model means changing `CostVisitor` and nothing else.
 
----
-
 ## 8. Catalogue of pitfalls and warnings
 
 1. **Action references name registered actions** (§2): a reference to an unknown name
@@ -794,8 +820,11 @@ Changing the cost model means changing `CostVisitor` and nothing else.
    `IllegalStateException("Recognition path N failed: ...")`.
 4. **Forks and copies**: all mutations are per-path (§3); do not expect cross-path
    effects; do NOT mutate captured shared state in nondeterministic settings (§6.3).
-5. **Epsilon self-loops** hang the engine (no epsilon-cycle detection, faithful to the
-   original). Applies to adaptively added epsilon edges too (§4.5).
+5. **Epsilon cycles are no longer a hang** (§6.1): a reachable epsilon-only cycle is
+   **rejected at validation time** when the automaton registers no adaptive actions, and
+   **warned about** when it does. At runtime a path that re-enters a configuration it
+   already left is **cut** (`PathOutcome.CUT`), and the other branches carry on. Applies
+   to adaptively added epsilon edges too (§4.5).
 6. **The families never overlap** (§4.1, §4.2): the symbol family never selects a
    submachine call, and a concrete symbol never selects an epsilon edge — ask for
    epsilon explicitly with `Symbol.Epsilon`.
@@ -825,8 +854,9 @@ Changing the cost model means changing `CostVisitor` and nothing else.
 14. **A published fact is the action's own claim** (§7.3). The engine relays it verbatim;
     it does not validate or interpret it. A consumer that prices facts is trusting the
     action that published them.
-
----
+15. **No public member of the library is nullable** (§4.0): not a filter, not a value,
+    not a marker, not a configuration slot. "Not configured yet" surfaces as an
+    exception, never as a `null` to guard against.
 
 ## 9. Where to go next
 

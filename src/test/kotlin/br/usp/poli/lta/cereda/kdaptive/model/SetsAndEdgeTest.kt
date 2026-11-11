@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -32,7 +29,7 @@ private data class Letter(val value: Char) : Symbol() {
 
 /**
  * Coverage tests for the small structural pieces: [Stack], [TransitionEdge],
- * [RecognitionPath], [IdentifierUtils], the three sets' `toString()` and CRUD
+ * [RecognitionPath], [IdentifierUtils], the three collections' `toString()` and CRUD
  * paths, and the remaining [TransitionMapping] filters.
  */
 class SetsAndEdgeTest {
@@ -53,17 +50,17 @@ class SetsAndEdgeTest {
         stack.push(M2)
 
         val clone = stack.copy()
-        assertEquals(listOf(M2, M1), clone.elementsList())
-        assertEquals(M2, clone.top())
+        assertEquals(listOf(M2, M1), clone.elements)
+        assertEquals(M2, clone.peek())
         clone.pop()
-        assertEquals(M1, clone.top())
+        assertEquals(M1, clone.peek())
     }
 
     @Test
     fun `stack empty toString and top throw`() {
         val stack = Stack()
         assertEquals("Stack: {}", stack.toString())
-        assertThrows<IllegalStateException> { stack.top() }
+        assertThrows<IllegalStateException> { stack.peek() }
     }
 
     // -----------------------------------------------------------------------
@@ -148,52 +145,63 @@ class SetsAndEdgeTest {
         mapping.add(t2)
         mapping.add(t3)
 
-        assertEquals(setOf(t1), mapping.withSourceStateAndSymbol(M0, sym('a')).toSet())
-        assertEquals(setOf(t1), mapping.withSourceStateSymbolAndTargetState(M0, sym('a'), M1).toSet())
+        assertEquals(
+            setOf(t1),
+            Topology.of(mapping, Submachines())
+                .matching(TransitionPattern(source = M0, symbol = sym('a')))
+                .toSet(),
+        )
+        assertEquals(
+            setOf(t1),
+            Topology.of(mapping, Submachines())
+                .matching(TransitionPattern(source = M0, symbol = sym('a'), target = M1))
+                .toSet(),
+        )
 
         mapping.add(t4)
-        assertEquals(setOf(t1, t4), mapping.withSymbolEpsilonOrSubmachineFromSourceState(M0, sym('a')).toSet())
-        assertEquals(setOf(t4), mapping.withEpsilonOrSubmachineFromSourceState(M0).toSet())
-        assertEquals(setOf(t3), mapping.withEpsilonOrSubmachineFromSourceState(M1).toSet())
+        val topology = Topology.of(mapping, Submachines())
+        assertEquals(setOf(t1, t4), topology.applicableEdgesFrom(M0, sym('a')).toSet())
+        assertEquals(setOf(t4), topology.epsilonOrCallEdgesFrom(M0).toSet())
+        assertEquals(setOf(t3), topology.epsilonOrCallEdgesFrom(M1).toSet())
 
         assertTrue(mapping.toString().contains("TransitionEdge(id="))
     }
 
     // -----------------------------------------------------------------------
-    // ActionsSet / SubmachinesSet
+    // Actions / Submachines
     // -----------------------------------------------------------------------
     @Test
-    fun `actionsSet add removeByName copy and toString`() {
-        val actions = ActionsSet()
+    fun `actions add removeByName copy and toString`() {
+        val actions = Actions()
         actions.add(Action(name = "A", handler = { _, _, _ -> }))
-        assertEquals(1, actions.size())
+        assertEquals(1, actions.size)
         assertTrue(actions.toString().contains("A"))
 
         val clone = actions.copy()
-        assertEquals(1, clone.size())
+        assertEquals(1, clone.size)
         assertThrows<IllegalStateException> { clone.fromName("nope") }
 
         actions.removeByName("A")
-        assertEquals(0, actions.size())
+        assertEquals(0, actions.size)
         assertThrows<IllegalArgumentException> { actions.removeByName("A") }
     }
 
     @Test
-    fun `submachinesSet lookups copy and toString`() {
-        val submachines = SubmachinesSet()
+    fun `submachines lookups copy and toString`() {
+        val submachines = Submachines()
         val main = Submachine(name = "Main", states = setOf(M0, M1), initialState = M0, acceptingStates = setOf(M1))
         submachines.add(main)
-        assertEquals(main, submachines.getFromName("Main"))
-        assertThrows<IllegalStateException> { submachines.getFromName("nope") }
-        assertEquals(main, submachines.getFromState(M1))
-        assertThrows<IllegalStateException> { submachines.getFromState(M2) }
+        assertEquals(main, submachines.fromName("Main"))
+        assertThrows<IllegalStateException> { submachines.fromName("nope") }
+        assertEquals(main, submachines.fromState(M1))
+        assertThrows<IllegalStateException> { submachines.fromState(M2) }
 
         assertTrue(submachines.toString().contains("Main"))
 
         val clone = submachines.copy()
         clone.removeByName("Main")
-        assertEquals(0, clone.size())
-        assertEquals(1, submachines.size())
+        assertEquals(0, clone.size)
+        assertEquals(1, submachines.size)
     }
 
     // -----------------------------------------------------------------------
@@ -210,10 +218,19 @@ class SetsAndEdgeTest {
 
     @Test
     fun `recognition path addStep and toString`() {
-        val path = RecognitionPath()
-        assertEquals(emptyList<String>(), path.path)
-        val next = path.addStep("step-1").addStep("step-2")
-        assertEquals(listOf("step-1", "step-2"), next.path)
-        assertTrue(next.toString().contains("step-2"))
+        val q0 = object : State() {
+            override fun toString(): String = "q0"
+        }
+        val step =
+            TransitionEdge(
+                source = q0,
+                target = q0,
+                transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
+            )
+        val path = RecognitionPath(state = q0)
+        assertEquals(emptyList<TransitionEdge>(), path.path)
+        val next = path.addStep(step).addStep(step)
+        assertEquals(listOf(step, step), next.path)
+        assertTrue(next.toString().contains("q0"))
     }
 }

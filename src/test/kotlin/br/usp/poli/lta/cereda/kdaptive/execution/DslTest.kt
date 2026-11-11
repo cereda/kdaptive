@@ -36,25 +36,25 @@ class DslTest {
     @Test
     fun `dsl recognises empty string`() {
         val automaton = specToAutomaton(evenAsSpec())
-        assertTrue(automaton.recognize(emptyList()))
+        assertTrue(automaton.recognize(emptyList()).accepted)
     }
 
     @Test
     fun `dsl recognises aa`() {
         val automaton = specToAutomaton(evenAsSpec())
-        assertTrue(automaton.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(automaton.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
     }
 
     @Test
     fun `dsl rejects single a`() {
         val automaton = specToAutomaton(evenAsSpec())
-        assertFalse(automaton.recognize(listOf(CharSymbol('a'))))
+        assertFalse(automaton.recognize(listOf(CharSymbol('a'))).accepted)
     }
 
     @Test
     fun `dsl recognises aab`() {
         val automaton = specToAutomaton(evenAsSpec())
-        assertTrue(automaton.recognize(listOf(CharSymbol('a'), CharSymbol('a'), CharSymbol('b'))))
+        assertTrue(automaton.recognize(listOf(CharSymbol('a'), CharSymbol('a'), CharSymbol('b'))).accepted)
     }
 
     @Test
@@ -62,8 +62,8 @@ class DslTest {
         val spec = evenAsSpec()
         val a1 = specToAutomaton(spec)
         val a2 = specToAutomaton(spec)
-        assertTrue(a1.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
-        assertTrue(a2.recognize(listOf(CharSymbol('a'), CharSymbol('a'), CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a1.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
+        assertTrue(a2.recognize(listOf(CharSymbol('a'), CharSymbol('a'), CharSymbol('a'), CharSymbol('a'))).accepted)
     }
 
     /** A submachine "S" that consumes a single 'x'; main calls S and returns. */
@@ -93,12 +93,12 @@ class DslTest {
     fun `dsl submachine call accepts x`() {
         val automaton = specToAutomaton(xSpec())
         val result = automaton.recognize(listOf(CharSymbol('x')))
-        assertTrue(result)
+        assertTrue(result.accepted)
     }
 
     @Test
     fun `dsl submachine call rejects empty`() {
         val automaton = specToAutomaton(xSpec())
-        assertFalse(automaton.recognize(emptyList()))
+        assertFalse(automaton.recognize(emptyList()).accepted)
     }
 }

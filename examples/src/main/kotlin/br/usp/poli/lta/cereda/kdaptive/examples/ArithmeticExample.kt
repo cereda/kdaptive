@@ -42,7 +42,7 @@ class ArithmeticExample : AdaptiveAutomaton() {
         consume(q3, '1', q4)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

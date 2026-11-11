@@ -1,16 +1,18 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-package br.usp.poli.lta.cereda.kdaptive.model.sets
-
-import br.usp.poli.lta.cereda.kdaptive.model.Action
+package br.usp.poli.lta.cereda.kdaptive.model
 
 /**
- * The set of actions of the adaptive automaton.
+ * The actions of the adaptive automaton.
+ *
+ * The set is itself a collection: an automaton's actions are reached by
+ * iterating over them, and their number is asked of them directly. There is
+ * no second, more official way of reaching them.
  *
  * Manages a collection of [Action] instances that can be looked up by name
  * and executed during recognition.
  */
-class ActionsSet {
-    private val actions = mutableSetOf<Action>()
+class Actions : Iterable<Action> {
+    private val entries = mutableSetOf<Action>()
 
     /**
      * Adds an action to the set.
@@ -23,36 +25,35 @@ class ActionsSet {
      * @param action the action to add
      */
     fun add(action: Action) {
-        actions.removeIf { it.name == action.name }
-        actions.add(action)
+        entries.removeIf { it.name == action.name }
+        entries.add(action)
     }
 
+    /** Returns the actions of the automaton. */
+    override fun iterator(): Iterator<Action> = entries.iterator()
+
     /**
-     * Returns all actions in the set.
+     * Tells whether the set holds [action].
      *
-     * The set is live: it reflects the set as it is, and mutating it mutates
-     * the set of actions.
-     *
-     * @return the live set of all actions
+     * @param action the action to look for
+     * @return true when an equal action is in the set
      */
-    fun getActions(): Set<Action> = actions
+    operator fun contains(action: Action): Boolean = action in entries
 
     /**
      * Replaces all actions in the set with the given actions.
      *
      * @param newActions the new set of actions
      */
-    fun setActions(newActions: Set<Action>) {
-        actions.clear()
-        actions.addAll(newActions)
+    fun replaceAll(newActions: Set<Action>) {
+        entries.clear()
+        entries.addAll(newActions)
     }
 
     /**
-     * Returns the number of actions in the set.
-     *
-     * @return the action count
+     * The number of actions in the set.
      */
-    fun size(): Int = actions.size
+    val size: Int get() = entries.size
 
     /**
      * Retrieves an action by name.
@@ -62,7 +63,7 @@ class ActionsSet {
      * @throws IllegalStateException if no action with the given name exists
      */
     fun fromName(name: String): Action {
-        val result = actions.firstOrNull { it.name == name }
+        val result = entries.firstOrNull { it.name == name }
         return result ?: error("No action with name '$name'.")
     }
 
@@ -73,28 +74,28 @@ class ActionsSet {
      * @throws IllegalStateException if no action with the given name exists
      */
     fun removeByName(name: String) {
-        val result = actions.firstOrNull { it.name == name }
+        val result = entries.firstOrNull { it.name == name }
         require(result != null) { "No action with name '$name'." }
-        actions.remove(result)
+        entries.remove(result)
     }
 
     /**
-     * Returns a shallow copy of this action set.
+     * Creates a shallow copy of this action set.
      *
-     * @return a new [ActionsSet] with the same actions
+     * @return a new [Actions] with the same actions
      */
-    fun copy(): ActionsSet {
-        val c = ActionsSet()
-        c.actions.addAll(actions)
+    fun copy(): Actions {
+        val c = Actions()
+        c.entries.addAll(entries)
         return c
     }
 
     /** Returns a human-readable representation of this action set. */
     override fun toString(): String {
         val sb = StringBuilder("Set of actions: {")
-        if (actions.isNotEmpty()) {
+        if (entries.isNotEmpty()) {
             sb.append("\n")
-            for (a in actions) {
+            for (a in entries) {
                 sb.append("  $a\n")
             }
         }

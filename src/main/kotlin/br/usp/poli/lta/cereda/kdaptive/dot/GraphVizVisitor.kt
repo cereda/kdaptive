@@ -2,9 +2,8 @@
 package br.usp.poli.lta.cereda.kdaptive.dot
 
 import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
  * An [ExecutionVisitor] that emits a GraphViz DOT snapshot of the automaton
@@ -38,21 +37,11 @@ class GraphVizVisitor(
     /** The stateless exporter reused across snapshots. */
     private val exporter = DotExporter()
 
-    override fun onEdgeAdded(
-        pathId: Int,
-        edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
-    ) {
-        sink(pathId, exporter.toDot(transitions, submachines))
+    override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
+        sink(pathId, exporter.toDot(topology))
     }
 
-    override fun onEdgeRemoved(
-        pathId: Int,
-        edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
-    ) {
-        sink(pathId, exporter.toDot(transitions, submachines))
+    override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
+        sink(pathId, exporter.toDot(topology))
     }
 }

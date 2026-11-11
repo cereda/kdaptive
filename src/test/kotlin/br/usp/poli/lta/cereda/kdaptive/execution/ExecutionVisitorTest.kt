@@ -7,10 +7,10 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -123,7 +123,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(evenAsSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertEquals(listOf("start", "end:true"), events)
     }
@@ -134,8 +134,8 @@ class ExecutionVisitorTest {
         var submachineCount = -1
         val visitor = object : ExecutionVisitor {
             override fun onRecognizeStart(automaton: AdaptiveAutomaton) {
-                transitionCount = automaton.transitions.size()
-                submachineCount = automaton.submachines.size()
+                transitionCount = automaton.transitions.size
+                submachineCount = automaton.submachines.size
             }
         }
         val a = specToAutomaton(evenAsSpec())
@@ -154,8 +154,8 @@ class ExecutionVisitorTest {
             override fun onPathStart(pathId: Int, input: List<Symbol>) {
                 events.add("pathStart:$pathId")
             }
-            override fun onPathEnd(pathId: Int, accepted: Boolean, cursor: Int) {
-                events.add("pathEnd:$pathId:$accepted:$cursor")
+            override fun onPathEnd(pathId: Int, outcome: PathOutcome, cursor: Int) {
+                events.add("pathEnd:$pathId:$outcome:$cursor")
             }
             override fun onBeforeTraverse(pathId: Int, edge: TransitionEdge) {
                 events.add("before:$pathId")
@@ -167,7 +167,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(evenAsSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertTrue(events.any { it.startsWith("pathStart:") })
         assertTrue(events.any { it.startsWith("pathEnd:") })
@@ -205,20 +205,10 @@ class ExecutionVisitorTest {
         }
 
         val visitor = object : ExecutionVisitor {
-            override fun onEdgeAdded(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 addEvents.add("${edge.source}->${edge.target}")
             }
-            override fun onEdgeRemoved(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 removeEvents.add("${edge.source}->${edge.target}")
             }
         }
@@ -228,7 +218,7 @@ class ExecutionVisitorTest {
 
         // "aba": q0 -a-> q1 (action A fires: adds q1-a->q0), q1 -b-> q1, q1 -a-> q0
         // Two a's → even → accept.
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('b'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('b'), CharSymbol('a'))).accepted)
 
         assertFalse(addEvents.isEmpty())
         // The added edge is q1-a->q0.
@@ -260,12 +250,7 @@ class ExecutionVisitorTest {
     fun `visitor receives edge removal events`() {
         val removed = mutableListOf<String>()
         val visitor = object : ExecutionVisitor {
-            override fun onEdgeRemoved(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 removed.add("${edge.source}->${edge.target}")
             }
         }
@@ -295,7 +280,7 @@ class ExecutionVisitorTest {
 
         // "x" can be matched by either the direct path or the submachine path.
         // The submachine path produces call/return events.
-        assertTrue(a.recognize(listOf(CharSymbol('x'))))
+        assertTrue(a.recognize(listOf(CharSymbol('x'))).accepted)
         assertTrue(events.any { it == "call:S" })
         assertTrue(events.any { it == "return" })
     }
@@ -312,7 +297,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(forkSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'))).accepted)
 
         assertEquals(1, forks.size)
         val (parentId, childIds) = forks.first()
@@ -334,7 +319,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(forkSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'))).accepted)
 
         val (parentId, children) = forks.first()
         assertEquals(2, children.size)
@@ -354,7 +339,7 @@ class ExecutionVisitorTest {
         val b = specToAutomaton(forkSpec())
         b.visitors.add(visitor)
         b.visitors.add(tracer)
-        assertTrue(b.recognize(listOf(CharSymbol('a'))))
+        assertTrue(b.recognize(listOf(CharSymbol('a'))).accepted)
 
         val second = forks.last()
         second.second.forEach { child ->
@@ -368,7 +353,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(evenAsSpec())
         a.visitors.add(DefaultVisitor())
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
     }
 
     @Test
@@ -376,7 +361,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(mutatingSpec())
         a.visitors.add(DefaultVisitor())
 
-        assertFalse(a.recognize(listOf(CharSymbol('a'), CharSymbol('b'))))
+        assertFalse(a.recognize(listOf(CharSymbol('a'), CharSymbol('b'))).accepted)
     }
 
     @Test
@@ -384,7 +369,7 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(callSpec())
         a.visitors.add(DefaultVisitor())
 
-        assertTrue(a.recognize(listOf(CharSymbol('x'))))
+        assertTrue(a.recognize(listOf(CharSymbol('x'))).accepted)
     }
 
     @Test
@@ -392,6 +377,6 @@ class ExecutionVisitorTest {
         val a = specToAutomaton(forkSpec())
         a.visitors.add(DefaultVisitor())
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'))).accepted)
     }
 }

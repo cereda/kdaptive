@@ -50,7 +50,7 @@ class CallReturnExample : AdaptiveAutomaton() {
         consume(m1, 'c', m1)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

@@ -7,9 +7,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isOrdinary
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineReturn
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
-import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,7 +14,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * Covers the remaining [TransitionMapping] single-axis and combined queries,
- * the set accessors of [ActionsSet] and [SubmachinesSet], the [Stack] clear and
+ * the set accessors of [Actions] and [Submachines], the [Stack] clear and
  * multi-element rendering, and the non-dot predicate values.
  */
 class MappingQueriesTest {
@@ -61,64 +58,72 @@ class MappingQueriesTest {
         return m
     }
 
+    /** The snapshot of the mapping the queries are asked of. */
+    private fun topology(): Topology = Topology.of(mapping(), Submachines())
+
     @Test
     fun `single-axis queries`() {
-        val m = mapping()
+        val t = topology()
 
-        assertTrue(m.withTargetState(Q0).isNotEmpty())
-        assertTrue(m.withTargetState(Q1).isNotEmpty())
-        assertTrue(m.withTargetState(Q2).isNotEmpty())
-        assertTrue(m.withSubmachine("M").isNotEmpty())
-        assertTrue(m.withSubmachine("nope").isEmpty())
-        assertTrue(m.withEpsilonTransitions().isNotEmpty())
-        assertTrue(m.withEpsilonFromSourceState(Q1).isNotEmpty())
-        assertTrue(m.withEpsilonFromSourceState(Q0).isEmpty())
+        assertTrue(t.edgesTo(Q0).isNotEmpty())
+        assertTrue(t.edgesTo(Q1).isNotEmpty())
+        assertTrue(t.edgesTo(Q2).isNotEmpty())
+        assertTrue(t.callsTo("M").isNotEmpty())
+        assertTrue(t.callsTo("nope").isEmpty())
+        assertTrue(t.epsilonEdges.isNotEmpty())
+        assertTrue(t.epsilonEdgesFrom(Q1).isNotEmpty())
+        assertTrue(t.epsilonEdgesFrom(Q0).isEmpty())
     }
 
     @Test
     fun `combined-criteria queries`() {
-        val m = mapping()
+        val t = topology()
         val a = CharSymbol('a')
 
-        assertTrue(m.withSourceStateAndSymbol(Q0, a).isNotEmpty())
-        assertTrue(m.withSourceStateAndSymbol(Q2, a).isEmpty())
+        assertTrue(t.matching(TransitionPattern(source = Q0, symbol = a)).isNotEmpty())
+        assertTrue(t.matching(TransitionPattern(source = Q2, symbol = a)).isEmpty())
 
-        assertTrue(m.withSourceAndTargetStates(Q1, Q0).isNotEmpty())
-        assertTrue(m.withSourceAndTargetStates(Q0, Q0).isEmpty())
+        assertTrue(t.matching(TransitionPattern(source = Q1, target = Q0, submachine = SubmachineRef.Any)).isNotEmpty())
+        assertTrue(t.matching(TransitionPattern(source = Q0, target = Q0, submachine = SubmachineRef.Any)).isEmpty())
 
-        assertTrue(m.withSourceStateAndSubmachine(Q1, "M").isNotEmpty())
-        assertTrue(m.withSourceStateAndSubmachine(Q0, "M").isEmpty())
+        assertTrue(
+            t.matching(TransitionPattern(source = Q1, submachine = SubmachineRef.Named("M"))).isNotEmpty(),
+        )
+        assertTrue(
+            t.matching(TransitionPattern(source = Q0, submachine = SubmachineRef.Named("M"))).isEmpty(),
+        )
 
-        assertTrue(m.withSymbolAndTargetState(a, Q1).isNotEmpty())
-        assertTrue(m.withSymbolAndTargetState(a, Q0).isEmpty())
+        assertTrue(t.matching(TransitionPattern(symbol = a, target = Q1)).isNotEmpty())
+        assertTrue(t.matching(TransitionPattern(symbol = a, target = Q0)).isEmpty())
     }
 
     @Test
     fun `prior and post action name queries`() {
-        val m = mapping()
+        val t = topology()
 
-        assertEquals(2, m.withPriorAction("PA").size)
-        assertTrue(m.withPriorAction("nope").isEmpty())
+        assertEquals(2, t.edgesWithPrior("PA").size)
+        assertTrue(t.edgesWithPrior("nope").isEmpty())
 
-        assertEquals(1, m.withPostAction("PB").size)
-        assertTrue(m.withPostAction("nope").isEmpty())
+        assertEquals(1, t.edgesWithPost("PB").size)
+        assertTrue(t.edgesWithPost("nope").isEmpty())
     }
 
     @Test
-    fun `actions set accessors`() {
-        val set = ActionsSet()
-        set.add(Action(name = "A") { _, _, _ -> })
-        set.add(Action(name = "B") { _, _, _ -> })
+    fun `actions collection`() {
+        val actions = Actions()
+        actions.add(Action(name = "A") { _, _, _ -> })
+        actions.add(Action(name = "B") { _, _, _ -> })
 
-        assertEquals(2, set.getActions().size)
-        assertEquals(2, set.copy().size())
-        set.setActions(emptySet())
-        assertEquals(0, set.size())
+        assertEquals(2, actions.size)
+        assertEquals(2, actions.count())
+        assertEquals(2, actions.copy().size)
+        actions.replaceAll(emptySet())
+        assertEquals(0, actions.size)
     }
 
     @Test
-    fun `submachines set accessors`() {
-        val set = SubmachinesSet()
+    fun `submachines collection`() {
+        val submachines = Submachines()
         val sm =
             Submachine(
                 name = "M",
@@ -126,29 +131,30 @@ class MappingQueriesTest {
                 initialState = Q0,
                 acceptingStates = setOf(Q1),
             )
-        set.add(sm)
+        submachines.add(sm)
 
-        assertEquals(1, set.getSubmachines().size)
-        assertEquals(1, set.copy().size())
-        set.setSubmachines(emptySet())
-        assertEquals(0, set.size())
+        assertEquals(1, submachines.size)
+        assertEquals(1, submachines.count())
+        assertEquals(1, submachines.copy().size)
+        submachines.replaceAll(emptySet())
+        assertEquals(0, submachines.size)
     }
 
     @Test
     fun `stack clear and rendering`() {
         val stack = Stack()
         stack.clear()
-        assertTrue(stack.isEmpty())
+        assertTrue(stack.isEmpty)
         assertEquals("Stack: {}", stack.toString())
 
         stack.push(Q0)
         stack.push(Q1)
-        assertEquals(listOf(Q1, Q0), stack.elementsList())
+        assertEquals(listOf(Q1, Q0), stack.elements)
         assertEquals("Stack: { q1, q0, top=q1 }", stack.toString())
-        assertEquals(Q1, stack.top())
+        assertEquals(Q1, stack.peek())
 
         stack.clear()
-        assertTrue(stack.isEmpty())
+        assertTrue(stack.isEmpty)
         assertEquals("Stack: {}", stack.toString())
     }
 

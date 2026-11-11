@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -74,7 +72,7 @@ class ElementaryActionsResolutionTest {
 
     @Test
     fun `every query arity resolves positionally`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         // The symbol family never sees the epsilon or the call edge.
         assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any).size)
@@ -89,7 +87,7 @@ class ElementaryActionsResolutionTest {
 
     @Test
     fun `every query arity resolves by named argument`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(2, ea.query(source = State.Any, symbol = Symbol.Any, target = State.Any).size)
         assertEquals(
@@ -135,63 +133,64 @@ class ElementaryActionsResolutionTest {
     @Test
     fun `every remove arity resolves positionally and by named argument`() {
         val positional = mapping()
-        ElementaryActions(positional).remove(State.Any, Symbol.Any, State.Any)
-        assertEquals(2, positional.size())
+        ElementaryActions(positional, Submachines()).remove(State.Any, Symbol.Any, State.Any)
+        assertEquals(2, positional.size)
 
         val prior = mapping()
-        ElementaryActions(prior).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free)
-        assertEquals(2, prior.size())
+        ElementaryActions(prior, Submachines()).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free)
+        assertEquals(2, prior.size)
 
         val both = mapping()
-        ElementaryActions(both).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free, ActionRef.Free)
-        assertEquals(2, both.size())
+        ElementaryActions(both, Submachines()).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free, ActionRef.Free)
+        assertEquals(2, both.size)
 
         val named = mapping()
-        ElementaryActions(named).remove(
+        ElementaryActions(named, Submachines()).remove(
             prior = ActionRef.Free,
             source = State.Any,
             symbol = Symbol.Any,
             target = State.Any,
         )
-        assertEquals(2, named.size())
+        assertEquals(2, named.size)
 
         val namedBoth = mapping()
-        ElementaryActions(namedBoth).remove(
+        ElementaryActions(namedBoth, Submachines()).remove(
             post = ActionRef.Free,
             prior = ActionRef.Free,
             source = State.Any,
             symbol = Symbol.Any,
             target = State.Any,
         )
-        assertEquals(2, namedBoth.size())
+        assertEquals(2, namedBoth.size)
     }
 
     @Test
     fun `every removeCall arity resolves positionally and by named argument`() {
         val positional = mapping()
-        ElementaryActions(positional).removeCall(State.Any, SubmachineRef.Any, State.Any)
-        assertEquals(3, positional.size())
+        ElementaryActions(positional, Submachines()).removeCall(State.Any, SubmachineRef.Any, State.Any)
+        assertEquals(3, positional.size)
 
         val named = mapping()
-        ElementaryActions(named).removeCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any)
-        assertEquals(3, named.size())
+        ElementaryActions(named, Submachines())
+            .removeCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any)
+        assertEquals(3, named.size)
     }
 
     @Test
     fun `the builder blocks resolve too`() {
         val m = mapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         assertEquals(2, ea.query { }.size)
         assertEquals(1, ea.queryCall { }.size)
         ea.remove { }
         // The symbol family leaves; the epsilon and the call edge stay.
-        assertEquals(2, m.size())
+        assertEquals(2, m.size)
     }
 
     @Test
     fun `the action filters still discriminate`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         // Prior "A" and post "B" are carried by the symbol edge and the call edge.
         assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, actionRef("A")).size)

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.logging.logger
+
 /**
  * The rules every topology must satisfy, whatever built it.
  *
@@ -20,37 +22,37 @@ package br.usp.poli.lta.cereda.kdaptive.model
  *   cannot tell which submachine is running when the edge is taken;
  * - a call names a declared submachine;
  * - a call returns to a state owned by the calling submachine, otherwise the
- *   return would switch the running submachine.
+ *   return would switch the running submachine;
+ * - no reachable cycle consumes no input, unless an adaptive action may break
+ *   it.
  */
 object TopologyValidator {
 
     /**
      * Checks the topology of an automaton.
      *
-     * @param edges the edges of the automaton
-     * @param submachines the submachines of the automaton
-     * @param mainSubmachine the name of the main submachine, or null when none
-     *   was declared
+     * @param topology the topology of the automaton
+     * @param mainSubmachine the name of the main submachine
+     * @param actionNames the names of the adaptive actions registered in the
+     *   automaton; an automaton that registers none can never change its own
+     *   topology
      * @throws IllegalArgumentException if the topology breaks one of the rules
      */
-    fun validate(edges: Collection<TransitionEdge>, submachines: Collection<Submachine>, mainSubmachine: String?) {
-        validateMain(submachines, mainSubmachine)
-        validateStates(submachines)
-        validateTransitions(edges, submachines)
+    fun validate(topology: Topology, mainSubmachine: String, actionNames: Collection<String>) {
+        validateMain(topology.submachines, mainSubmachine)
+        validateStates(topology.submachines)
+        validateTransitions(topology.edges, topology.submachines)
+        validateCycles(topology, mainSubmachine, actionNames)
     }
 
     /**
      * Checks that a main submachine is declared and exists: recognition starts
      * there, so a missing one is a modeling mistake, not a runtime detail.
      */
-    private fun validateMain(submachines: Collection<Submachine>, mainSubmachine: String?) {
-        val mainName =
-            requireNotNull(mainSubmachine) {
-                "The automaton must declare a main submachine, for example main(\"M\")."
-            }
+    private fun validateMain(submachines: Collection<Submachine>, mainSubmachine: String) {
         val names = submachines.map { it.name }.toSet()
-        require(mainName in names) {
-            "Main submachine '$mainName' is not declared. " +
+        require(mainSubmachine in names) {
+            "Main submachine '$mainSubmachine' is not declared. " +
                 "Declared submachines: ${names.joinToString(", ")}."
         }
     }
@@ -101,7 +103,129 @@ object TopologyValidator {
     }
 
     /**
-     * Checks that [state] is a concrete state.
+     * Checks that no reachable cycle consumes no input.
+     *
+     * An epsilon transition and a submachine call consume nothing: a path
+     * that follows them never runs out of input and never gets stuck, so a
+     * cycle of such moves loops forever. The engine explores every branch, so
+     * such a cycle keeps the whole recognition from ever finishing.
+     *
+     * The cycle is only *fatal* when the automaton registers no adaptive
+     * action: nothing may then change the topology, and the loop is certain.
+     * When an action is registered, the action may legitimately break the
+     * cycle — the documented one-shot idiom removes the very edge that loops
+     * — so the engine reports the cycle and cuts the branches that loop.
+     */
+    private fun validateCycles(topology: Topology, mainSubmachine: String, actionNames: Collection<String>) {
+        val byName = topology.submachines.associateBy { it.name }
+        val main = byName[mainSubmachine] ?: return
+        val moves = mutableMapOf<State, MutableList<State>>()
+        val freeMoves = mutableMapOf<State, MutableList<State>>()
+        topology.edges.forEach { edge ->
+            when (val transition = edge.transition) {
+                is Transition.Epsilon -> {
+                    moves.add(edge.source, edge.target)
+                    freeMoves.add(edge.source, edge.target)
+                }
+
+                is Transition.Call -> {
+                    val callee = byName[transition.submachine] ?: return@forEach
+                    moves.add(edge.source, callee.initialState)
+                    freeMoves.add(edge.source, callee.initialState)
+                }
+
+                is Transition.SymbolTransition -> {
+                    moves.add(edge.source, edge.target)
+                }
+
+                is Transition.Return -> {
+                    // A return pops the stack: it never closes a cycle.
+                }
+            }
+        }
+
+        // Reachability ignores what the input holds: a state reachable by
+        // *some* input is reachable, and a cycle behind it is just as fatal.
+        val reachable = mutableSetOf<State>()
+        val pending = ArrayDeque<State>()
+        pending.add(main.initialState)
+        while (pending.isNotEmpty()) {
+            val state = pending.removeFirst()
+            if (!reachable.add(state)) continue
+            moves[state].orEmpty().forEach { pending.add(it) }
+        }
+
+        val cycle = findCycle(freeMoves, reachable) ?: return
+        val description = cycle.joinToString(" -> ") { it.toString() }
+        if (actionNames.isEmpty()) {
+            throw IllegalArgumentException(
+                "The automaton has a reachable cycle that consumes no input: $description. " +
+                    "Such a cycle never reaches a verdict, and an automaton without adaptive actions " +
+                    "can never break it. Remove the cycle, or register an action that changes the topology.",
+            )
+        }
+        logger.warn(
+            "The automaton has a reachable cycle that consumes no input: $description. " +
+                "An adaptive action may break it; if it does not, the engine cuts the branches that loop.",
+        )
+    }
+
+    /**
+     * Finds a cycle of the graph [adjacency] restricted to [reachable].
+     *
+     * @param adjacency the successors of every state
+     * @param reachable the states the search may visit
+     * @return the states of the cycle, or null when the graph has none
+     */
+    private fun findCycle(adjacency: Map<State, List<State>>, reachable: Set<State>): List<State>? {
+        val colors = mutableMapOf<State, Int>()
+        val parents = mutableMapOf<State, State>()
+        for (start in reachable) {
+            if (colors.containsKey(start)) continue
+            colors[start] = VISITING
+            val stack = ArrayDeque<Pair<State, Iterator<State>>>()
+            stack.addLast(start to successors(adjacency, start, reachable))
+            while (stack.isNotEmpty()) {
+                val (node, remaining) = stack.last()
+                if (!remaining.hasNext()) {
+                    colors[node] = VISITED
+                    stack.removeLast()
+                    continue
+                }
+                val next = remaining.next()
+                when (colors[next] ?: UNVISITED) {
+                    UNVISITED -> {
+                        colors[next] = VISITING
+                        parents[next] = node
+                        stack.addLast(next to successors(adjacency, next, reachable))
+                    }
+
+                    VISITING -> return cycleOf(next, node, parents)
+
+                    else -> Unit
+                }
+            }
+        }
+        return null
+    }
+
+    /** Returns the successors of [state] the search may visit. */
+    private fun successors(adjacency: Map<State, List<State>>, state: State, reachable: Set<State>): Iterator<State> =
+        adjacency[state].orEmpty().filter { it in reachable }.iterator()
+
+    /** Rebuilds the cycle closed by the edge from [node] to [ancestor]. */
+    private fun cycleOf(ancestor: State, node: State, parents: Map<State, State>): List<State> {
+        val cycle = mutableListOf(ancestor)
+        var current = node
+        while (current != ancestor) {
+            cycle.add(current)
+            current = parents[current] ?: return cycle
+        }
+        cycle.add(ancestor)
+        return cycle
+    }
+
+    /** Checks that [state] is a concrete state.
      *
      * A domain is a filter: it names several states at once, and no edge can
      * start or end at all of them.
@@ -121,4 +245,18 @@ object TopologyValidator {
     private fun unownedStateMessage(state: State): String =
         "State '$state' is not part of any submachine. Declare it inside a submachine block, " +
             "for example submachine(\"M\") { state(\"$state\") }."
+
+    /** Adds [target] to the successors of [source]. */
+    private fun MutableMap<State, MutableList<State>>.add(source: State, target: State) {
+        getOrPut(source) { mutableListOf() }.add(target)
+    }
+
+    /** The state has not been visited yet. */
+    private const val UNVISITED = 0
+
+    /** The state is on the path currently being explored. */
+    private const val VISITING = 1
+
+    /** The state has been fully explored. */
+    private const val VISITED = 2
 }

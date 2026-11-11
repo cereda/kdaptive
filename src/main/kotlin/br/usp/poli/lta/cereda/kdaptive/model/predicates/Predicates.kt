@@ -3,9 +3,13 @@ package br.usp.poli.lta.cereda.kdaptive.model.predicates
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.stateMatches
+import br.usp.poli.lta.cereda.kdaptive.model.submachineMatches
+import br.usp.poli.lta.cereda.kdaptive.model.symbolMatches
 
 /** A predicate over transition edges: true if the edge matches. */
 typealias TransitionPredicate = (TransitionEdge) -> Boolean
@@ -40,26 +44,44 @@ val hasPriorAction: TransitionPredicate = { it.prior is ActionRef.Bound }
 /** Matches transitions with a post action. */
 val hasPostAction: TransitionPredicate = { it.post is ActionRef.Bound }
 
-/** Matches transitions whose source state equals [state]. */
-fun sourceState(state: State): TransitionPredicate = { it.source == state }
+/**
+ * Matches transitions whose source state satisfies the state filter [state].
+ *
+ * The filter means what it means everywhere else: the wildcard [State.Any]
+ * matches any source state, a domain matches the states it names, and a
+ * concrete state matches only itself.
+ */
+fun sourceState(state: State): TransitionPredicate = { stateMatches(it.source, state) }
 
-/** Matches transitions whose target state equals [state]. */
-fun targetState(state: State): TransitionPredicate = { it.target == state }
+/**
+ * Matches transitions whose target state satisfies the state filter [target].
+ *
+ * The filter means what it means everywhere else: the wildcard [State.Any]
+ * matches any target state, a domain matches the states it names, and a
+ * concrete state matches only itself.
+ */
+fun targetState(target: State): TransitionPredicate = { stateMatches(it.target, target) }
 
-/** Matches transitions consuming [symbol]. */
-fun symbol(sym: Symbol): TransitionPredicate = {
-    it.transition is Transition.SymbolTransition &&
-        it.transition.symbol == sym
-}
+/**
+ * Matches transitions consuming the symbol named by [sym].
+ *
+ * The filter means what it means everywhere else: the wildcard [Symbol.Any]
+ * matches every symbol-consuming transition, the empty word [Symbol.Epsilon]
+ * matches the epsilon transitions, a domain matches the symbols it names, and
+ * a concrete symbol matches only the transitions consuming it.
+ */
+fun symbol(sym: Symbol): TransitionPredicate = { symbolMatches(it, sym) }
 
-/** Matches transitions calling submachine [name]. */
+/**
+ * Matches transitions calling submachine [name].
+ */
 fun submachineCall(name: String): TransitionPredicate = {
-    it.transition is Transition.Call &&
-        it.transition.submachine == name
+    submachineMatches(it, SubmachineRef.Named(name))
 }
 
-/** Matches transitions calling one of the submachines named [names]. */
+/**
+ * Matches transitions calling one of the submachines named [names].
+ */
 fun submachineCallIn(names: Set<String>): TransitionPredicate = {
-    it.transition is Transition.Call &&
-        it.transition.submachine in names
+    submachineMatches(it, SubmachineRef.Domain(names))
 }

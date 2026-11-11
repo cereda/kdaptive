@@ -10,8 +10,6 @@ automaton can do to *itself* while running, see the companion
 Below, "the DSL" refers to all authoring styles collectively; each section marks which
 style it applies to.
 
----
-
 ## 1. The mental model
 
 An automaton is made of:
@@ -36,8 +34,6 @@ recognition path terminates. Edges are of exactly four kinds (the sealed class `
 > **Hint**: you almost never construct a `TransitionEdge` by hand; use `consume` /
 > `epsilon` / `call` below. `Return` transitions are created by the executor when a
 > submachine cannot continue but outer work remains.
-
----
 
 ## 2. Style A: subclass `AdaptiveAutomaton` (imperative)
 
@@ -105,8 +101,6 @@ What `setup()` may use:
 > **Remark**: `setup()` runs on the *clone* produced by `recognize()`, i.e. once per
 > recognition call. Keep it free of global side effects that assume it runs exactly once
 > per process (details in the adaptive-actions guide, §2).
-
----
 
 ## 3. Style B: the `automaton { }` builder DSL (declarative)
 
@@ -223,22 +217,27 @@ the runtime `ref` of the handler context.
 
 #### Declaring the argument count
 
-`action(name, arity = n) { ... }` states how many arguments every reference to
-that action must bind; the builder checks the references before the automaton is
-built:
+`action(name, arity = Arity.Exactly(n)) { ... }` states how many arguments every
+reference to that action must bind; the builder checks the references before the
+automaton is built:
 
 ```kotlin
-action("A", arity = 2) { _, args -> ... }
+action("A", arity = Arity.Exactly(2)) { _, args -> ... }
 on("q1").on('a').to("q1", post = ref("A", "q2", "q3"))   // 2 arguments: ok
 on("q1").on('a').to("q1", prior = ref("A", g1, g2))       // 2 arguments: ok
 on("q1").on('a').to("q1", post = ref("A", "q2"))          // 1 argument:
 // IllegalArgumentException: Action 'A' expects 2 argument(s), but a reference binds 1.
 ```
 
-Without `arity` (the default) nothing is checked, which suits actions that are
-legitimately called with and without arguments. The check covers the references
+Without `arity` (the default, `Arity.Any`) nothing is checked, which suits actions that
+are legitimately called with and without arguments. The check covers the references
 written in the builder, on symbol, epsilon and call edges alike; edges added at
 runtime by a handler are outside it.
+
+> **Changed in 4.0.0**: the arity used to be a nullable `Int` (`arity = n`), and `null`
+> meant "any arity". It is now an `Arity` marker — `Arity.Any` or `Arity.Exactly(n)` —
+> in the style of `SubmachineRef`: a wildcard is a value in its own right, and the
+> public API is null-free.
 
 > **Pitfall**: even without `arity`, the argument list must match what the handler
 > expects, **for both firing directions**. A prior action and a post action deliver
@@ -264,11 +263,11 @@ through the instrumentation facility to the consumer, which decides what it is w
 the library never interprets it.
 
 ```kotlin
-data class DomainSize(val count: Int) : Observation
+data class DomainCount(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
     val matched = ea.query(state("q0"), CharSymbol('b'), State.Any)
-    observe(DomainSize(matched.map { it.source }.distinct().size))
+    observe(DomainCount(matched.map { it.source }.distinct().size))
 }
 ```
 
@@ -347,8 +346,6 @@ Two things to know before you prefer this style:
    parameter, so `to("q1", prior = "X")` may only be written as a normal call; the bare
    chain covers parameterless completions.
 
----
-
 ## 4. Transition kinds in detail
 
 ### `consume`, symbol edges
@@ -362,7 +359,8 @@ consume(q0, myToken, q1, post = actionRef("Lexer", token))   // with an argument
 - `from` / `to`: `State` objects (Style A) or names (Style B).
 - `symbol`: anything `Symbol` or `Char`. Subclass `Symbol()` for your own algebra,
   see `LexerExampleKt`, where tokens like lexer words are first-class symbols.
-- `prior` / `post`: action references (`String` name, `ActionRef.Bound`, or `null`).
+- `prior` / `post`: action references (`String` name, `ActionRef.Bound`, or
+  `ActionRef.None`). `null` no longer compiles: the empty slot is a value.
 
 #### Types: what `consume` keeps, converts, and rejects
 
@@ -401,12 +399,15 @@ Moves without consuming. Use it to make a state optional, to publish a zero-leng
 path, or to chain submachines. An epsilon edge may carry a prior and a post action
 exactly like a symbol edge: the prior fires before the move, the post after it.
 
-> **Pitfall: epsilon self-loops are infinite loops.** `epsilon(q, q)` lets the engine
-> take epsilon from `q` back to `q` **forever**: the path never runs out of moves, never
-> rejects, and recognition **hangs**: the engine has no epsilon-cycle detection (this is
-> faithful to the original device's notion of freedom). Two mutually referential edges,
-> `epsilon(q, r)` plus `epsilon(r, q)`, hang the same way. Make every epsilon cycle
-> include at least one consuming edge, or keep the epsilon-only subgraph acyclic.
+> **Pitfall**: an epsilon **cycle** is a modelling mistake. Since 4.0.0 it is no longer
+> a hang: the validator **rejects** a reachable epsilon-only cycle when the automaton
+> registers no adaptive actions (nothing could change the topology, so the cycle is
+> provably non-terminating), and **warns** about it when actions are present (an action
+> may legitimately break it). At runtime, a path that re-enters a configuration it
+> already left is **cut** — its outcome becomes `PathOutcome.CUT` — and the other
+> branches carry on. Two mutually referential edges, `epsilon(q, r)` plus
+> `epsilon(r, q)`, behave the same way. Make every epsilon cycle include at least one
+> consuming edge, or keep the epsilon-only subgraph acyclic.
 
 ### `call`, submachine calls
 
@@ -430,8 +431,6 @@ address is pushed, the post **after** the jump into the called submachine.
 > state owned by another submachine would switch the running submachine on return.
 > Keep submachine names in constants.
 
----
-
 ## 5. The `from(source) { ... }` group block
 
 ```kotlin
@@ -448,8 +447,6 @@ else. Groups nest freely; there is no semantic coupling between a group's edges.
 Every member of the group takes the same parameters as its standalone counterpart,
 `prior` and `post` included.
 
----
-
 ## 6. Submachines: the full discipline
 
 Style B shape:
@@ -464,7 +461,7 @@ consume("m0", 'c', "m1")      // referenced by the same shared names
 
 - Submachines exist to be **called**. In Style B, names are shared with the parent state
   table; in Style A you pass the state objects explicitly. Reusing the same state objects
-  in two submachines is legal but muddies `submachines.getFromState(state)`; look-up
+  in two submachines is legal but muddies `submachines.fromState(state)`; look-up
   returns merely the **first registered** submachine containing that state.
 - `accepting(...)` takes several states at once (`accepting("m0", "m1")`), but at least
   one: an empty call is rejected. `initial(...)` must be given exactly once, a second
@@ -484,14 +481,17 @@ consume("m0", 'c', "m1")      // referenced by the same shared names
 > then returns immediately without consuming). Pick one convention and use it
 > consistently across your project.
 
----
-
 ## 7. Checklist: what people usually trip on
 
-1. **Forgetting `mainSubmachine = "..."`** (Style A) → `requireNotNull` fails inside
-   `recognize()` with "Main submachine cannot be null". Set it first (both styles).
-2. **Forgetting `main("...")`** (Style B) → `toSpec()` throws "The automaton must
-   declare a main submachine". In Style A the name is only checked at runtime.
+1. **Forgetting `mainSubmachine = "..."`** (Style A) → `recognize()` throws
+   `IllegalArgumentException` with "The automaton does not declare a main submachine".
+   Reading `mainSubmachine` before `setup()` declared it throws
+   `IllegalStateException` ("Main submachine cannot be null."). Set it first (both
+   styles).
+2. **Forgetting `main("...")`** (Style B) → `toSpec()` throws "The automaton does not
+   declare a main submachine". Reading the builder's `main` property before `main(...)`
+   was called throws `IllegalStateException` ("Main submachine cannot be null. Call
+   main(\"M\") to declare it.").
 3. **A state owned by no submachine** (Style B) → `toSpec()` throws "State 'q1' is not
    part of any submachine". Declare every state inside a `submachine("M") { ... }`
    block; the executor needs the owner to know which submachine is running.
@@ -499,7 +499,10 @@ consume("m0", 'c', "m1")      // referenced by the same shared names
    undeclared submachine 'Typo'". In Style A the same mistake explodes at runtime.
 5. **A call returning to a state of another submachine** (Style B) → `toSpec()` throws:
    the return would switch the running submachine. Return to a state of the caller.
-6. **Epsilon self-loops** (§4) → infinite recognition (hang).
+6. **Epsilon cycles** (§4) → no longer a hang: the validator rejects them when the
+   automaton has no adaptive actions, warns about them when it has, and the engine cuts
+   a path that re-enters a configuration it already left. Still a modelling mistake:
+   make every epsilon cycle include at least one consuming edge.
 7. **String states in `setup()`** (§2) → `IllegalArgumentException` with a helpful message.
 8. **Symbols and states compared by `equals`**: a custom `Symbol`/`State` without value
    equality makes filter lookups match by reference only. Use `data class` or hand-write
@@ -513,15 +516,13 @@ consume("m0", 'c', "m1")      // referenced by the same shared names
 12. **Adaptive action arity** (Style B, §3): every reference to an action must bind
     the same number of arguments, because prior and post firing deliver the same
     list; a handler reading `args[2]` fails loudly with an index error otherwise.
-    Declare the contract with `action("A", arity = 2)` to have the builder reject
-    mismatches before the automaton runs.
+    Declare the contract with `action("A", arity = Arity.Exactly(2))` to have the
+    builder reject mismatches before the automaton runs.
 13. **A state name in `ref(...)`** (Style B, §3) must denote a state of the
     automaton: the builder rejects unknown names instead of creating a phantom
     state. Use `actionRef(...)` for string payloads.
 14. **A state name in a handler** (Style B, §3) is a read-only lookup: an unknown
     name throws instead of inventing a state.
-
----
 
 ## 8. A complete, runnable Style B example
 
@@ -546,13 +547,14 @@ val ka = specToAutomaton(spec)
 fun chars(input: String) = input.map { CharSymbol(it) }
 
 fun main() {
-    println(ka.recognize(chars(""))     )  // true, zero repetitions
-    println(ka.recognize(chars("abab")) )  // true
-    println(ka.recognize(chars("aba"))  )  // false, trailing unpaired 'a'
+    println(ka.recognize(chars(""))     .accepted)  // true, zero repetitions
+    println(ka.recognize(chars("abab")) .accepted)  // true
+    println(ka.recognize(chars("aba"))  .accepted)  // false, trailing unpaired 'a'
 }
 ```
 
----
+`recognize()` answers with a **result object**: `result.accepted` is the verdict, and
+`result.paths` holds the paths that reached one.
 
 ## 9. Where to go next
 

@@ -7,8 +7,8 @@ import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
  * Example: recognises `ab` over `{a, b}`, and uses an adaptive action that
@@ -41,7 +41,7 @@ class GraphVizExample : AdaptiveAutomaton() {
         // on the accepting state, demonstrating dynamic topology mutation.
         actions.add(
             Action(name = "AddLoop") { transitions, _, _ ->
-                val ea = ElementaryActions(transitions)
+                val ea = ElementaryActions(transitions, submachines)
                 ea.add(q2, CharSymbol('a'), q2)
             },
         )
@@ -50,7 +50,7 @@ class GraphVizExample : AdaptiveAutomaton() {
         consume(q1, 'b', q2)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 /** Entry point for `./gradlew :examples:run -Pmain=...GraphVizExampleKt`. */

@@ -2,6 +2,7 @@
 package br.usp.poli.lta.cereda.kdaptive.dsl
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.Arity
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -29,7 +30,7 @@ class DslActionParityTest {
                 main("M")
             }
         val aa = specToAutomaton(spec)
-        assertTrue(aa.recognize(emptyList()))
+        assertTrue(aa.recognize(emptyList()).accepted)
         assertEquals(listOf("P:Epsilon", "Q:Epsilon"), fired)
     }
 
@@ -52,7 +53,7 @@ class DslActionParityTest {
                 main("M")
             }
         val aa = specToAutomaton(spec)
-        assertTrue(aa.recognize(emptyList()))
+        assertTrue(aa.recognize(emptyList()).accepted)
         assertEquals(listOf("P:Call", "Q:Call"), fired)
     }
 
@@ -90,7 +91,7 @@ class DslActionParityTest {
                         initial("q0")
                         accepting("q1")
                     }
-                    action("A", arity = 2) { _, _ -> }
+                    action("A", arity = Arity.Exactly(2)) { _, _ -> }
                     epsilon("q0", "q1", prior = ref("A", "q1"))
                     main("M")
                 }
@@ -111,7 +112,7 @@ class DslActionParityTest {
                     initial("n0")
                     accepting("n1")
                 }
-                action("A", arity = 1) { _, _ -> }
+                action("A", arity = Arity.Exactly(1)) { _, _ -> }
                 epsilon("q0", "q1", prior = ref("A", "q1"))
                 call("q0", "N", "q1", post = ref("A", "q1"))
                 main("M")
@@ -135,6 +136,6 @@ class DslActionParityTest {
                 main("M")
             }
         val aa = specToAutomaton(spec)
-        assertTrue(aa.recognize(listOf(CharSymbol('b'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('b'))).accepted)
     }
 }

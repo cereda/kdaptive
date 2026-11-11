@@ -6,6 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
@@ -53,7 +54,7 @@ class SelfRemovalTest {
             )
             actions.add(
                 Action(name = "SelfRemove") { transitions, _, _ ->
-                    val ea = ElementaryActions(transitions)
+                    val ea = ElementaryActions(transitions, Submachines())
                     ea.remove { prior = ActionRef.Named("SelfRemove") }
                     ea.add(R0, CharSymbol('a'), R1)
                 },
@@ -85,7 +86,7 @@ class SelfRemovalTest {
             )
             actions.add(
                 Action(name = "RemoveAll") { transitions, _, _ ->
-                    ElementaryActions(transitions).remove(
+                    ElementaryActions(transitions, Submachines()).remove(
                         source = State.Any,
                         symbol = Symbol.Any,
                         target = State.Any,
@@ -110,9 +111,10 @@ class SelfRemovalTest {
         // The path takes the edge carrying the prior action, the action
         // removes that edge and installs another one, and the path re-plans:
         // the new edge consumes the same symbol, so the input is accepted.
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
-        assertEquals(1, aa.getRecognitionPaths().size)
-        assertEquals(PathOutcome.ACCEPTED, aa.getRecognitionPaths().single().outcome)
+        val result = aa.recognize(listOf(CharSymbol('a')))
+        assertTrue(result.accepted)
+        assertEquals(1, result.paths.size)
+        assertEquals(PathOutcome.ACCEPTED, result.paths.single().outcome)
     }
 
     @Test
@@ -127,7 +129,7 @@ class SelfRemovalTest {
             },
         )
 
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
 
         // The action fired once: the re-planned transition carries no action,
         // and the one that carried it is gone.
@@ -140,7 +142,8 @@ class SelfRemovalTest {
 
         // Every edge is gone: the path has nowhere to go and rejects. It does
         // not spin forever.
-        assertFalse(aa.recognize(listOf(CharSymbol('a'))))
-        assertEquals(1, aa.getRecognitionPaths().size)
+        val result = aa.recognize(listOf(CharSymbol('a')))
+        assertFalse(result.accepted)
+        assertEquals(1, result.paths.size)
     }
 }

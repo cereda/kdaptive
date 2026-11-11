@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.model
 
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -38,7 +37,7 @@ class MappingSinkTest {
                 transition = Transition.Epsilon,
             ),
         )
-        m.removeFromIdentifier(m.getTransitions().first().id)
+        m.removeFromIdentifier(m.transitions.first().id)
         m.observe(object : Observation {})
     }
 
@@ -70,7 +69,7 @@ class MappingSinkTest {
         m.onOperation = { reported.add(it) }
 
         val copy = m.copy()
-        ElementaryActions(copy).query()
+        ElementaryActions(copy, Submachines()).query()
 
         assertEquals(1, reported.size)
     }

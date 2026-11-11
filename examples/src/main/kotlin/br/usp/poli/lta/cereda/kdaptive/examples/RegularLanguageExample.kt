@@ -43,17 +43,17 @@ class RegularLanguageExample : AdaptiveAutomaton() {
         consume(q2, 'a', q1, post = "A")
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {
     val aa = RegularLanguageExample()
 
-    val result = aa.recognize("ab")
-    println("Result: string ${if (result) "accepted" else "rejected"}")
+    val result = aa.recognize(convert("ab"))
+    println("Result: string ${if (result.accepted) "accepted" else "rejected"}")
     print("Deterministic recognition? ")
-    println(getAnswer(aa.getRecognitionPaths().size == 1))
-    for (rp in aa.getRecognitionPaths()) {
+    println(getAnswer(result.paths.size == 1))
+    for (rp in result.paths) {
         println(rp)
     }
 }

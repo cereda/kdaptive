@@ -5,10 +5,10 @@ import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 
 /**
  * Visitors hook into the recognition execution to observe path lifecycle,
@@ -45,10 +45,16 @@ interface ExecutionVisitor {
 
     /**
      * Called when a recognition path terminates.
-     * @param accepted whether the path accepted the input
+     *
+     * The path ends with a verdict: it accepted the input, it rejected it, or
+     * it was cut because it re-entered a configuration it had already left.
+     * A cut is not a rejection, and the visitor can tell them apart.
+     *
+     * @param pathId the identifier of the terminated path
+     * @param outcome the verdict of the path
      * @param cursor the input cursor at termination
      */
-    fun onPathEnd(pathId: Int, accepted: Boolean, cursor: Int) = Unit
+    fun onPathEnd(pathId: Int, outcome: PathOutcome, cursor: Int) = Unit
 
     /**
      * Called when a recognition path forks into one or more child paths.
@@ -101,19 +107,31 @@ interface ExecutionVisitor {
 
     /**
      * Called immediately after an edge is added to this path's transition
-     * mapping. Includes the full mapping and submachines so a visitor can
-     * snapshot the topology (e.g. GraphViz DOT export).
+     * mapping.
+     *
+     * The topology is a snapshot: it describes the automaton as it is now,
+     * and it cannot be used to change the running recognition. A visitor that
+     * wants to keep the topology keeps the snapshot, not the live mapping.
+     *
+     * @param pathId the identifier of the path that performed the mutation
+     * @param edge the edge that was added
+     * @param topology the topology of the path after the addition
      */
-    fun onEdgeAdded(pathId: Int, edge: TransitionEdge, transitions: TransitionMapping, submachines: SubmachinesSet) =
-        Unit
+    fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) = Unit
 
     /**
      * Called immediately after an edge is removed from this path's transition
-     * mapping. Includes the full mapping and submachines so a visitor can
-     * snapshot the topology (e.g. GraphViz DOT export).
+     * mapping.
+     *
+     * The topology is a snapshot: it describes the automaton as it is now,
+     * and it cannot be used to change the running recognition. A visitor that
+     * wants to keep the topology keeps the snapshot, not the live mapping.
+     *
+     * @param pathId the identifier of the path that performed the mutation
+     * @param edge the edge that was removed
+     * @param topology the topology of the path after the removal
      */
-    fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, transitions: TransitionMapping, submachines: SubmachinesSet) =
-        Unit
+    fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) = Unit
 
     // -----------------------------------------------------------------------
     // Operations over the transition mapping

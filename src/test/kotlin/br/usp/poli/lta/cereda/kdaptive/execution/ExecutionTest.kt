@@ -19,43 +19,43 @@ class ExecutionTest {
 
     @Test
     fun `recognises empty string (zero a's is even)`() {
-        assertTrue(aa.recognize(emptyList()))
+        assertTrue(aa.recognize(emptyList()).accepted)
     }
 
     @Test
     fun `recognises aa`() {
-        assertTrue(aa.recognize(aa.symbols('a', 'a')))
+        assertTrue(aa.recognize(aa.symbols('a', 'a')).accepted)
     }
 
     @Test
     fun `rejects single a`() {
-        assertFalse(aa.recognize(aa.symbols('a')))
+        assertFalse(aa.recognize(aa.symbols('a')).accepted)
     }
 
     @Test
     fun `rejects ab (one a)`() {
-        assertFalse(aa.recognize(aa.symbols('a', 'b')))
+        assertFalse(aa.recognize(aa.symbols('a', 'b')).accepted)
     }
 
     @Test
     fun `recognises aab (two a's)`() {
-        assertTrue(aa.recognize(aa.symbols('a', 'a', 'b')))
+        assertTrue(aa.recognize(aa.symbols('a', 'a', 'b')).accepted)
     }
 
     @Test
     fun `recognises bbbb (zero a's)`() {
-        assertTrue(aa.recognize(aa.symbols('b', 'b', 'b', 'b')))
+        assertTrue(aa.recognize(aa.symbols('b', 'b', 'b', 'b')).accepted)
     }
 
     @Test
     fun `rejects aaa (three a's)`() {
-        assertFalse(aa.recognize(aa.symbols('a', 'a', 'a')))
+        assertFalse(aa.recognize(aa.symbols('a', 'a', 'a')).accepted)
     }
 
     @Test
     fun `recognition paths are recorded`() {
-        aa.recognize(aa.symbols('a', 'a'))
-        val paths = aa.getRecognitionPaths()
+        val result = aa.recognize(aa.symbols('a', 'a'))
+        val paths = result.paths
         assertTrue(paths.isNotEmpty())
         assertTrue(paths.any { it.outcome == PathOutcome.ACCEPTED })
     }

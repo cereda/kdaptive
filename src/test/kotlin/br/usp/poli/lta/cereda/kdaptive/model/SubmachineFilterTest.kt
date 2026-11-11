@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.model
 
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -44,7 +43,7 @@ class SubmachineFilterTest {
 
     @Test
     fun `the wildcard matches every call edge`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(2, ea.queryCall().size)
         assertEquals(2, ea.queryCall(submachine = SubmachineRef.Any).size)
@@ -52,7 +51,7 @@ class SubmachineFilterTest {
 
     @Test
     fun `a named filter matches the calls to that submachine`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.queryCall(submachine = SubmachineRef.Named("M")).size)
         assertEquals(1, ea.queryCall(submachine = SubmachineRef.Named("N")).size)
@@ -61,7 +60,7 @@ class SubmachineFilterTest {
 
     @Test
     fun `a domain matches the calls to any of its submachines`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(2, ea.queryCall(submachine = SubmachineRef.anyOf("M", "N")).size)
         assertEquals(1, ea.queryCall(submachine = SubmachineRef.anyOf("M")).size)
@@ -71,22 +70,22 @@ class SubmachineFilterTest {
     @Test
     fun `a removal over a domain removes the calls it names`() {
         val m = mapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.removeCall(submachine = SubmachineRef.anyOf("M", "N"))
 
-        assertEquals(0, m.size())
+        assertEquals(0, m.size)
     }
 
     @Test
     fun `a removal over a domain leaves the calls it does not name`() {
         val m = mapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.removeCall(submachine = SubmachineRef.Named("M"))
 
-        assertEquals(1, m.size())
-        assertEquals("N", (m.getTransitions().single().transition as Transition.Call).submachine)
+        assertEquals(1, m.size)
+        assertEquals("N", (m.transitions.single().transition as Transition.Call).submachine)
     }
 
     @Test
@@ -99,7 +98,7 @@ class SubmachineFilterTest {
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
             ),
         )
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         assertEquals(2, ea.queryCall().size)
         assertEquals(1, ea.query().size)
@@ -108,14 +107,14 @@ class SubmachineFilterTest {
     @Test
     fun `an addition over a domain adds one edge per submachine`() {
         val m = TransitionMapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.addCall(C0, SubmachineRef.anyOf("M", "N"), C1)
 
-        assertEquals(2, m.size())
+        assertEquals(2, m.size)
         assertEquals(
             setOf("M", "N"),
-            m.getTransitions().map { (it.transition as Transition.Call).submachine }.toSet(),
+            m.transitions.map { (it.transition as Transition.Call).submachine }.toSet(),
         )
     }
 
@@ -124,7 +123,7 @@ class SubmachineFilterTest {
         val m = TransitionMapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.addCall(C0, SubmachineRef.anyOf("M", "N"), C1)
 
@@ -139,16 +138,16 @@ class SubmachineFilterTest {
     @Test
     fun `an addition over a domain crosses the state domains`() {
         val m = TransitionMapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.addCall(State.anyOf(C0, C1), SubmachineRef.anyOf("M", "N"), C0)
 
-        assertEquals(4, m.size())
+        assertEquals(4, m.size)
     }
 
     @Test
     fun `an addition rejects the wildcard and the empty filter`() {
-        val ea = ElementaryActions(TransitionMapping())
+        val ea = ElementaryActions(TransitionMapping(), Submachines())
 
         assertThrows<IllegalArgumentException> { ea.addCall(C0, SubmachineRef.Any, C1) }
         assertThrows<IllegalArgumentException> { ea.addCall(C0, SubmachineRef.None, C1) }
@@ -156,7 +155,7 @@ class SubmachineFilterTest {
 
     @Test
     fun `a call query rejects the empty filter`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertThrows<IllegalArgumentException> { ea.queryCall(submachine = SubmachineRef.None) }
         assertThrows<IllegalArgumentException> { ea.removeCall(submachine = SubmachineRef.None) }
@@ -164,7 +163,7 @@ class SubmachineFilterTest {
 
     @Test
     fun `the builder blocks carry the same filter`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         assertEquals(1, ea.queryCall { submachine = SubmachineRef.Named("M") }.size)
         assertEquals(2, ea.queryCall { submachine = SubmachineRef.anyOf("M", "N") }.size)

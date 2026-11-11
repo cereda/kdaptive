@@ -45,6 +45,11 @@ enum class TransitionPatternKind {
  * that actually matched are reported separately by
  * [MappingOperation.Query] and [MappingOperation.Remove].
  *
+ * The pattern also *answers* what it asks: [matches] tells whether an edge
+ * satisfies it, and it is the single implementation of that question — the
+ * elementary operations filter the mapping with it, and a consumer asking the
+ * same question gets the same answer.
+ *
  * @property source the source-state filter; [State.Any] means any source state
  * @property symbol the symbol filter; [Symbol.Any] means any
  *   symbol-consuming transition, while [Symbol.Epsilon] means an epsilon
@@ -98,17 +103,50 @@ data class TransitionPattern(
         }
 
     /**
+     * Tells whether [edge] matches this pattern.
+     *
+     * This is the single implementation of what a pattern means: the
+     * elementary operations filter the mapping with it, and a consumer can
+     * ask the same question of the same pattern and get the same answer.
+     *
+     * The family of the pattern fixes which filters apply. A pattern of the
+     * submachine family ([TransitionPatternKind.SUBMACHINE]) constrains the
+     * called submachine and ignores the symbol filter; a pattern of the
+     * symbol family constrains the symbol and ignores the submachine filter.
+     * The families never overlap: the symbol family never selects a
+     * submachine call, and the call family never selects a
+     * symbol-consuming transition.
+     *
+     * @param edge the edge to test
+     * @return true if [edge] satisfies every applicable filter
+     */
+    fun matches(edge: TransitionEdge): Boolean {
+        if (!stateMatches(edge.source, source)) return false
+        if (!stateMatches(edge.target, target)) return false
+        if (!actionSlotMatches(prior, edge.prior)) return false
+        if (!actionSlotMatches(post, edge.post)) return false
+        return when (kind) {
+            TransitionPatternKind.SUBMACHINE -> submachineMatches(edge, submachine)
+
+            TransitionPatternKind.SYMBOL,
+            TransitionPatternKind.EPSILON,
+            TransitionPatternKind.MIXED,
+            -> symbolMatches(edge, symbol)
+        }
+    }
+
+    /**
      * The number of source states this pattern may select.
      *
      * A concrete state names one state, a domain names as many states as it
      * has members, and the wildcard [State.Any] names an unbounded number of
-     * them — which is reported as null.
+     * them.
      */
-    val sourceDomainSize: Int?
+    val sourceDomainSize: DomainSize
         get() = when {
-            source === State.Any -> null
-            source is StateDomain -> source.size
-            else -> 1
+            source === State.Any -> DomainSize.Unbounded
+            source is StateDomain -> DomainSize.Bounded(source.size)
+            else -> DomainSize.Bounded(1)
         }
 
     /**
@@ -116,16 +154,16 @@ data class TransitionPattern(
      *
      * A concrete symbol — [Symbol.Epsilon] included — names one symbol, a
      * domain names as many symbols as it has members, and the wildcard
-     * [Symbol.Any] names an unbounded number of them — which is reported as
-     * null. When the pattern belongs to the submachine family the filter
-     * does not apply, and the size is one.
+     * [Symbol.Any] names an unbounded number of them. When the pattern belongs
+     * to the submachine family the filter does not apply, and the size is
+     * one.
      */
-    val symbolDomainSize: Int?
+    val symbolDomainSize: DomainSize
         get() = when {
-            submachine !== SubmachineRef.None -> 1
-            symbol === Symbol.Any -> null
-            symbol is SymbolDomain -> symbol.size
-            else -> 1
+            submachine !== SubmachineRef.None -> DomainSize.Bounded(1)
+            symbol === Symbol.Any -> DomainSize.Unbounded
+            symbol is SymbolDomain -> DomainSize.Bounded(symbol.size)
+            else -> DomainSize.Bounded(1)
         }
 
     /**
@@ -133,29 +171,29 @@ data class TransitionPattern(
      *
      * A concrete state names one state, a domain names as many states as it
      * has members, and the wildcard [State.Any] names an unbounded number of
-     * them — which is reported as null.
+     * them.
      */
-    val targetDomainSize: Int?
+    val targetDomainSize: DomainSize
         get() = when {
-            target === State.Any -> null
-            target is StateDomain -> target.size
-            else -> 1
+            target === State.Any -> DomainSize.Unbounded
+            target is StateDomain -> DomainSize.Bounded(target.size)
+            else -> DomainSize.Bounded(1)
         }
 
     /**
      * The number of submachines this pattern may select.
      *
      * The wildcard [SubmachineRef.Any] names an unbounded number of
-     * submachines — which is reported as null — while a named one names
-     * exactly one and a domain names as many submachines as it has members.
-     * When the filter does not apply, the size is one.
+     * submachines, while a named one names exactly one and a domain names as
+     * many submachines as it has members. When the filter does not apply, the
+     * size is one.
      */
-    val submachineDomainSize: Int?
+    val submachineDomainSize: DomainSize
         get() = when (submachine) {
-            SubmachineRef.Any -> null
-            is SubmachineRef.Named -> 1
-            is SubmachineRef.Domain -> submachine.size
-            SubmachineRef.None -> 1
+            SubmachineRef.Any -> DomainSize.Unbounded
+            is SubmachineRef.Named -> DomainSize.Bounded(1)
+            is SubmachineRef.Domain -> DomainSize.Bounded(submachine.size)
+            SubmachineRef.None -> DomainSize.Bounded(1)
         }
 
     /**
@@ -163,13 +201,12 @@ data class TransitionPattern(
      *
      * A concrete filter — [ActionRef.None], [ActionRef.Named] or
      * [ActionRef.Bound] — names one action, while [ActionRef.Free] and
-     * [ActionRef.Any] name an unbounded number of them — which is reported as
-     * null.
+     * [ActionRef.Any] name an unbounded number of them.
      */
-    val priorDomainSize: Int?
+    val priorDomainSize: DomainSize
         get() = when (prior) {
-            is ActionRef.Free, is ActionRef.Any -> null
-            else -> 1
+            is ActionRef.Free, is ActionRef.Any -> DomainSize.Unbounded
+            else -> DomainSize.Bounded(1)
         }
 
     /**
@@ -177,12 +214,11 @@ data class TransitionPattern(
      *
      * A concrete filter — [ActionRef.None], [ActionRef.Named] or
      * [ActionRef.Bound] — names one action, while [ActionRef.Free] and
-     * [ActionRef.Any] name an unbounded number of them — which is reported as
-     * null.
+     * [ActionRef.Any] name an unbounded number of them.
      */
-    val postDomainSize: Int?
+    val postDomainSize: DomainSize
         get() = when (post) {
-            is ActionRef.Free, is ActionRef.Any -> null
-            else -> 1
+            is ActionRef.Free, is ActionRef.Any -> DomainSize.Unbounded
+            else -> DomainSize.Bounded(1)
         }
 }

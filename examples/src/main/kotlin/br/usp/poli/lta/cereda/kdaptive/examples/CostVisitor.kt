@@ -2,12 +2,12 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
+import br.usp.poli.lta.cereda.kdaptive.model.DomainSize
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
  * A cost model built entirely on top of the instrumentation facility.
@@ -64,21 +64,11 @@ class CostVisitor : ExecutionVisitor {
         published.add(pathId to observation)
     }
 
-    override fun onEdgeAdded(
-        pathId: Int,
-        edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
-    ) {
+    override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
         entered.add(edge)
     }
 
-    override fun onEdgeRemoved(
-        pathId: Int,
-        edge: TransitionEdge,
-        transitions: TransitionMapping,
-        submachines: SubmachinesSet,
-    ) {
+    override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
         left.add(edge)
     }
 
@@ -160,8 +150,13 @@ class CostVisitor : ExecutionVisitor {
      * The number of edge shapes the filters of [pattern] may select.
      *
      * The number is the product of the domain sizes of the six filters of the
-     * pattern. An unbounded filter contributes zero: the number of
-     * combinations it admits is not a finite number.
+     * pattern. A bounded filter contributes its count.
+     *
+     * An unbounded filter admits an unbounded number of combinations, and
+     * this model does not price unbounded work: it contributes zero, and the
+     * operation is reported as free. That is a decision of *this* consumer,
+     * not of the library — the library only reports that the filter is
+     * unbounded, and leaves the pricing to whoever consumes it.
      *
      * @param pattern the pattern to measure
      * @return the number of shapes the pattern may select
@@ -176,6 +171,11 @@ class CostVisitor : ExecutionVisitor {
                 pattern.priorDomainSize,
                 pattern.postDomainSize,
             )
-        return sizes.fold(1) { shapes, size -> shapes * (size ?: 0) }
+        return sizes.fold(1) { shapes, size ->
+            when (size) {
+                is DomainSize.Bounded -> shapes * size.count
+                DomainSize.Unbounded -> 0
+            }
+        }
     }
 }

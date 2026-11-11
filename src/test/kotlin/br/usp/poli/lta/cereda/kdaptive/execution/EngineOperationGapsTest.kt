@@ -7,15 +7,15 @@ import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -94,25 +94,26 @@ class EngineOperationGapsTest {
     fun `prior action fires and keeps its edge (acceptance continues)`() {
         val fired = mutableListOf<String>()
         val aa = SimpleAa(SimpleAa.Mode.PRIOR) { _, _, _ -> fired.add("P") }
-        assertTrue(aa.recognize(aa.symbols('a')))
+        val result = aa.recognize(aa.symbols('a'))
+        assertTrue(result.accepted)
         assertEquals(listOf("P"), fired)
-        assertTrue(aa.getRecognitionMap().isNotEmpty())
+        assertTrue(result.paths.isNotEmpty())
     }
 
     @Test
     fun `prior action removing its own edge leaves the path stuck and rejected`() {
         val aa =
             SimpleAa(SimpleAa.Mode.PRIOR) { transitions, transition, _ ->
-                transitions.removeFromIdentifier(transitions.getTransitions().first { it.transition === transition }.id)
+                transitions.removeFromIdentifier(transitions.transitions.first { it.transition === transition }.id)
             }
-        assertFalse(aa.recognize(aa.symbols('a')))
+        assertFalse(aa.recognize(aa.symbols('a')).accepted)
     }
 
     @Test
     fun `post action fires after the transition is applied`() {
         val fired = mutableListOf<String>()
         val aa = SimpleAa(SimpleAa.Mode.POST) { _, _, _ -> fired.add("Q") }
-        assertTrue(aa.recognize(aa.symbols('a')))
+        assertTrue(aa.recognize(aa.symbols('a')).accepted)
         assertEquals(listOf("Q"), fired)
     }
 
@@ -121,11 +122,11 @@ class EngineOperationGapsTest {
         val aa = StrayReturnAa()
         // 'a': reaches accepting q1; the declared Return edge is filtered out but
         // the configuration is terminal, so the path accepts.
-        assertTrue(aa.recognize(listOf(CharSymbol('a'))))
+        assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)
         // 'ab': accepted prefix still carries a remaining symbol: reject.
-        assertFalse(aa.recognize(listOf(CharSymbol('a'), CharSymbol('b'))))
+        assertFalse(aa.recognize(listOf(CharSymbol('a'), CharSymbol('b'))).accepted)
         // Empty input never leaves the non-accepting initial state: reject.
-        assertFalse(aa.recognize(emptyList()))
+        assertFalse(aa.recognize(emptyList()).accepted)
     }
 
     private class StrayReturnAa : AdaptiveAutomaton() {
@@ -151,11 +152,12 @@ class EngineOperationGapsTest {
     }
 
     @Test
-    fun `stop at first finished path returns promptly and recognition map is queryable`() {
+    fun `stop at first acceptance returns promptly and the paths are queryable`() {
         val aa = EvenAsAutomaton()
-        aa.setStopAtFirstResult(true)
-        assertTrue(aa.recognize(emptyList()))
-        assertTrue(aa.getRecognitionMap().keys.isNotEmpty())
+        aa.stopOnFirstAcceptance = true
+        val result = aa.recognize(emptyList())
+        assertTrue(result.accepted)
+        assertTrue(result.paths.isNotEmpty())
     }
 
     @Test
@@ -184,7 +186,7 @@ class EngineOperationGapsTest {
         // The epsilon and call helpers work with plain state objects.
         aa.epsilon(q0, q1)
         aa.call(q0, "N", q1)
-        assertEquals(2, aa.transitions.size())
+        assertEquals(2, aa.transitions.size)
     }
 
     @Test
@@ -199,17 +201,30 @@ class EngineOperationGapsTest {
         aa.from(Aq0) {
             epsilon(Aq2)
         }
-        assertEquals(1, aa.transitions.size())
+        assertEquals(1, aa.transitions.size)
     }
 
     @Test
     fun `path executor accessors delegate to the config`() {
-        val cfg = PathExecutorConfig(
-            input = listOf<Symbol>(CharSymbol('a')),
-            currentState = null,
-            currentSubmachine = "M",
-            mainSubmachine = "M",
-        )
+        val submachines =
+            Submachines().apply {
+                add(
+                    Submachine(
+                        name = "M",
+                        states = setOf(Aq0, Aq1),
+                        initialState = Aq0,
+                        acceptingStates = setOf(Aq1),
+                    ),
+                )
+            }
+        val cfg =
+            PathExecutorConfig(
+                currentState = Aq0,
+                currentSubmachine = "M",
+                mainSubmachine = "M",
+                submachines = submachines,
+                input = listOf<Symbol>(CharSymbol('a')),
+            )
         val threads = mutableListOf<PathExecutor>()
         val paths = mutableMapOf<Int, RecognitionPath>()
         val executor = PathExecutor(config = cfg, threads = threads, paths = paths)
@@ -218,8 +233,8 @@ class EngineOperationGapsTest {
         assertEquals("M", executor.mainSubmachine)
         assertEquals("M", executor.currentSubmachine)
         assertEquals(1, executor.input.size)
-        assertTrue(executor.stack.isEmpty())
-        assertNull(executor.currentState)
+        assertTrue(executor.stack.isEmpty)
+        assertEquals(Aq0, executor.currentState)
         assertTrue(executor.enablePriorAction)
     }
 }

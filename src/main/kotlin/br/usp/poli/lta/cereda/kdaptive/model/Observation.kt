@@ -8,7 +8,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * engine reports what it does on its own channel (see
  * [br.usp.poli.lta.cereda.kdaptive.model.MappingOperation]), while
  * instrumentation-aware action code may publish facts of its own through
- * [br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping.observe].
+ * [br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping.observe].
  *
  * Consumers receive observations through
  * [br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor.onObservation] and

@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 
 /**

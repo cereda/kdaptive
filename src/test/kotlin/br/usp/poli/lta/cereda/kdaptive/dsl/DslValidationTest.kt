@@ -167,13 +167,10 @@ class DslValidationTest {
     }
 
     @Test
-    fun `a specification without a main submachine is rejected when materialized`() {
-        val spec =
-            AutomatonSpec(
-                submachines = mapOf("M" to minimalSubmachine("M")),
-            )
-        val error = assertThrows<IllegalArgumentException> { specToAutomaton(spec) }
-        assertTrue(error.message!!.contains("main submachine"))
+    fun `the builder refuses to report a main submachine it was not given`() {
+        val builder = AutomatonBuilder()
+        val error = assertThrows<IllegalStateException> { builder.main }
+        assertTrue(error.message!!.contains("Main submachine"))
     }
 
     @Test

@@ -77,7 +77,7 @@ class NestedCallReturnExample : AdaptiveAutomaton() {
         consume(n0, 'e', n1)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

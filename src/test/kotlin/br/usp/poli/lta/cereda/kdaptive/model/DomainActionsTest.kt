@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
@@ -68,7 +66,7 @@ class DomainActionsTest {
 
     @Test
     fun `a state domain selects the edges whose endpoint it names`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         val domain = State.anyOf(D0, D1)
         assertEquals(1, ea.query(source = domain, symbol = CharSymbol('a')).size)
@@ -78,7 +76,7 @@ class DomainActionsTest {
 
     @Test
     fun `a symbol domain selects the edges consuming one of its members`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         val domain = Symbol.anyOf(CharSymbol('a'), CharSymbol('b'))
         assertEquals(2, ea.query(symbol = domain).size)
@@ -87,7 +85,7 @@ class DomainActionsTest {
 
     @Test
     fun `a domain naming the empty word selects the epsilon edges as well`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
 
         val domain = Symbol.anyOf(CharSymbol('a'), Symbol.Epsilon)
         // The 'a' edge and the epsilon edge.
@@ -98,11 +96,11 @@ class DomainActionsTest {
 
     @Test
     fun `the family of a pattern follows the domain it carries`() {
-        val ea = ElementaryActions(mapping())
+        val ea = ElementaryActions(mapping(), Submachines())
         val operations = mutableListOf<MappingOperation>()
         val m = mapping()
         m.onOperation = { operations.add(it) }
-        val ea2 = ElementaryActions(m)
+        val ea2 = ElementaryActions(m, Submachines())
 
         ea2.query(symbol = Symbol.anyOf(CharSymbol('a'), CharSymbol('b')))
         ea2.query(symbol = Symbol.anyOf(CharSymbol('a'), Symbol.Epsilon))
@@ -124,12 +122,12 @@ class DomainActionsTest {
     @Test
     fun `a removal over a domain removes every matching edge`() {
         val m = mapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.remove(symbol = Symbol.anyOf(CharSymbol('a'), CharSymbol('b')))
 
         // The two symbol edges are gone; the epsilon and the call edges remain.
-        assertEquals(2, m.size())
+        assertEquals(2, m.size)
         assertEquals(1, ea.query(symbol = Symbol.Epsilon).size)
         assertEquals(1, ea.queryCall().size)
     }
@@ -137,12 +135,12 @@ class DomainActionsTest {
     @Test
     fun `an addition over domains produces the cartesian product`() {
         val m = TransitionMapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.add(State.anyOf(D0, D1), CharSymbol('a'), State.anyOf(D1, D2))
 
         // Two sources times one symbol times two targets.
-        assertEquals(4, m.size())
+        assertEquals(4, m.size)
         assertEquals(1, ea.query(source = D0, symbol = CharSymbol('a'), target = D1).size)
         assertEquals(1, ea.query(source = D0, symbol = CharSymbol('a'), target = D2).size)
         assertEquals(1, ea.query(source = D1, symbol = CharSymbol('a'), target = D1).size)
@@ -152,11 +150,11 @@ class DomainActionsTest {
     @Test
     fun `an addition over a domain naming the empty word produces an epsilon edge`() {
         val m = TransitionMapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.add(D0, Symbol.anyOf(CharSymbol('a'), Symbol.Epsilon), D1)
 
-        assertEquals(2, m.size())
+        assertEquals(2, m.size)
         assertEquals(1, ea.query(source = D0, symbol = CharSymbol('a')).size)
         assertEquals(1, ea.query(source = D0, symbol = Symbol.Epsilon).size)
     }
@@ -166,7 +164,7 @@ class DomainActionsTest {
         val m = TransitionMapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.add(State.anyOf(D0, D1), Symbol.anyOf(CharSymbol('a'), CharSymbol('b')), D1)
 
@@ -183,11 +181,11 @@ class DomainActionsTest {
         val m = TransitionMapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.addCall(State.anyOf(D0, D1), SubmachineRef.Named("M"), State.anyOf(D1, D2))
 
-        assertEquals(4, m.size())
+        assertEquals(4, m.size)
         assertEquals(4, operations.size)
         assertEquals(4, ea.queryCall().size)
     }
@@ -197,7 +195,7 @@ class DomainActionsTest {
         val m = mapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.query(
             source = State.anyOf(D0, D1),
@@ -208,12 +206,12 @@ class DomainActionsTest {
         )
 
         val pattern = (operations.single() as MappingOperation.Query).pattern
-        assertEquals(2, pattern.sourceDomainSize)
-        assertEquals(3, pattern.symbolDomainSize)
-        assertEquals(1, pattern.targetDomainSize)
-        assertEquals(1, pattern.submachineDomainSize)
-        assertEquals(1, pattern.priorDomainSize)
-        assertEquals(1, pattern.postDomainSize)
+        assertEquals(DomainSize.Bounded(2), pattern.sourceDomainSize)
+        assertEquals(DomainSize.Bounded(3), pattern.symbolDomainSize)
+        assertEquals(DomainSize.Bounded(1), pattern.targetDomainSize)
+        assertEquals(DomainSize.Bounded(1), pattern.submachineDomainSize)
+        assertEquals(DomainSize.Bounded(1), pattern.priorDomainSize)
+        assertEquals(DomainSize.Bounded(1), pattern.postDomainSize)
     }
 
     @Test
@@ -221,18 +219,18 @@ class DomainActionsTest {
         val m = mapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.query()
 
         val pattern = (operations.single() as MappingOperation.Query).pattern
-        assertNull(pattern.sourceDomainSize)
-        assertNull(pattern.symbolDomainSize)
-        assertNull(pattern.targetDomainSize)
-        assertNull(pattern.priorDomainSize)
-        assertNull(pattern.postDomainSize)
+        assertEquals(DomainSize.Unbounded, pattern.sourceDomainSize)
+        assertEquals(DomainSize.Unbounded, pattern.symbolDomainSize)
+        assertEquals(DomainSize.Unbounded, pattern.targetDomainSize)
+        assertEquals(DomainSize.Unbounded, pattern.priorDomainSize)
+        assertEquals(DomainSize.Unbounded, pattern.postDomainSize)
         // The submachine filter does not apply to the symbol family.
-        assertEquals(1, pattern.submachineDomainSize)
+        assertEquals(DomainSize.Bounded(1), pattern.submachineDomainSize)
     }
 
     @Test
@@ -240,17 +238,17 @@ class DomainActionsTest {
         val m = mapping()
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.queryCall(submachine = SubmachineRef.Named("M"))
         ea.queryCall()
 
         val named = (operations[0] as MappingOperation.Query).pattern
         val any = (operations[1] as MappingOperation.Query).pattern
-        assertEquals(1, named.submachineDomainSize)
-        assertNull(any.submachineDomainSize)
+        assertEquals(DomainSize.Bounded(1), named.submachineDomainSize)
+        assertEquals(DomainSize.Unbounded, any.submachineDomainSize)
         // The symbol filter does not apply to the call family.
-        assertEquals(1, named.symbolDomainSize)
+        assertEquals(DomainSize.Bounded(1), named.symbolDomainSize)
     }
 
     @Test
@@ -294,24 +292,28 @@ class DomainActionsTest {
         val error =
             assertThrows<IllegalArgumentException> {
                 TopologyValidator.validate(
-                    edges =
-                    listOf(
-                        TransitionEdge(
-                            source = D0,
-                            target = domain,
-                            transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
+                    topology =
+                    Topology(
+                        edges =
+                        setOf(
+                            TransitionEdge(
+                                source = D0,
+                                target = domain,
+                                transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
+                            ),
                         ),
-                    ),
-                    submachines =
-                    listOf(
-                        Submachine(
-                            name = "M",
-                            states = setOf(D0, D1, D2),
-                            initialState = D0,
-                            acceptingStates = setOf(D1),
+                        submachines =
+                        setOf(
+                            Submachine(
+                                name = "M",
+                                states = setOf(D0, D1, D2),
+                                initialState = D0,
+                                acceptingStates = setOf(D1),
+                            ),
                         ),
                     ),
                     mainSubmachine = "M",
+                    actionNames = emptyList(),
                 )
             }
         assertTrue(error.message!!.contains("domain"))

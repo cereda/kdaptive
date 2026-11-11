@@ -6,9 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.actions.asState
 import br.usp.poli.lta.cereda.kdaptive.model.actions.asSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.actions.castOrThrow
 import br.usp.poli.lta.cereda.kdaptive.model.actions.isType
-import br.usp.poli.lta.cereda.kdaptive.model.actions.requireNonNull
 import br.usp.poli.lta.cereda.kdaptive.model.actions.withType
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
@@ -18,8 +16,8 @@ import org.junit.jupiter.api.assertThrows
 
 /**
  * Covers the type helpers of the actions package ([castOrThrow], [asState],
- * [asSymbol], [requireNonNull], `isType<>()` and `withType<>()`) plus the
- * parameterless [ElementaryActions.add] overload.
+ * [asSymbol], `isType<>()` and `withType<>()`) plus the parameterless
+ * [ElementaryActions.add] overload.
  */
 class ElementaryActionsGapsTest {
     private object P0 : State() {
@@ -47,13 +45,6 @@ class ElementaryActionsGapsTest {
         assertSame(S0, S0.asSymbol<Symbol>())
         assertThrows<ClassCastException> { "nope".asSymbol<Symbol>() }
         assertThrows<ClassCastException> { "nope".asState<State>() }
-    }
-
-    @Test
-    fun `requireNonNull returns value or throws`() {
-        val value: State = P0
-        assertSame(value, requireNonNull(value))
-        assertThrows<IllegalArgumentException> { requireNonNull(null) }
     }
 
     @Test
@@ -92,11 +83,11 @@ class ElementaryActionsGapsTest {
         m.add(
             TransitionEdge(source = P1, target = P1, transition = Transition.Epsilon),
         )
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
 
         ea.add(P0, S0, P1)
 
-        assertEquals(2, m.size())
-        assertTrue(m.withSymbol(S0).isNotEmpty())
+        assertEquals(2, m.size)
+        assertTrue(Topology.of(m, Submachines()).edgesConsuming(S0).isNotEmpty())
     }
 }

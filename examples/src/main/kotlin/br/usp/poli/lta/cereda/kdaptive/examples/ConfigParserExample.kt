@@ -39,7 +39,7 @@ class ConfigParserExample : AdaptiveAutomaton() {
         consume(q3, ';', q4)
     }
 
-    fun recognize(input: String): Boolean = recognize(convert(input))
+    fun recognize(input: String): Boolean = recognize(convert(input)).accepted
 }
 
 fun main() {

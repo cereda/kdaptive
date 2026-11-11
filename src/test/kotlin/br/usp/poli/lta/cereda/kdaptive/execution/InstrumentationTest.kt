@@ -9,13 +9,14 @@ import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
-import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -127,7 +128,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
         val matched = ea.query(State.Any, CharSymbol('a'), State.Any)
 
         assertEquals(2, matched.size)
@@ -147,7 +148,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).queryCall(State.Any, SubmachineRef.Any, State.Any)
+        ElementaryActions(m, Submachines()).queryCall(State.Any, SubmachineRef.Any, State.Any)
 
         val query = operations.single() as MappingOperation.Query
         assertEquals(TransitionPatternKind.SUBMACHINE, query.pattern.kind)
@@ -160,7 +161,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).remove(State.Any, CharSymbol('a'), State.Any)
+        ElementaryActions(m, Submachines()).remove(State.Any, CharSymbol('a'), State.Any)
 
         assertEquals(1, operations.size)
 
@@ -168,7 +169,7 @@ class InstrumentationTest {
         assertEquals(2, removal.edges.size)
         assertEquals(3, removal.mappingSizeBefore)
         assertEquals(1, removal.mappingSizeAfter)
-        assertEquals(1, m.size())
+        assertEquals(1, m.size)
     }
 
     @Test
@@ -177,13 +178,13 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).remove(State.Any, CharSymbol('z'), State.Any)
+        ElementaryActions(m, Submachines()).remove(State.Any, CharSymbol('z'), State.Any)
 
         val removal = operations.single() as MappingOperation.Remove
         assertEquals(0, removal.edges.size)
         assertEquals(3, removal.mappingSizeBefore)
         assertEquals(3, removal.mappingSizeAfter)
-        assertEquals(3, m.size())
+        assertEquals(3, m.size)
     }
 
     @Test
@@ -192,7 +193,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).add(Q0, CharSymbol('z'), G0)
+        ElementaryActions(m, Submachines()).add(Q0, CharSymbol('z'), G0)
 
         assertEquals(1, operations.size)
 
@@ -208,11 +209,11 @@ class InstrumentationTest {
     @Test
     fun `no operation is reported when no observer is registered`() {
         val m = mapping()
-        val ea = ElementaryActions(m)
+        val ea = ElementaryActions(m, Submachines())
         ea.query(State.Any, Symbol.Any, State.Any)
         ea.remove(State.Any, CharSymbol('a'), State.Any)
         ea.add(Q0, CharSymbol('z'), G0)
-        assertEquals(2, m.size())
+        assertEquals(2, m.size)
     }
 
     // -----------------------------------------------------------------------
@@ -231,7 +232,7 @@ class InstrumentationTest {
         val a = specToAutomaton(instrumentedSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertEquals(3, operations.size)
 
@@ -266,7 +267,7 @@ class InstrumentationTest {
         val a = specToAutomaton(instrumentedSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertEquals(1, observations.size)
         val (pathId, observation) = observations.single()
@@ -283,12 +284,7 @@ class InstrumentationTest {
                 operations.add(operation)
             }
 
-            override fun onEdgeRemoved(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 removals.add(edge)
             }
         }
@@ -296,7 +292,7 @@ class InstrumentationTest {
         val a = specToAutomaton(instrumentedSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         // One removal operation, one edge removed.
         assertEquals(1, operations.count { it is MappingOperation.Remove })
@@ -342,21 +338,11 @@ class InstrumentationTest {
         val added = mutableListOf<TransitionEdge>()
         val removed = mutableListOf<TransitionEdge>()
         val visitor = object : ExecutionVisitor {
-            override fun onEdgeAdded(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 added.add(edge)
             }
 
-            override fun onEdgeRemoved(
-                pathId: Int,
-                edge: TransitionEdge,
-                transitions: TransitionMapping,
-                submachines: SubmachinesSet,
-            ) {
+            override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
                 removed.add(edge)
             }
         }
@@ -364,7 +350,7 @@ class InstrumentationTest {
         val a = specToAutomaton(instrumentedSpec())
         a.visitors.add(visitor)
 
-        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))))
+        assertTrue(a.recognize(listOf(CharSymbol('a'), CharSymbol('a'))).accepted)
 
         assertEquals(1, added.size)
         assertEquals(1, removed.size)

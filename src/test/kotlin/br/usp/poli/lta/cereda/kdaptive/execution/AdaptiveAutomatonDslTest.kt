@@ -129,7 +129,7 @@ class AdaptiveAutomatonDslTest {
     fun `epsilon and call edges fire their prior and post actions`() {
         ActionLog.fired.clear()
         val aa = GroupActionAutomaton()
-        assertTrue(aa.recognize(emptyList()))
+        assertTrue(aa.recognize(emptyList()).accepted)
         assertEquals(listOf("P:Epsilon", "Q:Epsilon", "P:Call"), ActionLog.fired)
     }
 
@@ -137,24 +137,24 @@ class AdaptiveAutomatonDslTest {
     fun `plain epsilon and call edges fire their prior and post actions`() {
         ActionLog.fired.clear()
         val aa = PlainActionAutomaton()
-        assertTrue(aa.recognize(emptyList()))
+        assertTrue(aa.recognize(emptyList()).accepted)
         assertEquals(listOf("P:Epsilon", "Q:Epsilon", "P:Call"), ActionLog.fired)
     }
 
     @Test
     fun `dsl automaton recognizes a c-star b`() {
         val aa = DslCallAutomaton()
-        assertTrue(aa.recognize(aa.chars('a', 'b')))
-        assertTrue(aa.recognize(aa.chars('a', 'c', 'b')))
-        assertTrue(aa.recognize(aa.chars('a', 'c', 'c', 'c', 'b')))
+        assertTrue(aa.recognize(aa.chars('a', 'b')).accepted)
+        assertTrue(aa.recognize(aa.chars('a', 'c', 'b')).accepted)
+        assertTrue(aa.recognize(aa.chars('a', 'c', 'c', 'c', 'b')).accepted)
     }
 
     @Test
     fun `dsl automaton rejects invalid input`() {
         val aa = DslCallAutomaton()
-        assertFalse(aa.recognize(aa.chars('a')))
-        assertFalse(aa.recognize(aa.chars('a', 'b', 'b')))
-        assertFalse(aa.recognize(aa.chars('b')))
+        assertFalse(aa.recognize(aa.chars('a')).accepted)
+        assertFalse(aa.recognize(aa.chars('a', 'b', 'b')).accepted)
+        assertFalse(aa.recognize(aa.chars('b')).accepted)
     }
 
     @Test

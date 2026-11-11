@@ -4,16 +4,18 @@ package br.usp.poli.lta.cereda.kdaptive.dsl
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.Arity
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TopologyValidator
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
 
 /**
  * The handler signature for DSL-registered adaptive actions.
@@ -89,14 +91,14 @@ class DslActionContext internal constructor(
  * @property submachines the submachines, keyed by name
  * @property transitions the transitions of the main submachine
  * @property actions the DSL-registered adaptive actions, keyed by name
- * @property main the name of the main submachine, or null when not set
+ * @property main the name of the main submachine
  */
 data class AutomatonSpec(
     val states: Map<String, State> = emptyMap(),
     val submachines: Map<String, Submachine> = emptyMap(),
     val transitions: List<TransitionEdge> = emptyList(),
     val actions: Map<String, DslActionHandler> = emptyMap(),
-    val main: String? = null,
+    val main: String,
 )
 
 /**
@@ -114,14 +116,12 @@ data class AutomatonSpec(
  * submachine, or names one that does not exist
  */
 fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
-    val mainName =
-        requireNotNull(spec.main) {
-            "The specification does not declare a main submachine."
-        }
+    val mainName = spec.main
     require(mainName in spec.submachines) {
         "Main submachine '$mainName' is not declared in the specification. " +
             "Declared submachines: ${spec.submachines.keys.joinToString(", ")}."
     }
+    val declaredSubmachines = Submachines().apply { spec.submachines.values.forEach { add(it) } }
     return object : AdaptiveAutomaton() {
         private var freshStateCounter = 0
         private val reservedStateNames = spec.states.keys.toSet()
@@ -150,7 +150,10 @@ fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
                 actions.add(
                     Action(name = name) { transitions, transition, parameters ->
                         handler(
-                            DslActionContext(ElementaryActions(transitions), spec.states) { prefix ->
+                            DslActionContext(
+                                ElementaryActions(transitions, declaredSubmachines),
+                                spec.states,
+                            ) { prefix ->
                                 nextFreshState(prefix)
                             },
                             transition,
@@ -175,11 +178,25 @@ class AutomatonBuilder {
     private val transitions = mutableListOf<TransitionEdge>()
     private val submachineBuilders = mutableMapOf<String, SubmachineBuilder>()
     private val actions = mutableMapOf<String, DslActionHandler>()
-    private val actionArities = mutableMapOf<String, Int>()
+    private val actionArities = mutableMapOf<String, Arity>()
     private val actionReferences = mutableMapOf<String, MutableList<Int>>()
     private val argumentStates = mutableListOf<Pair<String, State>>()
     private val declaredStates = mutableSetOf<State>()
-    private var main: String? = null
+    private var mainSlot: String? = null
+
+    /**
+     * The name of the main submachine.
+     *
+     * Reading it before [main] was called fails with a clear message: a null
+     * would only spread the mistake.
+     *
+     * @throws IllegalStateException if no main submachine was declared
+     */
+    var main: String
+        get() = mainSlot ?: error("Main submachine cannot be null. Call main(\"M\") to declare it.")
+        set(value) {
+            mainSlot = value
+        }
 
     /** Creates or looks up a plain [State] by name. */
     fun state(name: String): State = states.getOrPut(name) {
@@ -236,7 +253,6 @@ class AutomatonBuilder {
     fun main(name: String) {
         this.main = name
     }
-
     // -----------------------------------------------------------------------
     // Adaptive actions
     // -----------------------------------------------------------------------
@@ -250,19 +266,18 @@ class AutomatonBuilder {
      * `freshState(prefix)` allocates a unique state, restarting at zero for
      * each recognition run.
      *
-     * When [arity] is given, every reference to this action must bind exactly
-     * that many arguments; the builder rejects mismatches before the automaton
-     * is built. Leave it null for actions that are legitimately called with
-     * different argument counts.
+     * When [arity] is [Arity.Exactly], every reference to this action must
+     * bind exactly that many arguments; the builder rejects mismatches before
+     * the automaton is built. [Arity.Any] leaves the number of arguments free
+     * for actions that are legitimately called with different argument counts.
      *
      * @throws IllegalArgumentException if an action with the same name is
      * already registered
      */
-    fun action(name: String, arity: Int? = null, handler: DslActionHandler) {
+    fun action(name: String, arity: Arity = Arity.Any, handler: DslActionHandler) {
         require(!actions.containsKey(name)) { "Action '$name' is already registered." }
-        require(arity == null || arity >= 0) { "Action '$name' cannot declare a negative arity." }
         actions[name] = handler
-        if (arity != null) {
+        if (arity is Arity.Exactly) {
             actionArities[name] = arity
         }
     }
@@ -444,15 +459,23 @@ class AutomatonBuilder {
         val submachines = submachineBuilders.mapValues { (name, builder) -> builder.build(name) }
         validateArities()
         validateArgumentStates(submachines.values)
+        val mainName = mainSlot
+        require(mainName != null) {
+            "The automaton does not declare a main submachine."
+        }
         // The topology rules are shared with the imperative API: a topology
         // the DSL accepts is executable, and the other way round.
-        TopologyValidator.validate(transitions, submachines.values, main)
+        TopologyValidator.validate(
+            topology = Topology(transitions.toSet(), submachines.values.toSet()),
+            mainSubmachine = mainName,
+            actionNames = actions.keys,
+        )
         return AutomatonSpec(
             states = states.toMap(),
             submachines = submachines,
             transitions = transitions,
             actions = actions.toMap(),
-            main = main,
+            main = mainName,
         )
     }
 
@@ -463,7 +486,8 @@ class AutomatonBuilder {
 
     /** Checks every reference against the arity declared by its action. */
     private fun validateArities() {
-        actionArities.forEach { (name, expected) ->
+        actionArities.forEach { (name, declared) ->
+            val expected = (declared as Arity.Exactly).count
             actionReferences[name].orEmpty().forEach { actual ->
                 require(actual == expected) {
                     "Action '$name' expects $expected argument(s), but a reference binds $actual."
