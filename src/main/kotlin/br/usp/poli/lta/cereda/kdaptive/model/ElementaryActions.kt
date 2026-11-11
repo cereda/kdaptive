@@ -1,19 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-package br.usp.poli.lta.cereda.kdaptive.model.actions
-
-import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
-import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
-import br.usp.poli.lta.cereda.kdaptive.model.Observation
-import br.usp.poli.lta.cereda.kdaptive.model.State
-import br.usp.poli.lta.cereda.kdaptive.model.StateDomain
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
-import br.usp.poli.lta.cereda.kdaptive.model.Submachines
-import br.usp.poli.lta.cereda.kdaptive.model.Symbol
-import br.usp.poli.lta.cereda.kdaptive.model.SymbolDomain
-import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
+package br.usp.poli.lta.cereda.kdaptive.model
 
 /**
  * Builds a concrete reference to the action named [name], called with [args].

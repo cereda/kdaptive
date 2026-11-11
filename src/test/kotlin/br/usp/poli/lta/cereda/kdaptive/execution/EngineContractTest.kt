@@ -3,6 +3,7 @@ package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Submachines
@@ -11,8 +12,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
-import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -253,9 +252,10 @@ class EngineContractTest {
         aa.recognize(listOf(CharSymbol('a')))
 
         // Every child traverses the edge it forked on, in its own mapping:
-        // the child owns a copy of the topology, and its edges have their own
-        // identifiers. A child that referenced the parent's edge would be
-        // killed by the very first check it makes on it.
+        // the child owns a copy of the topology, and the copy keeps the
+        // identifiers of the edges it was made with. A child that could not
+        // find its edge by identifier would be killed by the very first check
+        // it makes on it.
         val symbols = traversed.filter { (_, edge) -> edge.transition is Transition.SymbolTransition }
         assertEquals(2, symbols.size)
         assertEquals(2, symbols.map { it.first }.toSet().size)
@@ -288,7 +288,7 @@ class EngineContractTest {
     }
 
     @Test
-    fun `the lifecycle events pair even when a path fails`() {
+    fun `a failed path reports a failure, not a rejection`() {
         val aa = FailingAa()
         val events = mutableListOf<String>()
         aa.visitors.add(
@@ -301,14 +301,16 @@ class EngineContractTest {
                     events.add("pathEnd:$outcome")
                 }
 
-                override fun onRecognizeEnd(result: Boolean) {
-                    events.add("end:$result")
+                override fun onRecognizeFailed(cause: Throwable) {
+                    events.add("failed")
                 }
             },
         )
 
         assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
 
-        assertEquals(listOf("start", "pathEnd:REJECTED", "end:false"), events)
+        // The path died before it could decide anything: reporting it as a
+        // rejection would claim a verdict nobody reached.
+        assertEquals(listOf("start", "pathEnd:FAILED", "failed"), events)
     }
 }

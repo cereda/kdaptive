@@ -5,8 +5,8 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.automaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import br.usp.poli.lta.cereda.kdaptive.model.Topology
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -17,7 +17,7 @@ class GraphVizVisitorTest {
 
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     // An automaton whose adaptive action adds a transition.

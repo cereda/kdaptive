@@ -6,12 +6,11 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
-import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue

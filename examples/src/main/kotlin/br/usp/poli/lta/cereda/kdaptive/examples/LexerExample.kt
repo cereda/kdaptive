@@ -5,7 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
-import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
+import br.usp.poli.lta.cereda.kdaptive.model.actionRef
 
 /**
  * Example: simple lexer that recognises words and numbers in "hello world 123",

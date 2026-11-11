@@ -1,19 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.allOf
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.anyOf
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.not
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.sourceState
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -34,7 +21,7 @@ internal data class Sym(val value: Char) : Symbol()
 class ModelSetsTest {
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     private fun sym(c: Char) = Sym(c)

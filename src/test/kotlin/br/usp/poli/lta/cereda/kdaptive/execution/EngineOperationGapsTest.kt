@@ -5,6 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.ActionHandler
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Submachines
@@ -12,8 +13,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -32,7 +31,7 @@ import org.junit.jupiter.api.assertThrows
 class EngineOperationGapsTest {
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     private object Aq0 : State() {
@@ -218,16 +217,16 @@ class EngineOperationGapsTest {
                 )
             }
         val cfg =
-            PathExecutorConfig(
+            PathState(
                 currentState = Aq0,
                 currentSubmachine = "M",
                 mainSubmachine = "M",
                 submachines = submachines,
                 input = listOf<Symbol>(CharSymbol('a')),
             )
-        val threads = mutableListOf<PathExecutor>()
+        val worklist = mutableListOf<PathExecutor>()
         val paths = mutableMapOf<Int, RecognitionPath>()
-        val executor = PathExecutor(config = cfg, threads = threads, paths = paths)
+        val executor = PathExecutor(state = cfg, worklist = worklist, paths = paths)
         executor.run()
 
         assertEquals("M", executor.mainSubmachine)

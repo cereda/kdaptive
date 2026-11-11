@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-
 /**
  * Handler executed when an adaptive action fires: it receives the transition
  * mapping (which may be mutated by elementary actions), the current transition
@@ -36,7 +34,7 @@ data class Action(
      * tells this particular action apart from the others, but it does not
      * make two otherwise identical actions different.
      */
-    val id: Int = IdentifierUtils.nextActionId()
+    val id: Int = Identifiers.nextActionId()
 
     /** Returns a human-readable representation of this action. */
     override fun toString(): String = "Action(id=$id, name=$name)"

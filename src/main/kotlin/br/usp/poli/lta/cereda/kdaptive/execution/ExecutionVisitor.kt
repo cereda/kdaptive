@@ -8,7 +8,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 
 /**
  * Visitors hook into the recognition execution to observe path lifecycle,
@@ -17,7 +16,7 @@ import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
  * All methods have no-op defaults; override only the events you care about.
  * Implementations are invoked synchronously on the recognition thread, so a
  * slow visitor slows recognition. Register visitors via
- * [PathExecutorConfig.visitors] or [AdaptiveAutomaton.visitors].
+ * [AdaptiveAutomaton.visitors].
  */
 interface ExecutionVisitor {
 
@@ -33,8 +32,28 @@ interface ExecutionVisitor {
      */
     fun onRecognizeStart(automaton: AdaptiveAutomaton) = Unit
 
-    /** Called once after recognition finishes, with the overall boolean result. */
-    fun onRecognizeEnd(result: Boolean) = Unit
+    /**
+     * Called once after recognition finishes, with the result of the recognition.
+     *
+     * The result carries the verdict and the paths that reached one, so a
+     * visitor can inspect the outcome without asking the automaton again.
+     *
+     * A recognition that *fails* does not reach this event: it reports
+     * [onRecognizeFailed] instead. The two events are exclusive, and a
+     * recognition that started always ends with exactly one of them.
+     */
+    fun onRecognizeEnd(result: RecognitionResult) = Unit
+
+    /**
+     * Called when recognition fails, instead of [onRecognizeEnd].
+     *
+     * A failure is not a rejection: the engine could not decide anything about
+     * the input. The path that died reports [PathOutcome.FAILED], and this
+     * event carries the cause that killed it.
+     *
+     * @param cause the exception that killed the recognition
+     */
+    fun onRecognizeFailed(cause: Throwable) = Unit
 
     // -----------------------------------------------------------------------
     // Path lifecycle
@@ -46,9 +65,11 @@ interface ExecutionVisitor {
     /**
      * Called when a recognition path terminates.
      *
-     * The path ends with a verdict: it accepted the input, it rejected it, or
-     * it was cut because it re-entered a configuration it had already left.
-     * A cut is not a rejection, and the visitor can tell them apart.
+     * The path ends with a verdict: it accepted the input, it rejected it, it
+     * was cut because it re-entered a configuration it had already left, or it
+     * failed because something went wrong while it ran. A cut is not a
+     * rejection, a failure is not a rejection either, and the visitor can
+     * tell all four apart.
      *
      * @param pathId the identifier of the terminated path
      * @param outcome the verdict of the path

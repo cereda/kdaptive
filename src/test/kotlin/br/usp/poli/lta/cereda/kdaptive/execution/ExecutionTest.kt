@@ -2,8 +2,7 @@
 package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -12,7 +11,7 @@ import org.junit.jupiter.api.Test
 class ExecutionTest {
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     private val aa = EvenAsAutomaton()

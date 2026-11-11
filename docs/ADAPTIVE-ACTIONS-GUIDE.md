@@ -22,15 +22,18 @@ An adaptive action can do one of exactly three things to the transition mapping:
 The class that does this is `ElementaryActions`:
 
 ```kotlin
-import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
+import br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions
 
-val ea = ElementaryActions(transitions)   // wrap the mapping you were handed
+// Inside an AdaptiveAutomaton subclass: `transitions` is the mapping the
+// handler was handed, `submachines` is the automaton's own collection.
+val ea = ElementaryActions(transitions, submachines)
 ```
 
 > **Remark**: `ElementaryActions` is a *facade*: it adds zero state and zero policy.
 > It wraps an existing `TransitionMapping` so every call operates in place. Always
 > construct it with the mapping **given to your handler**, not some cached copy;
-> see §2 for who owns what.
+> see §2 for who owns what. The submachines come along because `addCall` has to know
+> which submachines exist (§4.2).
 
 ## 2. Actions, references, and who runs what
 
@@ -495,12 +498,14 @@ Removals obtain the matching edges' **ids** first, then call
 `remove { ... }` safe while a loop iterates over queried results.
 
 > **Warning**: `removeFromIdentifier` silently does nothing if the id is no longer
-> present. Ids come from the `IdentifierUtils` singleton; do NOT invent them.
+> present. Ids come from the engine's internal `Identifiers` generator; do NOT invent
+> them. (The generator is internal to the library: the ids it hands out are public
+> API, the generator is not.)
 
 ## 5. Predicates, the raw filter layer
 
 `ElementaryActions` is built on a general predicate layer
-(`br.usp.poli.lta.cereda.kdaptive.model.predicates`), public and fully usable:
+(`br.usp.poli.lta.cereda.kdaptive.model`), public and fully usable:
 
 ```kotlin
 // combinatorial
@@ -649,9 +654,10 @@ The events, and when they fire:
 | Event | Fires when |
 |---|---|
 | `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
-| `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
+| `onRecognizeEnd(result)` | once per `recognize()` that finished, with the whole `RecognitionResult` |
+| `onRecognizeFailed(cause)` | instead of `onRecognizeEnd`, when the recognition **died** before deciding anything |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
-| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, or was cut |
+| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, was cut, or failed |
 | `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse` / `onAfterTraverse` | around each edge traversal |
 | `onBeforeAction` / `onAfterAction` | around each action handler (`isPrior` tells prior from post) |
@@ -659,13 +665,20 @@ The events, and when they fire:
 | `onCall` / `onReturn` | entering or leaving a submachine |
 
 > **Pitfall**: a path terminates **exactly once**, either with `onPathEnd` (accept,
-> reject, or cut) or with `onPathFork` (the path was replaced by its children). A visitor
-> that keeps a set of open paths must close the path on both events, otherwise every
-> forked path leaks in the bookkeeping.
+> reject, cut, or failure) or with `onPathFork` (the path was replaced by its children).
+> A visitor that keeps a set of open paths must close the path on both events,
+> otherwise every forked path leaks in the bookkeeping.
+
+> **Call-out**: a **failure is not a rejection**. A path that died before reaching a
+> verdict reports `PathOutcome.FAILED`, and the recognition reports
+> `onRecognizeFailed(cause)` instead of `onRecognizeEnd`: the engine could not decide
+> anything about the input, and saying "rejected" would claim a verdict nobody
+> reached. The two events are exclusive — a recognition that started always ends with
+> exactly one of them.
 
 > **Call-out**: the callbacks are **synchronous**, on the recognition thread. A slow
 > visitor slows recognition down. With no visitor registered the engine skips every
-> callback, so the feature is free when unused.
+> callback — and never builds a topology snapshot — so the feature is free when unused.
 
 ### 7.2 GraphViz snapshots of the topology
 
@@ -838,8 +851,9 @@ Changing the cost model means changing `CostVisitor` and nothing else.
    `Symbol.Epsilon`, `SubmachineRef.Any`, `ActionRef.Free`. An over-broad pattern (e.g.
    all wildcards) removes MORE than you intended, including edges you didn't mean to
    touch. Compose the narrowest filter that expresses the intent.
-10. **Ids are engine-internal counters** (`IdentifierUtils`); never fabricate them, and
-    they reset per-process (see `IdentifierUtils.reset()` for tests).
+10. **Ids are engine-internal counters** (the internal `Identifiers` generator); never
+    fabricate them. The generator has an internal `reset()` for tests, but it is not
+    part of the public API.
 11. **`recognize()` runs `setup()` on a clone**, so setup-side effects repeat per call.
     The top-level `counter` in the context-sensitive example never resets: it keeps
     minting fresh, unique state names across calls, which is harmless. But mutable

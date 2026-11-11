@@ -10,15 +10,30 @@ plugins {
     alias(libs.plugins.kover)
     alias(libs.plugins.spotless)
     alias(libs.plugins.tapmoc)
+    alias(libs.plugins.binaryCompatibilityValidator)
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "4.0.0"
+version = "5.0.0"
+
+java {
+    // The library ships its sources next to the jar: the jar is the
+    // artefact, the sources are what make it readable.
+    withSourcesJar()
+}
 
 tapmoc {
     java(11)
     kotlin("2.4.0")
     checkDependencies()
+}
+
+// The binary-compatibility baseline guards the *library*: it is the artefact
+// that ships, and its consumers are the ones a break would hurt. The examples
+// are executables with no consumers, so a baseline there would guard nothing
+// and would only add a maintenance step.
+apiValidation {
+    ignoredProjects.add("examples")
 }
 
 repositories {

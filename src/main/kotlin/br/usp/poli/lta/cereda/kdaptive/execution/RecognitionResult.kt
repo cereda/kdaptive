@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.execution
 
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
-
 /**
  * The result of a recognition.
  *
@@ -14,6 +11,12 @@ import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
  * its children is not one of them: it never decided anything. A path that was
  * cut is one of them, and says so: [cutPaths] tells apart "the input was
  * refused" from "this branch was pruned".
+ *
+ * A recognition that **failed** never produces a result: it throws, because
+ * the engine could not decide anything about the input. A failed path
+ * reports [PathOutcome.FAILED] through
+ * [ExecutionVisitor.onPathEnd], and the cause reaches the caller as the
+ * exception.
  *
  * @property accepted whether the automaton recognised the input
  * @property paths the paths that reached a verdict

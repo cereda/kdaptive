@@ -4,11 +4,11 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
-import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 
 /**
  * Example: recognises `a b c` where the `c` transition is added dynamically by

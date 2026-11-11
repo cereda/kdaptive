@@ -18,18 +18,21 @@ Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 |---|---|
 | Language | Kotlin 2.4 (language/api level 2.4.0) |
 | Bytecode | Java 11 (major version 55) |
-| Build | Gradle wrapper 9.8.2, Kotlin DSL build script |
-| Tests | `kotlin("test")` over JUnit 5 (510 tests: 381 library, 129 examples) |
+| Build | Gradle wrapper 9.9.1, Kotlin DSL build script |
+| Tests | `kotlin("test")` over JUnit 5 (514 tests: 385 library, 129 examples) |
 | Static analysis | detekt 1.23.8, **zero-tolerance** config |
 | Format / style | Spotless, ktlint rules, 120-col, SPDX license header |
 | Docs | Dokka HTML (`./gradlew dokkaGenerateHtml`, fail-on-warning) |
 | Coverage | Kover: line ≥ 95%, branch ≥ 78% enforced on `check` |
+| API compatibility | binary-compatibility validator, baseline in `api/kdaptive.api` (`./gradlew apiCheck`) |
+| Supply chain | Gradle dependency verification (`gradle/verification-metadata.xml`) + wrapper checksum |
 | Logging | SLF4J API only (backend chosen by the consumer) |
 
-Coordinates: `br.usp.poli.lta.cereda:kdaptive:4.0.0`.
+Coordinates: `br.usp.poli.lta.cereda:kdaptive:5.0.0`.
 
 > **Remark**: the build currently **does not ship a publishing plugin**. The library jar
-> lands in `./build/libs/kdaptive-4.0.0.jar` after `./gradlew build`, and `:examples`
+> lands in `./build/libs/kdaptive-5.0.0.jar` (next to `kdaptive-5.0.0-sources.jar`) after
+> `./gradlew build`, and `:examples`
 > consumes `:kdaptive` (the root module) from the same multi-module build. To use the
 > library in another project, either include it (composite build / `includeBuild`) or
 > install the jar into a local repository of your choice.
@@ -197,23 +200,28 @@ ka.recognize(convert("ab"))
 | Event | Fires when |
 |---|---|
 | `onRecognizeStart(automaton)` | once per `recognize()`, on the clone, **after** `setup()` populated its topology |
-| `onRecognizeEnd(result)` | once per `recognize()`, with the overall verdict |
+| `onRecognizeEnd(result)` | once per `recognize()` that finished, with the whole `RecognitionResult` |
+| `onRecognizeFailed(cause)` | instead of `onRecognizeEnd`, when the recognition **died** before deciding anything |
 | `onPathStart(pathId, input)` | a path begins; forked children included |
-| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, or was cut |
+| `onPathEnd(pathId, outcome, cursor)` | a path ends: it accepted, rejected, was cut, or failed |
 | `onPathFork(pathId, children)` | a path forks: it reaches no verdict, its children carry on. Each child carries the edge it was created for |
 | `onBeforeTraverse(pathId, edge)` / `onAfterTraverse(pathId, edge)` | around each edge traversal |
 | `onBeforeAction(pathId, actionRef, isPrior)` / `onAfterAction(pathId, actionRef, isPrior)` | around each adaptive action handler |
 | `onEdgeAdded(...)` / `onEdgeRemoved(...)` | after each insertion/deletion in the path's mapping, together with an immutable `Topology` snapshot |
 | `onCall(pathId, submachine)` / `onReturn(pathId)` | entering or leaving a submachine |
 
-Two rules are worth remembering:
+Three rules are worth remembering:
 
-- **A path terminates exactly once**, either with `onPathEnd` (accept, reject, or cut) or
-  with `onPathFork` (the path was replaced by its children). A visitor that tracks open
-  paths must handle both.
+- **A path terminates exactly once**, either with `onPathEnd` (accept, reject, cut, or
+  failure) or with `onPathFork` (the path was replaced by its children). A visitor that
+  tracks open paths must handle both.
+- **A failure is not a rejection.** A path that died before reaching a verdict reports
+  `PathOutcome.FAILED`, and the recognition reports `onRecognizeFailed` instead of
+  `onRecognizeEnd`: the engine could not decide anything about the input, and saying
+  "rejected" would claim a verdict nobody reached.
 - **Callbacks are synchronous**, on the recognition thread: a slow visitor slows
-  recognition down. With no visitor registered the engine skips every callback, so the
-  feature costs nothing when unused.
+  recognition down. With no visitor registered the engine skips every callback — and
+  never builds a topology snapshot — so the feature costs nothing when unused.
 
 ### Per-path isolation
 
@@ -382,7 +390,7 @@ Changing that cost model means changing `CostVisitor` and nothing else.
 | `TransitionMapping` | The **live** set of edges: `val transitions`, `val size`, `contains(id)`, and the mutation sinks. |
 | `Topology` | The **immutable snapshot** of a topology: its edges, its submachines, and the queries (`edgesFrom`, `edgesConsuming`, `matching`, …). |
 | `TransitionPattern` | The single implementation of what a filter means: `matches(edge)` answers it, edge by edge. |
-| `RecognitionPath` | One recognizer path: the trail of `TransitionEdge`s it walked, its cursor, its state, and the `PathOutcome` verdict (`PENDING`, `ACCEPTED`, `REJECTED` or `CUT`). |
+| `RecognitionPath` | One recognizer path: the `trail` of `TransitionEdge`s it walked, its cursor, its state, and the `PathOutcome` verdict (`PENDING`, `ACCEPTED`, `REJECTED`, `CUT` or `FAILED`). |
 | `RecognitionResult` | What `recognize()` returns: the verdict (`accepted`) and the paths it was made of. |
 | `AdaptiveAutomaton` | The automaton itself, plus the recognition driver, the `stopOnFirstAcceptance` flag and the `limits` backstop. |
 | `ExecutionVisitor` | The recognition-event interface: no-op defaults for every event, registered through `AdaptiveAutomaton.visitors`. |
@@ -456,7 +464,7 @@ would answer "rejected" for an input the automaton does accept. The old
 ### Epsilon cycles: rejected, warned, or cut
 
 An epsilon cycle (a cycle of transitions that consume nothing) makes a path run forever.
-v4.0.0 answers it in two layers:
+The engine answers it in two layers:
 
 - **Statically**, the validator looks for a *reachable* epsilon-only cycle. If the
   automaton registers **no** adaptive actions, nothing can change the topology during the
@@ -486,8 +494,8 @@ aa.limits = RecognitionLimits(maxLivePaths = 10_000, maxStepsPerPath = 10_000, m
 
 | Path | Contents |
 |---|---|
-| `kdaptive/src/main/kotlin/…/model/` | `State`, `Symbol`, `CharSymbol`, `Transition`, `TransitionEdge`, `Submachine`, `Action`, `Stack`, plus `Observation`, `MappingOperation`, `TransitionPattern`, `Topology`, `DomainSize`, `Arity`, and the `Actions`, `Submachines` and `TransitionMapping` collections, with the `predicates/` and `actions/` packages |
-| `kdaptive/src/main/kotlin/…/execution/` | `AdaptiveAutomaton` (the public entry point), `PathExecutor`, `PathExecutorConfig`, `ExecutionVisitor` (the recognition-event interface), `RecognitionResult`, `RecognitionLimits`, `ForkedPath` |
+| `kdaptive/src/main/kotlin/…/model/` | `State`, `Symbol`, `CharSymbol`, `Transition`, `TransitionEdge`, `Submachine`, `Action`, `Stack`, plus `Observation`, `MappingOperation`, `TransitionPattern`, `Topology`, `DomainSize`, `Arity`, and the `Actions`, `Submachines` and `TransitionMapping` collections, with `ElementaryActions` and `Predicates` |
+| `kdaptive/src/main/kotlin/…/execution/` | `AdaptiveAutomaton` (the public entry point), `PathExecutor`, `PathState`, `ExecutionVisitor` (the recognition-event interface), `RecognitionPath`, `PathOutcome`, `RecognitionResult`, `RecognitionLimits`, `ForkedPath` |
 | `kdaptive/src/main/kotlin/…/dot/` | `DotExporter`, `GraphVizVisitor` (the GraphViz DOT export) |
 | `kdaptive/src/main/kotlin/…/dsl/` | `AutomatonDsl.kt`: the `automaton { }` builder and `specToAutomaton` |
 | `kdaptive/src/main/kotlin/…/logging/` | the SLF4J facade (`val <T> Any.logger`) |
@@ -532,6 +540,7 @@ All commands assume the Gradle wrapper:
 ./gradlew test                  # tests of every module (library + examples)
 ./gradlew :test                 # library tests only
 ./gradlew :examples:test        # example tests only
+./gradlew apiCheck              # binary compatibility against the baseline in api/
 ./gradlew dokkaGenerateHtml     # API docs in ./build/dokka/html, warnings fail the build
 ./gradlew koverHtmlReport       # coverage report → build/reports/kover/html/index.html
 ./gradlew :examples:run -Pmain=<FullyQualifiedMainKt>   # run an example
@@ -555,6 +564,11 @@ All commands assume the Gradle wrapper:
 - **tapmoc**: dependency class-file and Kotlin-metadata floors are checked inside `check`
   (the library claims Kotlin api/language 2.4.0 and Java 11 bytecode, and it means it).
 - **Spotless**: license header + ktlint on every file.
+- **Binary compatibility**: `apiCheck` compares the compiled API against the baseline in
+  `api/kdaptive.api` and fails on an accidental break.
+- **Supply chain**: Gradle dependency verification (`gradle/verification-metadata.xml`)
+  checks every dependency checksum, and the wrapper distribution carries its own
+  SHA-256.
 
 ## Compatibility
 
@@ -580,6 +594,105 @@ fails on any public nullable type, so it cannot regress silently. The only nulls
 the library are private implementation details (the lazy by-source index, the private
 "not configured yet" slots) and the standard `equals(other: Any?)` override the language
 itself mandates.
+
+### Changes in 5.0.0
+
+This is a **breaking** release. It fixes the honesty of the failure path, makes the
+engine linear instead of quadratic, tidies the package layout, and hardens the build.
+
+#### Correctness: a failure is not a rejection
+
+- **`PathOutcome` gains `FAILED`.** A path that died before reaching a verdict — an
+  action threw, or a structural bound tripped — used to be reported as `REJECTED`.
+  That was a lie: the engine had decided *nothing* about the input, and "rejected"
+  claims it did. The path now reports `FAILED`, and the failure reaches the caller as
+  the `IllegalStateException` it always was.
+- **`ExecutionVisitor.onRecognizeEnd` takes a `RecognitionResult`, not a `Boolean`,
+  and a new `onRecognizeFailed(cause)` reports a recognition that died.** The two
+  events are **exclusive**: a recognition that started always ends with exactly one of
+  them, so a visitor can rely on the pairing.
+- **The identifier spaces are unified.** The engine used to number kernel identifiers
+  and recognition-path identifiers from two counters, which could hand the same number
+  to two different kinds of object. There is one counter per kind of object now, and
+  the counters are atomic, so two recognitions running concurrently never collide.
+- **`Submachines.copy()` shares the submachine instances**, like `Actions.copy()`
+  already did. A copy is a copy of the *collection*, not of every element in it.
+
+#### Performance: linear, not quadratic
+
+The engine was rewritten around a **copy-on-write topology** and an **indexed
+lineage**. The measurements on the reference benchmarks:
+
+| Benchmark | 4.0.0 | 5.0.0 | Speed-up |
+|---|---|---|---|
+| 40 000-step chain | 4 236 ms | **43 ms** | **97×** |
+| 4 000 forks | 2 403 ms | **41 ms** | **59×** |
+| Cost of one extra step | grows 1.6× per doubling | **flat** | — |
+| Cost of one extra fork | grows 47 → 601 µs | **flat ≈ 9 µs** | — |
+
+- **The trail is appended to, not rebuilt.** A path used to copy its whole history on
+  every traversal; it now appends to a list and flattens it once, at the verdict.
+- **The lineage is an index, not a chain.** Detecting a repeated configuration walked
+  a linked list of ancestors; it is now a map lookup, and the map is shared
+  copy-on-write between forked siblings.
+- **The topology is copy-on-write.** A forked path used to duplicate every edge of
+  the mapping; now the two mappings hold the same edges until one of them is mutated.
+  The edges themselves are immutable and their identifiers are unique, so sharing them
+  is safe.
+- **Edges are indexed by identifier**, so `contains(id)` and `removeFromIdentifier(id)`
+  are constant-time instead of linear scans.
+- **The topology snapshot is built only when someone wants it.** A recognition with no
+  visitor registered never builds a `Topology`.
+- **The automaton is copied once per recognition**, not once per path.
+- **The call stack caches its snapshot**, because the engine reads it on every step
+  and it changes far less often than it is read.
+
+#### Cleanup: the package layout and the names
+
+The `utils` package is **gone**, and two sub-packages of `model` are flattened into
+`model`. The `*Utils` classes were renamed:
+
+| Before (4.0.0) | After (5.0.0) |
+|---|---|
+| `br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath` | `br.usp.poli.lta.cereda.kdaptive.execution.RecognitionPath` |
+| `br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome` | `br.usp.poli.lta.cereda.kdaptive.execution.PathOutcome` |
+| `br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils` | `br.usp.poli.lta.cereda.kdaptive.model.Identifiers` (**internal**) |
+| `br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions` | `br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions` |
+| `br.usp.poli.lta.cereda.kdaptive.model.predicates.*` | `br.usp.poli.lta.cereda.kdaptive.model.*` |
+
+The remaining renames:
+
+| Before (4.0.0) | After (5.0.0) | Why |
+|---|---|---|
+| `PathExecutorConfig` | `PathState` | It is not a configuration: it is the mutable state of a running path, and it is not a data class any more. |
+| `PathExecutor.threads` | `PathExecutor.worklist` | It was never a list of threads — the engine is iterative and single-threaded per path. |
+| `AdaptiveAutomaton.stack` | `AdaptiveAutomaton.initialStack` | It is the seed a recognition starts from, not the stack of a running path. |
+| `RecognitionPath.path` | `RecognitionPath.trail` | A path has *one* trail; the name said "path" about a property of a path. |
+| `IdentifierUtils` (public) | `Identifiers` (internal) | The identifiers it hands out are public API; the generator is not. |
+| `ExampleUtils.kt` (examples) | `ExampleSupport.kt` | It is support code for the examples, not a utility class. |
+
+`AdaptiveAutomaton.transitions`, `.submachines` and `.actions` are now `var` with a
+`private set`: the engine replaces them wholesale when it clones the automaton, and
+the consumer may still read them.
+
+#### Good practices: the build defends itself
+
+- **Gradle 9.9.1**, which carries the fix for the "version catalog values run as code
+  in generated accessors" vulnerability (critical) and two high-severity ones. The
+  project uses `gradle/libs.versions.toml`, so it applies directly.
+- **The wrapper distribution carries a SHA-256 checksum**, so a tampered distribution
+  is refused.
+- **Gradle dependency verification** (`gradle/verification-metadata.xml`) checks every
+  dependency checksum on every build.
+- **Binary-compatibility validation**: the compiled API is compared against the
+  baseline in `api/kdaptive.api`, and `apiCheck` fails on an accidental break. The
+  baseline is regenerated deliberately with `apiDump`.
+- **The library ships its sources** next to the jar
+  (`kdaptive-5.0.0-sources.jar`).
+- **Six detekt rules are re-enabled** (`TooGenericExceptionCaught`,
+  `EndOfSentenceFormat`, `UnconditionalJumpStatementInLoop`,
+  `StringLiteralDuplication`, `VariableMaxLength`, `VariableMinLength`): the code
+  already complied with all of them.
 
 ### Changes in 4.0.0
 

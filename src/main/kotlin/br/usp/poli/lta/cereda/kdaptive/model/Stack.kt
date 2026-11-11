@@ -8,9 +8,18 @@ package br.usp.poli.lta.cereda.kdaptive.model
 class Stack {
     private val entries = ArrayDeque<State>()
 
+    /**
+     * The elements of the stack, in top-to-bottom order.
+     *
+     * The list is cached: the engine reads it on every step of a path, and
+     * the stack changes far less often than it is read.
+     */
+    private var elementsCache: List<State>? = null
+
     /** Pushes [entry] onto the top of the stack. */
     fun push(entry: State) {
         entries.addFirst(entry)
+        elementsCache = null
     }
 
     /**
@@ -20,6 +29,7 @@ class Stack {
      */
     fun pop(): State {
         check(entries.isNotEmpty()) { "Stack is empty." }
+        elementsCache = null
         return entries.removeFirst()
     }
 
@@ -39,6 +49,7 @@ class Stack {
     /** Removes all elements from the stack. */
     fun clear() {
         entries.clear()
+        elementsCache = null
     }
 
     /** Creates a copy of this stack with the same top-to-bottom order. */
@@ -51,7 +62,13 @@ class Stack {
     }
 
     /** The elements of the stack in top-to-bottom order. */
-    val elements: List<State> get() = entries.toList()
+    val elements: List<State>
+        get() {
+            elementsCache?.let { return it }
+            val snapshot = entries.toList()
+            elementsCache = snapshot
+            return snapshot
+        }
 
     /** Returns a human-readable representation of this stack. */
     override fun toString(): String = if (isEmpty) {

@@ -13,8 +13,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.TopologyValidator
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
@@ -28,22 +26,32 @@ import org.slf4j.LoggerFactory
 abstract class AdaptiveAutomaton {
     private val logger: Logger = LoggerFactory.getLogger(javaClass)
 
-    /** The mapping of transitions of the adaptive automaton. */
+    /**
+     * The mapping of transitions of the adaptive automaton.
+     *
+     * The mapping is replaced wholesale when the automaton is cloned, and
+     * never from the outside: the topology of a running automaton is the
+     * engine's business.
+     */
     var transitions: TransitionMapping = TransitionMapping()
+        private set
 
-    /** The set of submachines of the adaptive automaton. */
+    /** The submachines of the adaptive automaton. */
     var submachines: Submachines = Submachines()
+        private set
 
-    /** The set of actions of the adaptive automaton. */
+    /** The actions of the adaptive automaton. */
     var actions: Actions = Actions()
+        private set
 
     /**
-     * The stack used during recognition.
+     * The stack a recognition starts from.
      *
      * Recognition runs on a clone, and each path keeps its own copy of the
-     * stack; this field holds the stack the clone starts from.
+     * stack; this field holds the stack the clone starts from. It is a seed,
+     * not the stack of a running path.
      */
-    var stack: Stack = Stack()
+    var initialStack: Stack = Stack()
 
     /**
      * The slot holding the name of the main submachine.
@@ -219,7 +227,10 @@ abstract class AdaptiveAutomaton {
         }
     }
 
-    private val threads = mutableListOf<PathExecutor>()
+    /** The worklist of the paths that still have to run. */
+    private val worklist = mutableListOf<PathExecutor>()
+
+    /** The paths of the running recognition, by identifier. */
     private val paths = mutableMapOf<Int, RecognitionPath>()
 
     /**
@@ -258,6 +269,7 @@ abstract class AdaptiveAutomaton {
      *
      * @param input the symbols to recognise
      * @return the result of the recognition: the verdict, and the paths it was made of
+     * @throws IllegalStateException if the recognition failed
      */
     fun recognize(input: List<Symbol>): RecognitionResult {
         val ref = clone()
@@ -267,10 +279,11 @@ abstract class AdaptiveAutomaton {
     private fun clone(): AdaptiveAutomaton {
         val instance = newInstance()
         require(instance !== this) { "newInstance() must return a fresh automaton, not this one." }
-        instance.transitions = transitions.copy()
+        transitions.shareEdges()
+        instance.transitions = transitions.isolatedCopy()
         instance.submachines = submachines.copy()
         instance.actions = actions.copy()
-        instance.stack = stack.copy()
+        instance.initialStack = initialStack.copy()
         instance.mainSubmachineSlot = mainSubmachineSlot
         instance.stopOnFirstAcceptance = stopOnFirstAcceptance
         instance.limits = limits
@@ -278,6 +291,7 @@ abstract class AdaptiveAutomaton {
         return instance
     }
 
+    @Suppress("TooGenericExceptionCaught")
     private fun recognizeOnce(input: List<Symbol>): RecognitionResult {
         setup()
 
@@ -302,47 +316,51 @@ abstract class AdaptiveAutomaton {
         // topology, so a visitor sees the automaton it is about to execute.
         visitors.toList().forEach { it.onRecognizeStart(this) }
 
-        threads.clear()
+        worklist.clear()
         paths.clear()
 
         // The path starts at the initial state of the main submachine; there
         // is no synthetic edge to traverse before the first real move.
         val initialState = submachines.fromName(mainSub).initialState
+        transitions.shareEdges()
         val root =
             PathExecutor(
-                config =
-                PathExecutorConfig(
+                state =
+                PathState(
                     currentState = initialState,
                     currentSubmachine = mainSub,
                     mainSubmachine = mainSub,
-                    stack = stack.copy(),
+                    stack = initialStack.copy(),
                     actions = actions.copy(),
-                    transitions = transitions.copy(),
+                    transitions = transitions.isolatedCopy(),
                     submachines = submachines.copy(),
                     input = input,
                     cursor = 0,
                     enablePriorAction = true,
                     limits = limits,
-                    visitors = visitors.toMutableList(),
                 ),
-                threads = threads,
+                worklist = worklist,
                 paths = paths,
+                visitors = visitors,
             )
 
         paths[root.id] = RecognitionPath(id = root.id, state = initialState)
-        threads.add(root)
+        worklist.add(root)
 
-        while (threads.isNotEmpty() && !anAcceptanceHappened()) {
-            var i = threads.size - 1
+        while (worklist.isNotEmpty() && !anAcceptanceHappened()) {
+            var i = worklist.size - 1
             while (i >= 0) {
                 try {
-                    threads[i].run()
+                    worklist[i].run()
                 } catch (e: Exception) {
-                    failPath(threads[i], e)
+                    // Every exception is caught, checked ones included: a path
+                    // that dies must still close its own lifecycle events
+                    // before the failure reaches the caller.
+                    failPath(worklist[i], e)
                 }
                 // When run() returns, the path is finished (accepted, rejected,
                 // cut, or forked). Remove it from the worklist.
-                threads.removeAt(i)
+                worklist.removeAt(i)
                 i--
             }
         }
@@ -352,7 +370,7 @@ abstract class AdaptiveAutomaton {
                 accepted = paths.values.any { it.outcome == PathOutcome.ACCEPTED },
                 paths = paths.values.filter { it.done },
             )
-        visitors.toList().forEach { it.onRecognizeEnd(result.accepted) }
+        visitors.toList().forEach { it.onRecognizeEnd(result) }
         return result
     }
 
@@ -360,15 +378,20 @@ abstract class AdaptiveAutomaton {
      * Reports the failure of [failed] and closes the recognition.
      *
      * A failing path terminates like any other: the path-end and the
-     * recognition-end events are fired before the failure propagates, so every
-     * path ends exactly once and the lifecycle events always pair.
+     * recognition-failed events are fired before the failure propagates, so
+     * every path ends exactly once and the lifecycle events always pair.
+     *
+     * The failure is reported as a failure, never as a rejection: the path
+     * died before it could decide anything, and saying "rejected" would
+     * claim a verdict nobody reached.
      *
      * @param failed the path that failed
      * @param cause the exception that killed it
      */
     private fun failPath(failed: PathExecutor, cause: Exception): Nothing {
-        visitors.toList().forEach { it.onPathEnd(failed.id, PathOutcome.REJECTED, failed.cursor) }
-        visitors.toList().forEach { it.onRecognizeEnd(false) }
+        failed.markFailed()
+        visitors.toList().forEach { it.onPathEnd(failed.id, PathOutcome.FAILED, failed.cursor) }
+        visitors.toList().forEach { it.onRecognizeFailed(cause) }
         // Surface path failures to the caller instead of killing the JVM.
         throw IllegalStateException(
             "Recognition path ${failed.id} failed: ${cause.message}",
@@ -396,7 +419,7 @@ abstract class AdaptiveAutomaton {
             append("  submachines: ").append(submachines.toString().indented()).append("\n")
             append("  transitions: ").append(transitions.toString().indented()).append("\n")
             append("  actions: ").append(actions.toString().indented()).append("\n")
-            append("  stack: ").append(stack).append("\n")
+            append("  stack: ").append(initialStack).append("\n")
             append("}")
         }
     }

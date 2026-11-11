@@ -1,15 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-package br.usp.poli.lta.cereda.kdaptive.model.predicates
-
-import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
-import br.usp.poli.lta.cereda.kdaptive.model.State
-import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
-import br.usp.poli.lta.cereda.kdaptive.model.Symbol
-import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.stateMatches
-import br.usp.poli.lta.cereda.kdaptive.model.submachineMatches
-import br.usp.poli.lta.cereda.kdaptive.model.symbolMatches
+package br.usp.poli.lta.cereda.kdaptive.model
 
 /** A predicate over transition edges: true if the edge matches. */
 typealias TransitionPredicate = (TransitionEdge) -> Boolean

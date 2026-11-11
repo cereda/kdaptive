@@ -4,7 +4,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
 /**
  * The submachines of the adaptive automaton.
  *
- * The set is itself a collection: an automaton's submachines are reached by
+ * The collection is itself iterable: an automaton's submachines are reached by
  * iterating over them, and their number is asked of them directly. There is
  * no second, more official way of reaching them.
  *
@@ -27,17 +27,17 @@ class Submachines : Iterable<Submachine> {
     override fun iterator(): Iterator<Submachine> = entries.iterator()
 
     /**
-     * Tells whether the set holds [submachine].
+     * Tells whether the collection holds [submachine].
      *
      * @param submachine the submachine to look for
-     * @return true when an equal submachine is in the set
+     * @return true when an equal submachine is in the collection
      */
     operator fun contains(submachine: Submachine): Boolean = submachine in entries
 
     /**
-     * Replaces all submachines in the set with the given submachines.
+     * Replaces all submachines in the collection with the given submachines.
      *
-     * @param newSubmachines the new set of submachines
+     * @param newSubmachines the new submachines
      */
     fun replaceAll(newSubmachines: Set<Submachine>) {
         entries.clear()
@@ -45,7 +45,7 @@ class Submachines : Iterable<Submachine> {
     }
 
     /**
-     * The number of submachines in the set.
+     * The number of submachines in the collection.
      */
     val size: Int get() = entries.size
 
@@ -86,19 +86,23 @@ class Submachines : Iterable<Submachine> {
     }
 
     /**
-     * Returns a copy of this set with copies of all submachines.
+     * Creates a shallow copy of this collection.
      *
-     * @return a new [Submachines] with copies of all submachines
+     * The submachines themselves are immutable, and their identifier plays no
+     * part in their equality, so the copy shares the instances it holds: a
+     * copy of a collection of submachines holds the same submachines.
+     *
+     * @return a new [Submachines] with the same submachines
      */
     fun copy(): Submachines {
         val s = Submachines()
-        entries.forEach { s.add(it.copy()) }
+        s.entries.addAll(entries)
         return s
     }
 
-    /** Returns a human-readable representation of this submachine set. */
+    /** Returns a human-readable representation of this collection of submachines. */
     override fun toString(): String {
-        val sb = StringBuilder("Set of submachines: {")
+        val sb = StringBuilder("Submachines: {")
         if (entries.isNotEmpty()) {
             sb.append("\n")
             for (s in entries) {

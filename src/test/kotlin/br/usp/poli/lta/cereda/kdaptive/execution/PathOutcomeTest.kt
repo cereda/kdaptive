@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-package br.usp.poli.lta.cereda.kdaptive.utils
+package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import org.junit.jupiter.api.Assertions.assertEquals

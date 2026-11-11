@@ -5,7 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.automaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test
 class DslTest {
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     /** Even number of 'a's over {a, b}, built with the DSL. */

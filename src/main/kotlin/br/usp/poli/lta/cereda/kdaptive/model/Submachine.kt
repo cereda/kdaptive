@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-
 /**
  * Formal definition of a submachine.
  *
@@ -30,7 +28,7 @@ data class Submachine(
      *
      * The identifier is deliberately outside the equality of the submachine.
      */
-    val id: Int = IdentifierUtils.nextSubmachineId()
+    val id: Int = Identifiers.nextSubmachineId()
 
     init {
         require(

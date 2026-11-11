@@ -3,11 +3,11 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.dsl.automaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
+import br.usp.poli.lta.cereda.kdaptive.execution.RecognitionPath
 import br.usp.poli.lta.cereda.kdaptive.model.Arity
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
-import br.usp.poli.lta.cereda.kdaptive.model.actions.asState
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
+import br.usp.poli.lta.cereda.kdaptive.model.asState
 
 /**
  * Example: recognises the context-sensitive language `a^n b^n c^n` (n > 0)

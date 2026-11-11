@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-
 /**
  * An edge in the transition mapping: a [Transition] plus its source/target
  * states and prior/post actions.
@@ -47,7 +45,7 @@ data class TransitionEdge(
      * tells this particular edge apart from the others, but it does not make
      * two otherwise identical edges different.
      */
-    val id: Int = IdentifierUtils.nextTransitionId()
+    val id: Int = Identifiers.nextTransitionId()
 
     /** Returns a human-readable representation of this edge, rendered as a graph arrow. */
     override fun toString(): String {

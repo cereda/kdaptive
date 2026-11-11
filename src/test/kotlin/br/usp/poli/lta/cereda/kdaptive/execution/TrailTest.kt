@@ -5,7 +5,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -59,13 +58,13 @@ class TrailTest {
         val result = LinearAa().recognize(listOf(CharSymbol('a'), CharSymbol('b')))
 
         val path = result.acceptedPaths.single()
-        assertEquals(2, path.path.size)
-        assertEquals(T0, path.path[0].source)
-        assertEquals(T1, path.path[0].target)
-        assertEquals(T1, path.path[1].source)
-        assertEquals(T1, path.path[1].target)
-        assertEquals(CharSymbol('a'), (path.path[0].transition as Transition.SymbolTransition).symbol)
-        assertEquals(CharSymbol('b'), (path.path[1].transition as Transition.SymbolTransition).symbol)
+        assertEquals(2, path.trail.size)
+        assertEquals(T0, path.trail[0].source)
+        assertEquals(T1, path.trail[0].target)
+        assertEquals(T1, path.trail[1].source)
+        assertEquals(T1, path.trail[1].target)
+        assertEquals(CharSymbol('a'), (path.trail[0].transition as Transition.SymbolTransition).symbol)
+        assertEquals(CharSymbol('b'), (path.trail[1].transition as Transition.SymbolTransition).symbol)
     }
 
     @Test
@@ -83,7 +82,7 @@ class TrailTest {
 
         val path = result.rejectedPaths.single()
         assertEquals(PathOutcome.REJECTED, path.outcome)
-        assertEquals(1, path.path.size)
+        assertEquals(1, path.trail.size)
         assertEquals(T1, path.state)
     }
 
@@ -111,7 +110,7 @@ class TrailTest {
         val result = ForkingAa().recognize(listOf(CharSymbol('a')))
 
         assertEquals(2, result.acceptedPaths.size)
-        val trails = result.acceptedPaths.map { path -> path.path.single().target }.toSet()
+        val trails = result.acceptedPaths.map { path -> path.trail.single().target }.toSet()
         assertEquals(setOf(T1, T2), trails)
     }
 
@@ -122,7 +121,7 @@ class TrailTest {
         val result = ForkingAa().recognize(listOf(CharSymbol('a')))
 
         result.acceptedPaths.forEach { path ->
-            assertEquals(1, path.path.size)
+            assertEquals(1, path.trail.size)
         }
     }
 
@@ -159,9 +158,9 @@ class TrailTest {
 
         val path = result.acceptedPaths.single()
         // The call, the symbol edge and the return: three traversals.
-        assertEquals(3, path.path.size)
-        assertTrue(path.path.any { edge -> edge.transition is Transition.Call })
-        assertTrue(path.path.any { edge -> edge.transition is Transition.Return })
+        assertEquals(3, path.trail.size)
+        assertTrue(path.trail.any { edge -> edge.transition is Transition.Call })
+        assertTrue(path.trail.any { edge -> edge.transition is Transition.Return })
         assertEquals(T1, path.state)
     }
 }

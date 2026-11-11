@@ -4,7 +4,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
 /**
  * The actions of the adaptive automaton.
  *
- * The set is itself a collection: an automaton's actions are reached by
+ * The collection is itself iterable: an automaton's actions are reached by
  * iterating over them, and their number is asked of them directly. There is
  * no second, more official way of reaching them.
  *
@@ -15,11 +15,11 @@ class Actions : Iterable<Action> {
     private val entries = mutableSetOf<Action>()
 
     /**
-     * Adds an action to the set.
+     * Adds an action to the collection.
      *
      * An action is identified by its name: adding an action whose name is
-     * already taken replaces the previous one, so the set never holds two
-     * actions under the same name. This mirrors the builder DSL, which
+     * already taken replaces the previous one, so the collection never holds
+     * two actions under the same name. This mirrors the builder DSL, which
      * rejects a duplicate name outright.
      *
      * @param action the action to add
@@ -33,17 +33,17 @@ class Actions : Iterable<Action> {
     override fun iterator(): Iterator<Action> = entries.iterator()
 
     /**
-     * Tells whether the set holds [action].
+     * Tells whether the collection holds [action].
      *
      * @param action the action to look for
-     * @return true when an equal action is in the set
+     * @return true when an equal action is in the collection
      */
     operator fun contains(action: Action): Boolean = action in entries
 
     /**
-     * Replaces all actions in the set with the given actions.
+     * Replaces all actions in the collection with the given actions.
      *
-     * @param newActions the new set of actions
+     * @param newActions the new actions
      */
     fun replaceAll(newActions: Set<Action>) {
         entries.clear()
@@ -51,7 +51,7 @@ class Actions : Iterable<Action> {
     }
 
     /**
-     * The number of actions in the set.
+     * The number of actions in the collection.
      */
     val size: Int get() = entries.size
 
@@ -80,7 +80,10 @@ class Actions : Iterable<Action> {
     }
 
     /**
-     * Creates a shallow copy of this action set.
+     * Creates a shallow copy of this collection.
+     *
+     * The actions themselves are shared: an action is an immutable handler
+     * bound to a name, and copying it would only duplicate the binding.
      *
      * @return a new [Actions] with the same actions
      */
@@ -90,9 +93,9 @@ class Actions : Iterable<Action> {
         return c
     }
 
-    /** Returns a human-readable representation of this action set. */
+    /** Returns a human-readable representation of this collection of actions. */
     override fun toString(): String {
-        val sb = StringBuilder("Set of actions: {")
+        val sb = StringBuilder("Actions: {")
         if (entries.isNotEmpty()) {
             sb.append("\n")
             for (a in entries) {

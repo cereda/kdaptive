@@ -6,11 +6,10 @@ import br.usp.poli.lta.cereda.kdaptive.dsl.specToAutomaton
 import br.usp.poli.lta.cereda.kdaptive.dsl.sym
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Topology
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -21,7 +20,7 @@ class ExecutionVisitorTest {
 
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     /**
@@ -116,8 +115,8 @@ class ExecutionVisitorTest {
             override fun onRecognizeStart(automaton: AdaptiveAutomaton) {
                 events.add("start")
             }
-            override fun onRecognizeEnd(result: Boolean) {
-                events.add("end:$result")
+            override fun onRecognizeEnd(result: RecognitionResult) {
+                events.add("end:${result.accepted}")
             }
         }
         val a = specToAutomaton(evenAsSpec())

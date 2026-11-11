@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
+import br.usp.poli.lta.cereda.kdaptive.execution.PathOutcome
+import br.usp.poli.lta.cereda.kdaptive.execution.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
@@ -24,7 +20,7 @@ internal object Q2 : State()
 class ModelTest {
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     @Test

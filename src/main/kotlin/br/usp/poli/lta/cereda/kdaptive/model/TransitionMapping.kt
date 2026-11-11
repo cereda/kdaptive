@@ -10,13 +10,30 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * snapshot; what a *filter* means is asked of a
  * [br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern]. The mapping itself
  * owns the edges and reports its own mutations.
+ *
+ * The mapping is also the unit of *isolation*: a forked path owns a mapping of
+ * its own, and a mutation on one path never reaches its siblings. Copies are
+ * therefore made lazily: a copy shares the edges of the original until one of
+ * them is mutated, and only then does it take a private set of its own.
  */
 class TransitionMapping {
     /** The edges of the mapping. */
-    private val edges = mutableSetOf<TransitionEdge>()
+    private var edges: MutableSet<TransitionEdge> = mutableSetOf()
+
+    /**
+     * Whether this mapping may mutate [edges] in place.
+     *
+     * A mapping that shares its edges with a copy gives up the ownership of
+     * them: the first mutation takes a private copy, and the copy keeps the
+     * edges it was made with.
+     */
+    private var ownsEdges: Boolean = true
 
     /** Lazy index of edges grouped by source state; null when invalidated by a mutation. */
     private var bySource: Map<State, List<TransitionEdge>>? = null
+
+    /** Lazy index of edges by identifier; null when invalidated by a mutation. */
+    private var byId: Map<Int, TransitionEdge>? = null
 
     /** Cached structural fingerprint of the edges; null when invalidated by a mutation. */
     private var digest: Long? = null
@@ -52,6 +69,38 @@ class TransitionMapping {
         return edges.groupBy { it.source }.also { bySource = it }
     }
 
+    /** Returns (building if needed) the index of edges by identifier. */
+    private fun idIndex(): Map<Int, TransitionEdge> {
+        byId?.let { return it }
+        val index = mutableMapOf<Int, TransitionEdge>()
+        edges.forEach { index[it.id] = it }
+        return index.also { byId = it }
+    }
+
+    /**
+     * Returns the edges of the mapping, for mutation.
+     *
+     * The mapping owns its edges unless it shares them with a copy. A shared
+     * set is never mutated in place: the first mutation takes a private copy,
+     * so that the copy keeps the edges it was made with.
+     */
+    private fun mutableEdges(): MutableSet<TransitionEdge> {
+        if (ownsEdges) return edges
+        edges = edges.toMutableSet()
+        ownsEdges = true
+        return edges
+    }
+
+    /**
+     * Gives up the exclusive ownership of the edges.
+     *
+     * The mapping keeps the edges it has, but the next mutation copies them
+     * first. This is what makes it safe to hand the edges to a copy.
+     */
+    internal fun shareEdges() {
+        ownsEdges = false
+    }
+
     /**
      * Adds a transition to the mapping.
      *
@@ -60,7 +109,7 @@ class TransitionMapping {
      * never see a phantom mutation.
      */
     fun add(t: TransitionEdge) {
-        if (!edges.add(t)) return
+        if (!mutableEdges().add(t)) return
         invalidate()
         onEdgeAdded(t)
     }
@@ -68,13 +117,15 @@ class TransitionMapping {
     /**
      * Returns all transitions in the mapping.
      *
-     * The set is live: it reflects the mapping as it is, and mutating it
-     * mutates the mapping.
+     * The collection is a live view: it reflects the mapping as it is. Mutate
+     * the mapping through [add], [removeFromIdentifier] and [clear] instead:
+     * mutating the view directly bypasses the bookkeeping the mapping keeps,
+     * and it may disturb a copy that shares the edges.
      */
     val transitions: Set<TransitionEdge> get() = edges
 
     /** Checks whether a transition with the given ID exists. */
-    fun contains(id: Int): Boolean = edges.any { it.id == id }
+    fun contains(id: Int): Boolean = idIndex()[id] != null
 
     /** The number of transitions in the mapping. */
     val size: Int get() = edges.size
@@ -131,6 +182,7 @@ class TransitionMapping {
     /** Drops the cached index and fingerprint after a mutation. */
     private fun invalidate() {
         bySource = null
+        byId = null
         digest = null
     }
 
@@ -141,11 +193,10 @@ class TransitionMapping {
      * the topology channel always balances the number of edges removed.
      */
     fun removeFromIdentifier(id: Int) {
-        val removed = edges.filter { it.id == id }
-        if (removed.isEmpty()) return
-        removed.forEach { edges.remove(it) }
+        val removed = idIndex()[id] ?: return
+        mutableEdges().remove(removed)
         invalidate()
-        removed.forEach { onEdgeRemoved(it) }
+        onEdgeRemoved(removed)
     }
 
     /**
@@ -155,7 +206,7 @@ class TransitionMapping {
      * because the edges were never observed as leaving one by one.
      */
     fun clear() {
-        edges.clear()
+        mutableEdges().clear()
         invalidate()
     }
 
@@ -165,6 +216,10 @@ class TransitionMapping {
      * The callbacks are carried over, so the copy keeps reporting to the same
      * observers. Copying the edges fires no event: they were duplicated, not
      * added.
+     *
+     * Every copy of an edge receives a fresh identifier, so the copy holds
+     * edges of its own. The engine does not use this method: it uses
+     * [isolatedCopy], which is cheaper and keeps the identifiers.
      */
     fun copy(): TransitionMapping {
         val m = TransitionMapping()
@@ -176,9 +231,37 @@ class TransitionMapping {
         return m
     }
 
+    /**
+     * Creates a copy of this mapping that shares the edges with it.
+     *
+     * The copy is isolated from the original in the only way that matters: a
+     * mutation on either side is invisible to the other. The isolation is
+     * lazy — the two mappings hold the same edges until one of them is
+     * mutated, and the copy then takes a private set of its own.
+     *
+     * The edges themselves are shared, not duplicated. An edge is immutable,
+     * and its identifier is unique across the whole process, so the copy can
+     * refer to an edge by its identifier without ambiguity.
+     *
+     * @return a copy of this mapping, sharing its edges
+     */
+    internal fun isolatedCopy(): TransitionMapping {
+        val m = TransitionMapping()
+        m.edges = edges
+        m.ownsEdges = false
+        m.bySource = bySource
+        m.byId = byId
+        m.digest = digest
+        m.onEdgeAdded = onEdgeAdded
+        m.onEdgeRemoved = onEdgeRemoved
+        m.onOperation = onOperation
+        m.onObservation = onObservation
+        return m
+    }
+
     /** Returns a human-readable representation of this mapping. */
     override fun toString(): String {
-        val sb = StringBuilder("Set of transitions: {")
+        val sb = StringBuilder("Transitions: {")
         if (edges.isNotEmpty()) {
             sb.append("\n")
             for (t in edges) {

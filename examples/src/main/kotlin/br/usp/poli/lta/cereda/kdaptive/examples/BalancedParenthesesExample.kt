@@ -8,7 +8,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
+import br.usp.poli.lta.cereda.kdaptive.model.actionRef
 
 /**
  * Example: recognises balanced parentheses over `{ (, ) }` using submachine

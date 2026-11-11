@@ -6,6 +6,7 @@ dokka = "2.3.0"
 kover = "0.9.11"
 spotless = "8.10.4"
 slf4j = "2.0.16"
+binaryCompatibilityValidator = "0.18.2"
 
 [libraries]
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
@@ -18,3 +19,4 @@ dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
 kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 tapmoc = { id = "com.gradleup.tapmoc", version = "0.5.0" }
+binaryCompatibilityValidator = { id = "org.jetbrains.kotlinx.binary-compatibility-validator", version.ref = "binaryCompatibilityValidator" }

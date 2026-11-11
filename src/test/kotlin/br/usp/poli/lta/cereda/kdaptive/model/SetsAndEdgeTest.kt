@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
+import br.usp.poli.lta.cereda.kdaptive.execution.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -29,7 +28,7 @@ private data class Letter(val value: Char) : Symbol() {
 
 /**
  * Coverage tests for the small structural pieces: [Stack], [TransitionEdge],
- * [RecognitionPath], [IdentifierUtils], the three collections' `toString()` and CRUD
+ * [RecognitionPath], [Identifiers], the three collections' `toString()` and CRUD
  * paths, and the remaining [TransitionMapping] filters.
  */
 class SetsAndEdgeTest {
@@ -37,7 +36,7 @@ class SetsAndEdgeTest {
 
     @BeforeEach
     fun resetIds() {
-        IdentifierUtils.reset()
+        Identifiers.reset()
     }
 
     // -----------------------------------------------------------------------
@@ -113,7 +112,7 @@ class SetsAndEdgeTest {
     @Test
     fun `mapping toString and remaining filters`() {
         val mapping = TransitionMapping()
-        assertEquals("Set of transitions: {}", mapping.toString())
+        assertEquals("Transitions: {}", mapping.toString())
 
         val t1 =
             TransitionEdge(
@@ -209,9 +208,9 @@ class SetsAndEdgeTest {
     // -----------------------------------------------------------------------
     @Test
     fun `identifier counters are per key and monotonic`() {
-        val first = IdentifierUtils.nextTransitionId()
-        val second = IdentifierUtils.nextTransitionId()
-        val pathId = IdentifierUtils.nextRecognitionPathId()
+        val first = Identifiers.nextTransitionId()
+        val second = Identifiers.nextTransitionId()
+        val pathId = Identifiers.nextRecognitionPathId()
         assertEquals(second, first + 1)
         assertEquals(1, pathId)
     }
@@ -228,9 +227,9 @@ class SetsAndEdgeTest {
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
             )
         val path = RecognitionPath(state = q0)
-        assertEquals(emptyList<TransitionEdge>(), path.path)
+        assertEquals(emptyList<TransitionEdge>(), path.trail)
         val next = path.addStep(step).addStep(step)
-        assertEquals(listOf(step, step), next.path)
+        assertEquals(listOf(step, step), next.trail)
         assertTrue(next.toString().contains("q0"))
     }
 }

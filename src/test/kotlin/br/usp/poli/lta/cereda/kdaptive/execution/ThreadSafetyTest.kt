@@ -2,12 +2,11 @@
 package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
+import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
-import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -125,7 +124,7 @@ class ThreadSafetyTest {
             (0 until threads).map { index ->
                 thread {
                     gate.await()
-                    repeat(perThread) { collected[index].add(IdentifierUtils.nextRecognitionPathId()) }
+                    repeat(perThread) { collected[index].add(Identifiers.nextRecognitionPathId()) }
                 }
             }
         gate.open()
@@ -149,14 +148,14 @@ class ThreadSafetyTest {
                     seen.add("start")
                     automaton.visitors.add(
                         object : ExecutionVisitor {
-                            override fun onRecognizeEnd(result: Boolean) {
+                            override fun onRecognizeEnd(result: RecognitionResult) {
                                 seen.add("late-end")
                             }
                         },
                     )
                 }
 
-                override fun onRecognizeEnd(result: Boolean) {
+                override fun onRecognizeEnd(result: RecognitionResult) {
                     seen.add("end")
                 }
             },
