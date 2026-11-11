@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model.sets
 
+import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
@@ -24,19 +25,19 @@ class TransitionMapping {
     private var bySource: Map<State, List<TransitionEdge>>? = null
 
     /** Callback invoked after a transition edge is added to this mapping. */
-    var onEdgeAdded: ((TransitionEdge) -> Unit)? = null
+    var onEdgeAdded: (TransitionEdge) -> Unit = {}
 
     /** Callback invoked after a transition edge is removed from this mapping. */
-    var onEdgeRemoved: ((TransitionEdge) -> Unit)? = null
+    var onEdgeRemoved: (TransitionEdge) -> Unit = {}
 
     /** Callback invoked after an elementary operation is performed on this mapping. */
-    var onOperation: ((MappingOperation) -> Unit)? = null
+    var onOperation: (MappingOperation) -> Unit = {}
 
     /** Callback invoked when instrumentation-aware code publishes a fact about this mapping. */
-    var onObservation: ((Observation) -> Unit)? = null
+    var onObservation: (Observation) -> Unit = {}
 
     /**
-     * Publishes a fact to the [onObservation] callback, if one is registered.
+     * Publishes a fact to the [onObservation] callback.
      *
      * This is the channel through which action code reports what it computed
      * and what the engine cannot observe on its own. Publishing a fact never
@@ -45,7 +46,7 @@ class TransitionMapping {
      * @param observation the fact to publish
      */
     fun observe(observation: Observation) {
-        onObservation?.invoke(observation)
+        onObservation(observation)
     }
 
     /** Returns (building if needed) the index of transitions grouped by source state. */
@@ -64,7 +65,7 @@ class TransitionMapping {
     fun add(t: TransitionEdge) {
         if (!transitions.add(t)) return
         bySource = null
-        onEdgeAdded?.invoke(t)
+        onEdgeAdded(t)
     }
 
     /**
@@ -139,13 +140,13 @@ class TransitionMapping {
     /** Returns transitions whose prior action name equals [name]. */
     fun withPriorAction(name: String): List<TransitionEdge> = transitions
         .asSequence()
-        .filter { it.prior?.name == name }
+        .filter { (it.prior as? ActionRef.Bound)?.name == name }
         .toList()
 
     /** Returns transitions whose post action name equals [name]. */
     fun withPostAction(name: String): List<TransitionEdge> = transitions
         .asSequence()
-        .filter { it.post?.name == name }
+        .filter { (it.post as? ActionRef.Bound)?.name == name }
         .toList()
 
     /** Returns all epsilon transitions. */
@@ -187,7 +188,7 @@ class TransitionMapping {
         if (removed.isEmpty()) return
         removed.forEach { transitions.remove(it) }
         bySource = null
-        removed.forEach { onEdgeRemoved?.invoke(it) }
+        removed.forEach { onEdgeRemoved(it) }
     }
 
     /**

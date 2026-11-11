@@ -12,6 +12,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -158,11 +159,11 @@ class PathExecutor(
         // callbacks are chained, not replaced: they still fire, once per
         // event.
         config.transitions.onEdgeAdded = { edge ->
-            consumerOnEdgeAdded?.invoke(edge)
+            consumerOnEdgeAdded(edge)
             observers.forEach { it.onEdgeAdded(id, edge, config.transitions, config.submachines) }
         }
         config.transitions.onEdgeRemoved = { edge ->
-            consumerOnEdgeRemoved?.invoke(edge)
+            consumerOnEdgeRemoved(edge)
             observers.forEach { it.onEdgeRemoved(id, edge, config.transitions, config.submachines) }
         }
 
@@ -170,14 +171,14 @@ class PathExecutor(
         // operations performed on this path's mapping, including the reads
         // that change nothing and would otherwise be invisible.
         config.transitions.onOperation = { operation ->
-            consumerOnOperation?.invoke(operation)
+            consumerOnOperation(operation)
             observers.forEach { it.onMappingOperation(id, operation) }
         }
 
         // Wire the fact channel, so visitors observe what action code
         // publishes about this path.
         config.transitions.onObservation = { observation ->
-            consumerOnObservation?.invoke(observation)
+            consumerOnObservation(observation)
             observers.forEach { it.onObservation(id, observation) }
         }
 
@@ -234,9 +235,9 @@ class PathExecutor(
     /** Applies a prior action if present and enabled. Returns the next transition
      * edge to process, or PathStep.Stop if the path terminated. */
     private fun applyPriorAction(tr: TransitionEdge): PathStep {
-        if (tr.prior == null || !config.enablePriorAction) return PathStep.Continue(tr)
-
         val ref = tr.prior
+        if (ref !is ActionRef.Bound || !config.enablePriorAction) return PathStep.Continue(tr)
+
         observers.forEach { it.onBeforeAction(id, ref, isPrior = true) }
 
         logger.debug("[Path $id] Executing prior action ${ref.name} on transition ${tr.id}.")
@@ -315,7 +316,8 @@ class PathExecutor(
 
     /** Executes the post action after the transition has been applied. */
     private fun executePostAction(tr: TransitionEdge) {
-        val ref = tr.post ?: return
+        val ref = tr.post
+        if (ref !is ActionRef.Bound) return
         observers.forEach { it.onBeforeAction(id, ref, isPrior = false) }
 
         logger.debug("[Path $id] Executing post action ${ref.name} on transition ${tr.id}.")
@@ -466,14 +468,14 @@ class PathExecutor(
     }
 
     private fun accept(state: State?, cursor: Int) {
-        paths[id] = paths[id]?.copy(result = true, cursor = cursor, state = state)
-            ?: RecognitionPath(id = id, result = true, cursor = cursor, state = state)
+        paths[id] = paths[id]?.copy(outcome = PathOutcome.ACCEPTED, cursor = cursor, state = state)
+            ?: RecognitionPath(id = id, outcome = PathOutcome.ACCEPTED, cursor = cursor, state = state)
         logger.debug("[Path $id] String accepted.")
     }
 
     private fun reject(state: State?, cursor: Int) {
-        paths[id] = paths[id]?.copy(result = false, cursor = cursor, state = state)
-            ?: RecognitionPath(id = id, result = false, cursor = cursor, state = state)
+        paths[id] = paths[id]?.copy(outcome = PathOutcome.REJECTED, cursor = cursor, state = state)
+            ?: RecognitionPath(id = id, outcome = PathOutcome.REJECTED, cursor = cursor, state = state)
         logger.debug("[Path $id] String rejected.")
     }
 }

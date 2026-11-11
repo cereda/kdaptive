@@ -58,7 +58,7 @@ class DslGapsTest {
         val edge = spec.transitions.single()
         assertEquals("q0", edge.source.toString())
         assertEquals("q1", edge.target.toString())
-        assertEquals("X", edge.post?.name)
+        assertEquals("X", (edge.post as ActionRef.Bound).name)
     }
 
     @Test

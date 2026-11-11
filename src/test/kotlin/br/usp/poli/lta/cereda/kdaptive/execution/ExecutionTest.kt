@@ -3,6 +3,7 @@ package br.usp.poli.lta.cereda.kdaptive.execution
 
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
@@ -56,6 +57,6 @@ class ExecutionTest {
         aa.recognize(aa.symbols('a', 'a'))
         val paths = aa.getRecognitionPaths()
         assertTrue(paths.isNotEmpty())
-        assertTrue(paths.any { it.done && it.result == true })
+        assertTrue(paths.any { it.outcome == PathOutcome.ACCEPTED })
     }
 }

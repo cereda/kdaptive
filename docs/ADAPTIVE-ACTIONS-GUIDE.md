@@ -206,14 +206,17 @@ Each family offers **one method per operation**, and every filter carries a defa
 
 ### 4.0 The marker doctrine: a wildcard is a value
 
-No filter is a `null`. The only exception is the `submachine` filter of the call family,
-where `null` means "any call". Everywhere else, a wildcard is a value in its own right:
+**No filter is a `null`, and no value is a `null` either.** A wildcard is a value in its
+own right:
 
 | Marker | Selects |
 |---|---|
 | `State.Any` | any state |
 | `Symbol.Any` | any **symbol-consuming** transition |
 | `Symbol.Epsilon` | an **epsilon** transition (the empty word) |
+| `SubmachineRef.Any` | any **submachine-call** transition |
+| `SubmachineRef.Named("M")` | the calls to the submachine "M" |
+| `SubmachineRef.None` | the filter **does not apply** — the pattern belongs to another family |
 | `ActionRef.Free` | the action slot is unconstrained: the edge may or may not carry an action there |
 | `ActionRef.Any` | the slot must carry **some** action, whatever its name and arguments |
 | `ActionRef.None` | the slot must carry **no** action at all |
@@ -225,18 +228,28 @@ automaton models it as a distinct transition kind (`Transition.Epsilon`). `Symbo
 exists so that a pattern can name those transitions explicitly, instead of overloading a
 null symbol.
 
-> **Note**: an edge fires one concrete action, so an edge carries an `ActionRef.Bound` —
-> the filter cases never appear on an edge. The two roles never disagree:
+The same doctrine holds for the **values** the model carries: the action slots of an
+edge hold an `ActionRef` — `ActionRef.None` for the empty slot — and never a `null`.
+
+> **Note**: an edge fires one concrete action, so an edge carries an `ActionRef.Bound` or
+> the empty slot `ActionRef.None`; the filter cases (`Free`, `Any`, `Named`) are rejected
+> when an edge is built. The two roles never disagree:
 > `Bound("A", x)` means the same thing on an edge and in a filter.
 
-### 4.0.1 Domains: naming several states or symbols at once
+> **Changed in 3.0.0**: the `submachine` filter used to be a nullable `String`, where
+> `null` meant "any call" in the call family and "not applicable" in the others — two
+> readings of one spelling. It is now a `SubmachineRef`, and the family of a pattern is
+> **derived** from its filters, so a pattern can never contradict itself.
 
-A wildcard says "any". A **domain** says "any of *these*": a set of states or symbols
-built with `State.anyOf` and `Symbol.anyOf`.
+### 4.0.1 Domains: naming several states, symbols or submachines at once
+
+A wildcard says "any". A **domain** says "any of *these*": a set of states, symbols or
+submachines built with `State.anyOf`, `Symbol.anyOf` and `SubmachineRef.anyOf`.
 
 ```kotlin
 val left = State.anyOf(q0, q1)                    // a set of states
 val vowels = Symbol.anyOf(CharSymbol('a'), CharSymbol('e'))  // a set of symbols
+val pair = SubmachineRef.anyOf("M", "N")          // a set of submachines
 ```
 
 A domain is a **filter marker**, like `State.Any`: it never belongs to the state set of
@@ -244,7 +257,7 @@ an automaton, and it is rejected wherever a concrete state is required.
 
 | Rule | Consequence |
 |---|---|
-| a domain matches an edge when the edge's endpoint (or consumed symbol) is one of its members | a filter over a domain is a *union* of the members |
+| a domain matches an edge when the edge's endpoint (or consumed symbol, or called submachine) is one of its members | a filter over a domain is a *union* of the members |
 | a domain may name `Symbol.Epsilon` among its members | the filter then selects the epsilon edges **and** the symbol-consuming ones |
 | a domain may **not** contain `State.Any`, `Symbol.Any`, or another domain | a domain names finitely many concrete values |
 | a domain may **not** be empty | an empty domain would match nothing, which is what "no filter" is for |
@@ -255,6 +268,9 @@ per combination — and reports **one operation per edge inserted**:
 ```kotlin
 ea.add(State.anyOf(q0, q1), CharSymbol('a'), State.anyOf(p0, p1))
 // four edges: q0 -a-> p0, q0 -a-> p1, q1 -a-> p0, q1 -a-> p1
+
+ea.addCall(State.anyOf(q0, q1), SubmachineRef.anyOf("M", "N"), p0)
+// four edges: one per (state, submachine) combination
 ```
 
 > **Pitfall**: a domain that names `Symbol.Epsilon` inserts an epsilon edge for that
@@ -287,8 +303,8 @@ fun add(
     source: State,
     symbol: Symbol,
     target: State,
-    prior: ActionRef.Bound? = null,
-    post: ActionRef.Bound? = null,
+    prior: ActionRef = ActionRef.None,
+    post: ActionRef = ActionRef.None,
 )
 ```
 
@@ -322,13 +338,14 @@ transitions consuming any of its members — epsilon included, when the domain n
 
 ### 4.2 Call family
 
-Submachine-call edges have their own family. A `null` `submachine` matches any call
-edge; a given name matches only the calls to that submachine.
+Submachine-call edges have their own family. The `submachine` filter is a
+`SubmachineRef`: `Any` matches any call edge, a `Named` matches only the calls to that
+submachine, and a `Domain` matches the calls to any submachine it names.
 
 ```kotlin
 fun queryCall(
     source: State = State.Any,
-    submachine: String? = null,
+    submachine: SubmachineRef = SubmachineRef.Any,
     target: State = State.Any,
     prior: ActionRef = ActionRef.Free,
     post: ActionRef = ActionRef.Free,
@@ -336,7 +353,7 @@ fun queryCall(
 
 fun removeCall(
     source: State = State.Any,
-    submachine: String? = null,
+    submachine: SubmachineRef = SubmachineRef.Any,
     target: State = State.Any,
     prior: ActionRef = ActionRef.Free,
     post: ActionRef = ActionRef.Free,
@@ -344,10 +361,10 @@ fun removeCall(
 
 fun addCall(
     source: State,
-    submachine: String,
+    submachine: SubmachineRef,
     target: State,
-    prior: ActionRef.Bound? = null,
-    post: ActionRef.Bound? = null,
+    prior: ActionRef = ActionRef.None,
+    post: ActionRef = ActionRef.None,
 )
 ```
 
@@ -355,11 +372,16 @@ or, using the builder block:
 
 ```kotlin
 val results = ea.queryCall {
-    submachine = "M"
+    submachine = SubmachineRef.Named("M")
     target = p2
     prior = ActionRef.Named("A")
 }
 ```
+
+`SubmachineRef.None` means "the filter does not apply", so it is **rejected** by the
+call family: a call operation always has a submachine filter. `addCall` rejects
+`SubmachineRef.Any` as well — an addition names what it adds — and accepts a
+`SubmachineRef.Domain`, adding one edge per submachine of the domain.
 
 > **Note**: `queryCall` is a separate method, not an overload of `query`. The two
 > families used to share the name `query`, which made `ea.query(null, null, null)`
@@ -404,7 +426,7 @@ ea.remove {
 }
 
 ea.removeCall {
-    submachine = "M"
+    submachine = SubmachineRef.Named("M")
 }
 ```
 
@@ -419,16 +441,16 @@ fun add(
     source: State,
     symbol: Symbol,
     target: State,
-    prior: ActionRef.Bound? = null,
-    post: ActionRef.Bound? = null,
+    prior: ActionRef = ActionRef.None,
+    post: ActionRef = ActionRef.None,
 )
 
 fun addCall(
     source: State,
-    submachine: String,
+    submachine: SubmachineRef,
     target: State,
-    prior: ActionRef.Bound? = null,
-    post: ActionRef.Bound? = null,
+    prior: ActionRef = ActionRef.None,
+    post: ActionRef = ActionRef.None,
 )
 ```
 
@@ -439,18 +461,19 @@ the post action, symmetrically with the removals:
 ```kotlin
 ea.add(p0, CharSymbol('a'), p1, prior = actionRef("A"), post = actionRef("B"))
 ea.add(p0, Symbol.Epsilon, p1)
-ea.addCall(p0, "M", p1, prior = actionRef("A"))
+ea.addCall(p0, SubmachineRef.Named("M"), p1, prior = actionRef("A"))
 ```
 
 The wildcards are rejected where a concrete value is required: `add` refuses
-`State.Any` and `Symbol.Any`, and `addCall` refuses `State.Any`. **Domains are
-accepted**: they expand into the concrete values they name, and the addition produces
-the Cartesian product of its domains, one edge — and one reported operation — per
-combination.
+`State.Any` and `Symbol.Any`, and `addCall` refuses `State.Any` and the submachine
+wildcards `SubmachineRef.Any` and `SubmachineRef.None`. **Domains are accepted**: they
+expand into the concrete values they name, and the addition produces the Cartesian
+product of its domains, one edge — and one reported operation — per combination.
 
 ```kotlin
 ea.add(State.anyOf(p0, p1), CharSymbol('a'), State.anyOf(q0, q1))  // four edges
-ea.addCall(State.anyOf(p0, p1), "M", q0)                           // two edges
+ea.addCall(State.anyOf(p0, p1), SubmachineRef.Named("M"), q0)      // two edges
+ea.addCall(p0, SubmachineRef.anyOf("M", "N"), q0)                  // two edges
 ```
 
 > **Pitfall**: an epsilon self-loop makes the query-for-next-step loop forever (see the
@@ -483,7 +506,7 @@ isEpsilon, isOrdinary, isSymbolConsumption, isSubmachineCall, isSubmachineReturn
 hasPriorAction, hasPostAction
 
 // field matchers (value equality)
-sourceState(s), targetState(t), symbol(sym), submachineCall(name)
+sourceState(s), targetState(t), symbol(sym), submachineCall(name), submachineCallIn(names)
 ```
 
 And `TransitionMapping` exposes the same idea ready-made:
@@ -783,9 +806,9 @@ Changing the cost model means changing `CostVisitor` and nothing else.
    come **last**, after the transition filters, and there is a single spelling of each
    call — no overload can ever be ambiguous.
 9. **A wildcard filter is a value, not a null** (§4.0): `State.Any`, `Symbol.Any`,
-   `Symbol.Epsilon`, `ActionRef.Free`. An over-broad pattern (e.g. all wildcards) removes
-   MORE than you intended, including edges you didn't mean to touch. Compose the
-   narrowest filter that expresses the intent.
+   `Symbol.Epsilon`, `SubmachineRef.Any`, `ActionRef.Free`. An over-broad pattern (e.g.
+   all wildcards) removes MORE than you intended, including edges you didn't mean to
+   touch. Compose the narrowest filter that expresses the intent.
 10. **Ids are engine-internal counters** (`IdentifierUtils`); never fabricate them, and
     they reset per-process (see `IdentifierUtils.reset()` for tests).
 11. **`recognize()` runs `setup()` on a clone**, so setup-side effects repeat per call.

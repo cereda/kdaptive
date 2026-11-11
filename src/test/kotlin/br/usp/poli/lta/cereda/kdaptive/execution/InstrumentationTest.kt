@@ -8,6 +8,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
@@ -146,7 +147,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).queryCall(State.Any, null, State.Any)
+        ElementaryActions(m).queryCall(State.Any, SubmachineRef.Any, State.Any)
 
         val query = operations.single() as MappingOperation.Query
         assertEquals(TransitionPatternKind.SUBMACHINE, query.pattern.kind)

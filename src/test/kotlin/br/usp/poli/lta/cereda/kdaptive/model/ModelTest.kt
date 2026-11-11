@@ -6,6 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
 import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -130,8 +131,9 @@ class ModelTest {
     fun `recognition path done flag`() {
         val rp = RecognitionPath()
         assertFalse(rp.done)
-        val rp2 = rp.copy(result = true)
+        val rp2 = rp.copy(outcome = PathOutcome.ACCEPTED)
         assertTrue(rp2.done)
+        assertEquals(PathOutcome.ACCEPTED, rp2.outcome)
     }
 
     @Test

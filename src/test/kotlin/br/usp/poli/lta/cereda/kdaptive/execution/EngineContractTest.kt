@@ -11,6 +11,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -259,9 +260,9 @@ class EngineContractTest {
         assertEquals(2, symbols.map { it.first }.toSet().size)
 
         // One child ends in an accepting state, the other does not.
-        val verdicts = aa.getRecognitionPaths().map { it.result }
-        assertEquals(1, verdicts.count { it == true })
-        assertEquals(1, verdicts.count { it == false })
+        val verdicts = aa.getRecognitionPaths().map { it.outcome }
+        assertEquals(1, verdicts.count { it == PathOutcome.ACCEPTED })
+        assertEquals(1, verdicts.count { it == PathOutcome.REJECTED })
     }
 
     @Test

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
@@ -119,11 +120,11 @@ class ElementaryActionsMatrixTest {
         val ea = ElementaryActions(mapping())
 
         // With a null submachine filter the family is still call-kind-limited.
-        assertEquals(1, ea.queryCall(source = State.Any, submachine = null, target = State.Any).size)
-        assertEquals(1, ea.queryCall(source = State.Any, submachine = null, target = S2).size)
-        assertEquals(1, ea.queryCall(S1, "M", State.Any).size)
-        assertEquals(0, ea.queryCall(S1, "N", State.Any).size)
-        assertEquals(0, ea.queryCall(S0, "M", State.Any).size)
+        assertEquals(1, ea.queryCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any).size)
+        assertEquals(1, ea.queryCall(source = State.Any, submachine = SubmachineRef.Any, target = S2).size)
+        assertEquals(1, ea.queryCall(S1, SubmachineRef.Named("M"), State.Any).size)
+        assertEquals(0, ea.queryCall(S1, SubmachineRef.Named("N"), State.Any).size)
+        assertEquals(0, ea.queryCall(S0, SubmachineRef.Named("M"), State.Any).size)
     }
 
     @Test
@@ -161,24 +162,32 @@ class ElementaryActionsMatrixTest {
 
         // The call family only sees the call edge: priors attached to symbol
         // edges (PA, PA2) are never returned by these queries.
-        assertTrue(ea.queryCall(State.Any, null, State.Any, ActionRef.Named("PA")).isEmpty())
-        assertTrue(ea.queryCall(State.Any, null, State.Any, ActionRef.Named("PA2")).isEmpty())
-        assertTrue(ea.queryCall(State.Any, "M", State.Any, ActionRef.Free, ActionRef.Named("PB")).isNotEmpty())
+        assertTrue(ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Named("PA")).isEmpty())
+        assertTrue(ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Named("PA2")).isEmpty())
+        assertTrue(
+            ea.queryCall(
+                State.Any,
+                SubmachineRef.Named("M"),
+                State.Any,
+                ActionRef.Free,
+                ActionRef.Named("PB"),
+            ).isNotEmpty(),
+        )
 
         // Zero-argument prior reference: name-only match on the call edge.
-        assertTrue(ea.queryCall(State.Any, null, State.Any, ActionRef.Named("PA3")).isNotEmpty())
-        assertEquals(1, ea.queryCall(State.Any, null, State.Any, actionRef("PA3")).size)
+        assertTrue(ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Named("PA3")).isNotEmpty())
+        assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, actionRef("PA3")).size)
 
         // Argument list shape must match the reference's arity.
         assertTrue(
             ea.queryCall(
                 prior = actionRef("PA3", S1),
                 source = State.Any,
-                submachine = null,
+                submachine = SubmachineRef.Any,
                 target = State.Any,
             ).isEmpty(),
         )
-        assertTrue(ea.queryCall(State.Any, null, State.Any, actionRef("PA3", S1, S1)).isEmpty())
+        assertTrue(ea.queryCall(State.Any, SubmachineRef.Any, State.Any, actionRef("PA3", S1, S1)).isEmpty())
     }
 
     @Test
@@ -249,16 +258,16 @@ class ElementaryActionsMatrixTest {
     @Test
     fun `removeCall overload matrix`() {
         val m1 = mapping()
-        ElementaryActions(m1).removeCall(source = State.Any, submachine = null, target = State.Any)
+        ElementaryActions(m1).removeCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any)
         // Only the call edge leaves the mapping.
         assertEquals(3, m1.size())
 
         val m2 = mapping()
-        ElementaryActions(m2).removeCall(source = S1, submachine = "M", target = State.Any)
+        ElementaryActions(m2).removeCall(source = S1, submachine = SubmachineRef.Named("M"), target = State.Any)
         assertEquals(3, m2.size())
 
         val m3 = mapping()
-        ElementaryActions(m3).removeCall { submachine = "N" }
+        ElementaryActions(m3).removeCall { submachine = SubmachineRef.Named("N") }
         // No edge calls N: nothing is removed.
         assertEquals(4, m3.size())
     }
@@ -283,7 +292,7 @@ class ElementaryActionsMatrixTest {
         )
 
         // Call family, no action filter.
-        assertEquals(1, ea.queryCall { submachine = "M" }.size)
+        assertEquals(1, ea.queryCall { submachine = SubmachineRef.Named("M") }.size)
         // Call family, prior filter only.
         assertEquals(1, ea.queryCall { prior = ActionRef.Named("PA3") }.size)
         // Call family, post filter only.

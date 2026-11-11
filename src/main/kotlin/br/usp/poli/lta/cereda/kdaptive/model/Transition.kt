@@ -9,24 +9,17 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * - [Epsilon]: consumes no input (spontaneous transition)
  * - [Call]: calls a submachine, pushing the return state
  * - [Return]: returns from a submachine, popping the stack
+ *
+ * A transition carries its payload only: the endpoints of an edge belong to
+ * the edge, which is the only place they are needed.
  */
 sealed class Transition {
-    /** The source state of this transition, if any. */
-    abstract val sourceState: State?
-
-    /** The target state of this transition, if any. */
-    abstract val targetState: State?
-
     /**
      * A transition that consumes a symbol from the input.
      *
      * @param symbol the symbol consumed by this transition
      */
-    data class SymbolTransition(
-        val symbol: Symbol,
-        override val sourceState: State? = null,
-        override val targetState: State? = null,
-    ) : Transition() {
+    data class SymbolTransition(val symbol: Symbol) : Transition() {
         init {
             require(symbol !is SymbolDomain) {
                 "A symbol transition consumes a concrete symbol, not a domain."
@@ -35,23 +28,18 @@ sealed class Transition {
     }
 
     /** Consumes no input (spontaneous transition). */
-    object Epsilon : Transition() {
-        override val sourceState: State? = null
-        override val targetState: State? = null
-    }
+    object Epsilon : Transition()
 
-    /** Calls a submachine, pushing the return state. */
+    /**
+     * Calls a submachine, pushing the return state.
+     *
+     * @property submachine the name of the submachine being called
+     */
     data class Call(
         /** The name of the submachine being called. */
         val submachine: String,
-    ) : Transition() {
-        override val sourceState: State? = null
-        override val targetState: State? = null
-    }
+    ) : Transition()
 
     /** Returns from a submachine, popping the stack. */
-    object Return : Transition() {
-        override val sourceState: State? = null
-        override val targetState: State? = null
-    }
+    object Return : Transition()
 }

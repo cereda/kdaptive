@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -184,7 +185,7 @@ class DomainActionsTest {
         m.onOperation = { operations.add(it) }
         val ea = ElementaryActions(m)
 
-        ea.addCall(State.anyOf(D0, D1), "M", State.anyOf(D1, D2))
+        ea.addCall(State.anyOf(D0, D1), SubmachineRef.Named("M"), State.anyOf(D1, D2))
 
         assertEquals(4, m.size())
         assertEquals(4, operations.size)
@@ -241,7 +242,7 @@ class DomainActionsTest {
         m.onOperation = { operations.add(it) }
         val ea = ElementaryActions(m)
 
-        ea.queryCall(submachine = "M")
+        ea.queryCall(submachine = SubmachineRef.Named("M"))
         ea.queryCall()
 
         val named = (operations[0] as MappingOperation.Query).pattern

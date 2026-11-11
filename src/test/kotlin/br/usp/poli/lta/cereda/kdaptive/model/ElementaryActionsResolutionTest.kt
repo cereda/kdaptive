@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
@@ -81,9 +82,9 @@ class ElementaryActionsResolutionTest {
         assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Free, ActionRef.Free).size)
 
         // The call family has the same shape, under its own name.
-        assertEquals(1, ea.queryCall(State.Any, null, State.Any).size)
-        assertEquals(1, ea.queryCall(State.Any, null, State.Any, ActionRef.Free).size)
-        assertEquals(1, ea.queryCall(State.Any, null, State.Any, ActionRef.Free, ActionRef.Free).size)
+        assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any).size)
+        assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Free).size)
+        assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Free, ActionRef.Free).size)
     }
 
     @Test
@@ -108,11 +109,16 @@ class ElementaryActionsResolutionTest {
 
         assertEquals(
             1,
-            ea.queryCall(source = State.Any, submachine = null, target = State.Any).size,
+            ea.queryCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any).size,
         )
         assertEquals(
             1,
-            ea.queryCall(prior = ActionRef.Free, source = State.Any, submachine = null, target = State.Any).size,
+            ea.queryCall(
+                prior = ActionRef.Free,
+                source = State.Any,
+                submachine = SubmachineRef.Any,
+                target = State.Any,
+            ).size,
         )
         assertEquals(
             1,
@@ -120,7 +126,7 @@ class ElementaryActionsResolutionTest {
                 post = ActionRef.Free,
                 prior = ActionRef.Free,
                 source = State.Any,
-                submachine = null,
+                submachine = SubmachineRef.Any,
                 target = State.Any,
             ).size,
         )
@@ -163,11 +169,11 @@ class ElementaryActionsResolutionTest {
     @Test
     fun `every removeCall arity resolves positionally and by named argument`() {
         val positional = mapping()
-        ElementaryActions(positional).removeCall(State.Any, null, State.Any)
+        ElementaryActions(positional).removeCall(State.Any, SubmachineRef.Any, State.Any)
         assertEquals(3, positional.size())
 
         val named = mapping()
-        ElementaryActions(named).removeCall(source = State.Any, submachine = null, target = State.Any)
+        ElementaryActions(named).removeCall(source = State.Any, submachine = SubmachineRef.Any, target = State.Any)
         assertEquals(3, named.size())
     }
 
@@ -197,6 +203,6 @@ class ElementaryActionsResolutionTest {
 
         // A reference that matches nothing narrows the result down.
         assertTrue(ea.query(State.Any, Symbol.Any, State.Any, actionRef("nope")).isEmpty())
-        assertTrue(ea.queryCall(State.Any, null, State.Any, actionRef("nope")).isEmpty())
+        assertTrue(ea.queryCall(State.Any, SubmachineRef.Any, State.Any, actionRef("nope")).isEmpty())
     }
 }

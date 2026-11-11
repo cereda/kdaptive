@@ -92,9 +92,9 @@ What `setup()` may use:
 |---|---|
 | `mainSubmachine = "..."` | sets the main submachine (**must** be set, `recognize` fails fast otherwise) |
 | `submachines.add(Submachine(...))` | registers a submachine |
-| `consume(from, symbol, to, prior = null, post = null)` | adds a symbol edge (symbol as `Char` or `Symbol`) |
-| `epsilon(from, to, prior = null, post = null)` | adds an epsilon edge |
-| `call(from, "Name", to, prior = null, post = null)` | adds a submachine-call edge |
+| `consume(from, symbol, to, prior = ActionRef.None, post = ActionRef.None)` | adds a symbol edge (symbol as `Char` or `Symbol`) |
+| `epsilon(from, to, prior = ActionRef.None, post = ActionRef.None)` | adds an epsilon edge |
+| `call(from, "Name", to, prior = ActionRef.None, post = ActionRef.None)` | adds a submachine-call edge |
 | `from(source) { ... }` | groups several edges sharing a source state |
 | `actions.add(Action(name) { ... })` | registers an adaptive action |
 
@@ -314,7 +314,7 @@ val spec = automaton {
   extension is `this on "q0"`, so it only exists inside the builder block).
 - `stepSource.on('a')` attaches the expected symbol: a raw `Char`, a `Symbol`, anything
   resolvable as a symbol.
-- `step.to(target, prior = null, post = null)` completes the edge. Only this call turns
+- `step.to(target, prior = ActionRef.None, post = ActionRef.None)` completes the edge. Only this call turns
   the accumulated pieces into a real edge; a chain that never reaches `.to` declares
   nothing at all, so double-check you did not lose an edge by mistake.
 - The plain `consume` / `epsilon` / `call` calls remain the always-available option;

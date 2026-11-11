@@ -306,10 +306,10 @@ sealed interface MappingOperation {
 The `pattern` says what was *asked for*, not what was found. Its filters are documented
 per family: `TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON`,
 `TransitionPatternKind.MIXED` and `TransitionPatternKind.SUBMACHINE` give the same filter
-different meanings, which is why the kind is part of the pattern. Every filter is an
-explicit value — a wildcard is `State.Any`, `Symbol.Any` or `ActionRef.Free`, never a
-null; the only null left is the `submachine` filter of the call family, where it means
-"any call".
+different meanings, which is why the pattern reports a **kind**. The kind is *derived*
+from the filters, so a pattern can never contradict itself. Every filter is an explicit
+value — a wildcard is `State.Any`, `Symbol.Any`, `SubmachineRef.Any` or
+`ActionRef.Free`, never a null.
 
 The pattern also reports **how many values each filter may select**:
 `sourceDomainSize`, `symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`,
@@ -370,13 +370,14 @@ Changing that cost model means changing `CostVisitor` and nothing else.
 | `Symbol` / `CharSymbol` | Input alphabet. `CharSymbol('a')` is the bread-and-butter symbol; subclass `Symbol()` for richer tokens (lexer-like recognizers). |
 | `State` | Abstract base. Subclass with value-based `equals`/`hashCode` (see `ExampleState`); transitions compare states by equality. |
 | `StateDomain` / `SymbolDomain` | The set-valued filters built by `State.anyOf(...)` and `Symbol.anyOf(...)`: a domain names several states or symbols at once, and an addition over domains produces their Cartesian product. |
+| `SubmachineRef` | The filter over the called submachine: `Any` (any call), `Named("M")`, `Domain` (`SubmachineRef.anyOf("M", "N")`) or `None` (the filter does not apply). It also names the submachines an addition calls. |
 | `Transition` (sealed) | Exactly one of `SymbolTransition`, `Epsilon`, `Call`, `Return`. |
-| `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and optional prior/post `ActionRef.Bound`s. |
+| `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and the prior/post action slots — an `ActionRef.Bound` or the empty slot `ActionRef.None`. |
 | `Submachine` | A named automaton fragment with its own initial/accepting states; called via `call(...)` and returning via a synthetic return transition. |
-| `Action` / `ActionRef` / `ActionHandler` | A named action with its Kotlin handler; `ActionRef.Bound(name, args)` references it with arguments on an edge, while `Free`/`Any`/`None`/`Named` filter an action slot in a query or a removal. |
+| `Action` / `ActionRef` / `ActionHandler` | A named action with its Kotlin handler; `ActionRef.Bound(name, args)` references it with arguments on an edge, `ActionRef.None` is the empty slot, while `Free`/`Any`/`Named` filter an action slot in a query or a removal. |
 | `Stack` | The call stack backing submachine call/return discipline. |
 | `TransitionMapping` | The mutable set of edges; O(1) filtered lookups via `withSourceState` and friends. |
-| `RecognitionPath` | The trail of one recognizer path: transition `toString()`s, termination cursor/state, accepted/rejected result. |
+| `RecognitionPath` | The trail of one recognizer path: transition `toString()`s, termination cursor/state, and the `PathOutcome` verdict (`PENDING`, `ACCEPTED` or `REJECTED`). |
 | `AdaptiveAutomaton` | The automaton itself, plus the recognition driver. |
 | `ExecutionVisitor` | The recognition-event interface: no-op defaults for every event, registered through `AdaptiveAutomaton.visitors`. |
 | `DotExporter` / `GraphVizVisitor` | GraphViz DOT rendering of a topology, and the visitor that emits a snapshot on every mutation. |
@@ -521,6 +522,54 @@ All commands assume the Gradle wrapper:
   Java 11+ or desugared Kotlin stdlib.
 - Choose any SLF4J backend you like (`slf4j-simple` is prewired for tests/examples).
 
+### Changes in 3.0.0
+
+This is a **breaking** release that demotes `null` from the model: **filters and values
+are null-free**, while configuration and genuine optionality keep their nulls.
+
+- **`SubmachineRef` replaces the nullable submachine filter.** The call family used to
+  spell "any call" as `submachine = null` — and in the other families `null` meant "not
+  applicable", so one spelling had two readings. The filter is now a value:
+  `SubmachineRef.Any` (any call), `SubmachineRef.Named("M")`, `SubmachineRef.Domain`
+  (built with `SubmachineRef.anyOf("M", "N")`) and `SubmachineRef.None` (the filter
+  does not apply). `queryCall`, `removeCall` and `CallSpec` take it; `queryCall(None)`
+  is rejected as meaningless.
+- **The call family is set-valued, like the other two.** `SubmachineRef.anyOf(...)`
+  names several submachines at once, and `addCall` over a domain adds **one edge per
+  submachine**, crossing the state domains — the Cartesian product, one reported
+  operation per edge inserted.
+- **`addCall` takes a `SubmachineRef`** and rejects the wildcards `Any` and `None`: an
+  addition names what it adds. `Transition.Call(submachine: String)` keeps a plain
+  string — an edge calls exactly one submachine, so it holds a value, not a filter.
+- **The family of a pattern is derived from its filters.** `TransitionPattern.kind` is
+  now a computed property: a pattern naming a submachine belongs to the call family,
+  and a pattern naming none belongs to the symbol family, whose kind follows the symbol
+  filter. A pattern can no longer contradict itself, and `TransitionPatternKind` no
+  longer has to be passed in.
+- **The action slots of an edge hold values.** `TransitionEdge.prior` and `.post` are
+  non-null `ActionRef`s: `ActionRef.None` is the empty slot, and only an
+  `ActionRef.Bound` may be attached to an edge — the filter-only markers (`Free`,
+  `Any`, `Named`) are rejected when the edge is built. The equality of an edge is
+  unchanged.
+- **`Transition.sourceState` and `Transition.targetState` are gone.** A transition
+  carries its payload only; the endpoints belong to the edge. The old copies could
+  contradict their own edge, and an edge declared with a bare transition was a
+  *different* edge from the same edge declared with its endpoints — now they are one
+  edge, and adding it twice is a no-op.
+- **The sinks of the transition mapping are never absent.** `onEdgeAdded`,
+  `onEdgeRemoved`, `onOperation` and `onObservation` are non-null callbacks that
+  default to a no-op: "nobody is listening" is a callback that does nothing, not a
+  missing one.
+- **A path verdict names itself.** `RecognitionPath.result: Boolean?` became
+  `RecognitionPath.outcome: PathOutcome`, with `PENDING`, `ACCEPTED` and `REJECTED`.
+  `recognize()` still answers `true`/`false`: a path has three outcomes, an automaton
+  has one verdict.
+- **The builder APIs lose their last null.** `consume`, `epsilon`, `call` and
+  `step.to` take `prior`/`post` as `Any = ActionRef.None`; `null` no longer compiles.
+  The `mainSubmachine` and `AutomatonSpec.main` configuration slots, and the state of
+  a path that has not started, keep their nulls — those are genuine optionality, and
+  they say so.
+
 ### Changes in 2.1.0
 
 This release completes the work begun in 2.0.0: the equality contract is explicit, the
@@ -579,8 +628,8 @@ explicit marker, and six engine defects were fixed.
 - **No filter is a null any more.** A wildcard is a value in its own right:
   `State.Any` (any state), `Symbol.Any` (any symbol-consuming transition),
   `Symbol.Epsilon` (an epsilon transition) and `ActionRef.Free` (an unconstrained
-  action slot). The only null left is the `submachine` filter of the call family, where
-  it means "any call".
+  action slot). The `submachine` filter of the call family was the last one to fall;
+  since 3.0.0 it is a `SubmachineRef` (see "Changes in 3.0.0").
 - **`ActionRef` is a sealed interface.** `Bound` is the concrete reference an edge
   carries; `Free`, `Any`, `None` and `Named` are the filters a query or a removal uses.
   `Named("A")` matches an action by name whatever its arguments; `Bound("A", x)` matches

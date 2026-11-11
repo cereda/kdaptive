@@ -6,12 +6,12 @@ import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.StateDomain
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.SymbolDomain
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.allOf
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
@@ -19,6 +19,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.sourceState
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
+import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCallIn
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
@@ -67,7 +68,8 @@ data class SymbolSpec(
  * the builder DSL.
  *
  * @property source the source state filter ([State.Any] = wildcard)
- * @property submachine the submachine name filter (null = any submachine call)
+ * @property submachine the submachine name filter ([SubmachineRef.Any] = any
+ *   submachine call, [SubmachineRef.None] = not applicable)
  * @property target the target state filter ([State.Any] = wildcard)
  * @property prior the prior action filter ([ActionRef.Free] = no constraint)
  * @property post the post action filter ([ActionRef.Free] = no constraint)
@@ -75,8 +77,8 @@ data class SymbolSpec(
 data class CallSpec(
     /** The source state filter. */
     var source: State = State.Any,
-    /** The submachine name filter; null matches any submachine call. */
-    var submachine: String? = null,
+    /** The submachine name filter; [SubmachineRef.Any] matches any submachine call. */
+    var submachine: SubmachineRef = SubmachineRef.Any,
     /** The target state filter. */
     var target: State = State.Any,
     /** The prior action filter. */
@@ -134,10 +136,10 @@ fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentExcep
  * call, and the call family never selects a symbol-consuming transition.
  * Neither of them selects the engine's internal return transitions.
  *
- * The state and symbol filters may also name a **domain** — a set built with
- * [State.anyOf] or [Symbol.anyOf]. A domain selects every member it names,
- * and an addition over domains produces the Cartesian product of its
- * domains.
+ * The state, symbol and submachine filters may also name a **domain** — a set
+ * built with [State.anyOf], [Symbol.anyOf] or [SubmachineRef.anyOf]. A domain
+ * selects every member it names, and an addition over domains produces the
+ * Cartesian product of its domains.
  *
  * Builder-style DSL is available through the `query`, `remove`, `queryCall`
  * and `removeCall` lambdas, which hide the wildcards behind named fields.
@@ -187,7 +189,6 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     ): List<TransitionEdge> {
         val pattern =
             TransitionPattern(
-                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
@@ -254,7 +255,6 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     ) {
         val pattern =
             TransitionPattern(
-                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
@@ -320,15 +320,17 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * @param symbol the symbol to consume, or [Symbol.Epsilon], or a domain
      * @param target the target state, or a domain of target states
      * @param prior the prior action executed before the edge is traversed
+     *   ([ActionRef.None] for none)
      * @param post the post action executed after the edge is traversed
+     *   ([ActionRef.None] for none)
      * @throws IllegalArgumentException if a wildcard state or symbol is given
      */
     fun add(
         source: State,
         symbol: Symbol,
         target: State,
-        prior: ActionRef.Bound? = null,
-        post: ActionRef.Bound? = null,
+        prior: ActionRef = ActionRef.None,
+        post: ActionRef = ActionRef.None,
     ) {
         val sources = concreteStates(source, "source")
         val symbols = concreteSymbols(symbol)
@@ -346,12 +348,12 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * Adds a single transition with concrete endpoints, and reports it as one
      * [MappingOperation.Add] operation.
      */
-    private fun addOne(source: State, symbol: Symbol, target: State, prior: ActionRef.Bound?, post: ActionRef.Bound?) {
+    private fun addOne(source: State, symbol: Symbol, target: State, prior: ActionRef, post: ActionRef) {
         val transition =
             if (symbol === Symbol.Epsilon) {
                 Transition.Epsilon
             } else {
-                Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target)
+                Transition.SymbolTransition(symbol = symbol)
             }
         val edge =
             TransitionEdge(
@@ -363,12 +365,11 @@ class ElementaryActions(private val transitions: TransitionMapping) {
             )
         val pattern =
             TransitionPattern(
-                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
-                prior = prior ?: ActionRef.None,
-                post = post ?: ActionRef.None,
+                prior = prior,
+                post = post,
             )
         performAdd(pattern, edge)
     }
@@ -380,28 +381,33 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     /**
      * Queries submachine-call transitions.
      *
-     * A null [submachine] filter matches any submachine-call edge.
+     * The [submachine] filter selects the called submachine:
+     * [SubmachineRef.Any] matches every call edge, [SubmachineRef.Named]
+     * matches the calls to one submachine, and [SubmachineRef.Domain] matches
+     * the calls to any submachine of the domain.
      *
      * @param source the source state filter ([State.Any] = wildcard)
-     * @param submachine the submachine name filter (null = any call)
+     * @param submachine the submachine filter ([SubmachineRef.Any] = any call)
      * @param target the target state filter ([State.Any] = wildcard)
      * @param prior the prior action filter ([ActionRef.Free] = no constraint)
      * @param post the post action filter ([ActionRef.Free] = no constraint)
      * @return list of matching [TransitionEdge] instances
+     * @throws IllegalArgumentException if the submachine filter is
+     *   [SubmachineRef.None], which names no submachine at all
      */
     fun queryCall(
         source: State = State.Any,
-        submachine: String? = null,
+        submachine: SubmachineRef = SubmachineRef.Any,
         target: State = State.Any,
         prior: ActionRef = ActionRef.Free,
         post: ActionRef = ActionRef.Free,
     ): List<TransitionEdge> {
+        requireApplicable(submachine, "query")
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
                 source = source,
-                submachine = submachine,
                 target = target,
+                submachine = submachine,
                 prior = prior,
                 post = post,
             )
@@ -423,7 +429,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * Example:
      * ```
      * val results = ea.queryCall {
-     *     submachine = "M"
+     *     submachine = SubmachineRef.Named("M")
      *     target = p1
      * }
      * ```
@@ -446,24 +452,26 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * The filters mean exactly what they mean in [queryCall].
      *
      * @param source the source state filter ([State.Any] = wildcard)
-     * @param submachine the submachine name filter (null = any call)
+     * @param submachine the submachine filter ([SubmachineRef.Any] = any call)
      * @param target the target state filter ([State.Any] = wildcard)
      * @param prior the prior action filter ([ActionRef.Free] = no constraint)
      * @param post the post action filter ([ActionRef.Free] = no constraint)
+     * @throws IllegalArgumentException if the submachine filter is
+     *   [SubmachineRef.None], which names no submachine at all
      */
     fun removeCall(
         source: State = State.Any,
-        submachine: String? = null,
+        submachine: SubmachineRef = SubmachineRef.Any,
         target: State = State.Any,
         prior: ActionRef = ActionRef.Free,
         post: ActionRef = ActionRef.Free,
     ) {
+        requireApplicable(submachine, "removal")
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
                 source = source,
-                submachine = submachine,
                 target = target,
+                submachine = submachine,
                 prior = prior,
                 post = post,
             )
@@ -496,30 +504,39 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     /**
      * Adds a submachine-call transition to the mapping.
      *
-     * The endpoints may be **domains** — sets built with [State.anyOf]. An
-     * addition over domains produces the Cartesian product of its domains:
-     * one edge per combination, and one [MappingOperation.Add] operation per
-     * edge inserted.
+     * The [submachine] filter names the submachines to call: a
+     * [SubmachineRef.Named] adds one call edge, and a [SubmachineRef.Domain]
+     * adds one edge per submachine it names. The endpoints may also be
+     * **domains** — sets built with [State.anyOf]. An addition over domains
+     * produces the Cartesian product of its domains: one edge per combination,
+     * and one [MappingOperation.Add] operation per edge inserted.
      *
      * @param source the source state, or a domain of source states
-     * @param submachine the name of the submachine to call
+     * @param submachine the submachine to call, or a domain of submachines
      * @param target the return state, owned by the calling submachine
-     * @param prior the prior action executed before the call
+     * @param prior the prior action executed before the call ([ActionRef.None]
+     *   for none)
      * @param post the post action executed after the jump into the submachine
-     * @throws IllegalArgumentException if a wildcard state is given
+     *   ([ActionRef.None] for none)
+     * @throws IllegalArgumentException if a wildcard state is given, or if the
+     *   submachine filter is [SubmachineRef.Any] or [SubmachineRef.None],
+     *   which name no concrete submachine
      */
     fun addCall(
         source: State,
-        submachine: String,
+        submachine: SubmachineRef,
         target: State,
-        prior: ActionRef.Bound? = null,
-        post: ActionRef.Bound? = null,
+        prior: ActionRef = ActionRef.None,
+        post: ActionRef = ActionRef.None,
     ) {
+        val names = concreteSubmachines(submachine)
         val sources = concreteStates(source, "source")
         val targets = concreteStates(target, "target")
         for (from in sources) {
-            for (to in targets) {
-                addCallOne(from, submachine, to, prior, post)
+            for (name in names) {
+                for (to in targets) {
+                    addCallOne(from, name, to, prior, post)
+                }
             }
         }
     }
@@ -528,13 +545,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * Adds a single submachine-call transition with concrete endpoints, and
      * reports it as one [MappingOperation.Add] operation.
      */
-    private fun addCallOne(
-        source: State,
-        submachine: String,
-        target: State,
-        prior: ActionRef.Bound?,
-        post: ActionRef.Bound?,
-    ) {
+    private fun addCallOne(source: State, submachine: String, target: State, prior: ActionRef, post: ActionRef) {
         val edge =
             TransitionEdge(
                 source = source,
@@ -545,12 +556,11 @@ class ElementaryActions(private val transitions: TransitionMapping) {
             )
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
                 source = source,
-                submachine = submachine,
                 target = target,
-                prior = prior ?: ActionRef.None,
-                post = post ?: ActionRef.None,
+                submachine = SubmachineRef.Named(submachine),
+                prior = prior,
+                post = post,
             )
         performAdd(pattern, edge)
     }
@@ -569,7 +579,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     private fun performQuery(pattern: TransitionPattern, predicate: TransitionPredicate): List<TransitionEdge> {
         val before = transitions.size()
         val matched = transitions.getTransitions().filter(predicate)
-        transitions.onOperation?.invoke(MappingOperation.Query(pattern, matched, before))
+        transitions.onOperation(MappingOperation.Query(pattern, matched, before))
         return matched
     }
 
@@ -587,7 +597,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val matched = transitions.getTransitions().filter(predicate)
         matched.forEach { transitions.removeFromIdentifier(it.id) }
         val after = transitions.size()
-        transitions.onOperation?.invoke(MappingOperation.Remove(pattern, matched, before, after))
+        transitions.onOperation(MappingOperation.Remove(pattern, matched, before, after))
     }
 
     /**
@@ -601,7 +611,7 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val before = transitions.size()
         transitions.add(edge)
         val after = transitions.size()
-        transitions.onOperation?.invoke(MappingOperation.Add(pattern, edge, before, after))
+        transitions.onOperation(MappingOperation.Add(pattern, edge, before, after))
     }
 
     /**
@@ -649,36 +659,31 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     }
 
     /**
-     * The submachine filter: a null filter matches any submachine-call edge,
-     * while a non-null one matches calls to that submachine only.
+     * The submachine filter: the wildcard matches any submachine-call edge, a
+     * named filter matches the calls to that submachine only, and a domain
+     * matches the calls to any of the submachines it names.
      */
-    private fun submachinePredicate(filter: String?): TransitionPredicate =
-        if (filter == null) isSubmachineCall else submachineCall(filter)
+    private fun submachinePredicate(filter: SubmachineRef): TransitionPredicate = when (filter) {
+        SubmachineRef.Any -> isSubmachineCall
+        is SubmachineRef.Named -> submachineCall(filter.name)
+        is SubmachineRef.Domain -> submachineCallIn(filter.names)
+        SubmachineRef.None -> { _: TransitionEdge -> false }
+    }
 
     /**
-     * The family a symbol filter belongs to.
+     * Checks that the submachine filter applies to the call family.
      *
-     * A domain naming the empty word among its members selects the two kinds
-     * at once, and the pattern then belongs to the
-     * [TransitionPatternKind.MIXED] family.
+     * [SubmachineRef.None] says "the filter does not apply", and a call
+     * operation always has a submachine filter: accepting it would build a
+     * pattern belonging to another family.
+     *
+     * @param filter the submachine filter given to the operation
+     * @param operation the name of the operation, used in the error message
      */
-    private fun symbolKind(filter: Symbol): TransitionPatternKind = when {
-        filter === Symbol.Epsilon -> TransitionPatternKind.EPSILON
-
-        filter === Symbol.Any -> TransitionPatternKind.SYMBOL
-
-        filter is SymbolDomain ->
-            if (filter.containsEpsilon) {
-                if (filter.alphabetMembers.isEmpty()) {
-                    TransitionPatternKind.EPSILON
-                } else {
-                    TransitionPatternKind.MIXED
-                }
-            } else {
-                TransitionPatternKind.SYMBOL
-            }
-
-        else -> TransitionPatternKind.SYMBOL
+    private fun requireApplicable(filter: SubmachineRef, operation: String) {
+        require(filter !== SubmachineRef.None) {
+            "The submachine filter of a call $operation cannot be 'None': it names no submachine."
+        }
     }
 
     /**
@@ -709,6 +714,26 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     }
 
     /**
+     * Expands a submachine filter into the concrete submachines an addition
+     * may call.
+     *
+     * The wildcard [SubmachineRef.Any] names no concrete submachine and is
+     * rejected, and so is [SubmachineRef.None]; a named filter expands into
+     * the one submachine it names, and a domain into the ones it names.
+     *
+     * @param filter the filter given to the addition
+     */
+    private fun concreteSubmachines(filter: SubmachineRef): List<String> = when (filter) {
+        is SubmachineRef.Named -> listOf(filter.name)
+
+        is SubmachineRef.Domain -> filter.names.toList()
+
+        SubmachineRef.Any, SubmachineRef.None -> throw IllegalArgumentException(
+            "The submachine of an added call must name a submachine, but '$filter' is a filter.",
+        )
+    }
+
+    /**
      * The action-slot filter, applied to the prior or the post action of the
      * edge.
      *
@@ -719,9 +744,9 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         val slot = { edge: TransitionEdge -> if (isPost) edge.post else edge.prior }
         return when (filter) {
             is ActionRef.Free -> { _: TransitionEdge -> true }
-            is ActionRef.Any -> { edge: TransitionEdge -> slot(edge) != null }
-            is ActionRef.None -> { edge: TransitionEdge -> slot(edge) == null }
-            is ActionRef.Named -> { edge: TransitionEdge -> slot(edge)?.name == filter.name }
+            is ActionRef.Any -> { edge: TransitionEdge -> slot(edge) is ActionRef.Bound }
+            is ActionRef.None -> { edge: TransitionEdge -> slot(edge) === ActionRef.None }
+            is ActionRef.Named -> { edge: TransitionEdge -> (slot(edge) as? ActionRef.Bound)?.name == filter.name }
             is ActionRef.Bound -> { edge: TransitionEdge -> matchesBinding(slot(edge), filter) }
         }
     }
@@ -732,8 +757,8 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * The expected binding fixes the arity; an expected argument equal to
      * [ActionRef.Free] leaves that position unconstrained.
      */
-    private fun matchesBinding(actual: ActionRef.Bound?, expected: ActionRef.Bound): Boolean {
-        if (actual == null) return false
+    private fun matchesBinding(actual: ActionRef, expected: ActionRef.Bound): Boolean {
+        if (actual !is ActionRef.Bound) return false
         if (actual.name != expected.name) return false
         if (actual.args.size != expected.args.size) return false
         return expected.args.indices.all { index ->

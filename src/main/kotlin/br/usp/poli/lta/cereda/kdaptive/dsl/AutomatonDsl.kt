@@ -212,8 +212,8 @@ class AutomatonBuilder {
         else -> throw IllegalArgumentException("Cannot resolve '$value' to Symbol")
     }
 
-    private fun resolveActionRef(value: Any?): ActionRef.Bound? = when (value) {
-        null -> null
+    private fun resolveActionRef(value: Any): ActionRef = when (value) {
+        ActionRef.None -> ActionRef.None
 
         is ActionRef.Bound -> value
 
@@ -305,19 +305,19 @@ class AutomatonBuilder {
     // -----------------------------------------------------------------------
 
     /** Adds a symbol-consuming transition, [prior]/[post] being optional action references. */
-    fun consume(from: Any, symbol: Any, to: Any, prior: Any? = null, post: Any? = null) {
+    fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
         val p = resolveActionRef(prior)
         val po = resolveActionRef(post)
-        p?.let { recordReference(it) }
-        po?.let { recordReference(it) }
+        (p as? ActionRef.Bound)?.let { recordReference(it) }
+        (po as? ActionRef.Bound)?.let { recordReference(it) }
         transitions.add(
             TransitionEdge(
                 source = s,
                 target = t,
-                transition = Transition.SymbolTransition(symbol = sym, sourceState = s, targetState = t),
+                transition = Transition.SymbolTransition(symbol = sym),
                 prior = p,
                 post = po,
             ),
@@ -333,13 +333,13 @@ class AutomatonBuilder {
      *
      * The prior action fires before the move, the post action after it.
      */
-    fun epsilon(from: Any, to: Any, prior: Any? = null, post: Any? = null) {
+    fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val p = resolveActionRef(prior)
         val po = resolveActionRef(post)
-        p?.let { recordReference(it) }
-        po?.let { recordReference(it) }
+        (p as? ActionRef.Bound)?.let { recordReference(it) }
+        (po as? ActionRef.Bound)?.let { recordReference(it) }
         transitions.add(
             TransitionEdge(
                 source = s,
@@ -362,13 +362,13 @@ class AutomatonBuilder {
      * The prior action fires before the call (the return state is not pushed
      * yet), the post action after the jump into the called submachine.
      */
-    fun call(from: Any, submachineName: String, to: Any, prior: Any? = null, post: Any? = null) {
+    fun call(from: Any, submachineName: String, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val p = resolveActionRef(prior)
         val po = resolveActionRef(post)
-        p?.let { recordReference(it) }
-        po?.let { recordReference(it) }
+        (p as? ActionRef.Bound)?.let { recordReference(it) }
+        (po as? ActionRef.Bound)?.let { recordReference(it) }
         transitions.add(
             TransitionEdge(
                 source = s,
@@ -392,17 +392,17 @@ class AutomatonBuilder {
     /** Builder for adding multiple transitions from a single source state. */
     class TransitionGroup(private val ab: AutomatonBuilder, private val source: Any) {
         /** Adds a symbol-consuming transition from the group's source state. */
-        fun symbol(sym: Any, target: Any, prior: Any? = null, post: Any? = null) {
+        fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.consume(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
-        fun epsilon(target: Any, prior: Any? = null, post: Any? = null) {
+        fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.epsilon(source, target, prior, post)
         }
 
         /** Adds a submachine-call transition from the group's source state. */
-        fun call(submachine: String, target: Any, prior: Any? = null, post: Any? = null) {
+        fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.call(source, submachine, target, prior, post)
         }
     }
@@ -420,7 +420,7 @@ class AutomatonBuilder {
     /** Holds source+symbol awaiting a target state. */
     class TransitionStep(private val ab: AutomatonBuilder, private val source: Any, private val symbol: Any) {
         /** Completes the transition: source --symbol--> target, with optional prior/post actions. */
-        fun to(target: Any, prior: Any? = null, post: Any? = null) {
+        fun to(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.consume(source, symbol, target, prior, post)
         }
 
@@ -431,7 +431,7 @@ class AutomatonBuilder {
          * member overload exists to make the bare chain work. Prior/post actions still go
          * through the three-parameter dotted [to].
          */
-        infix fun to(target: Any) = to(target, null, null)
+        infix fun to(target: Any) = to(target, ActionRef.None, ActionRef.None)
     }
 
     /** Infix: `builder on "q0"` creates a step source awaiting a symbol. */

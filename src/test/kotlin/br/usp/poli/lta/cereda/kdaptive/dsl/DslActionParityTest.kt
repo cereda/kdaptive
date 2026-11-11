@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.dsl
 
+import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -74,10 +75,10 @@ class DslActionParityTest {
                 main("M")
             }
         assertEquals(2, spec.transitions.size)
-        assertEquals("P", spec.transitions[0].prior?.name)
-        assertEquals("Q", spec.transitions[0].post?.name)
-        assertEquals("P", spec.transitions[1].prior?.name)
-        assertTrue(spec.transitions[1].post == null)
+        assertEquals("P", (spec.transitions[0].prior as ActionRef.Bound).name)
+        assertEquals("Q", (spec.transitions[0].post as ActionRef.Bound).name)
+        assertEquals("P", (spec.transitions[1].prior as ActionRef.Bound).name)
+        assertEquals(ActionRef.None, spec.transitions[1].post)
     }
 
     @Test

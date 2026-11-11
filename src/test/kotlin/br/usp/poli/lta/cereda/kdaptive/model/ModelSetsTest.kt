@@ -2,6 +2,7 @@
 package br.usp.poli.lta.cereda.kdaptive.model
 
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
@@ -341,7 +342,7 @@ class ModelSetsTest {
 
         val ea = ElementaryActions(mapping)
 
-        val result = ea.queryCall(S0, "M", State.Any)
+        val result = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any)
 
         assertEquals(setOf(S1), result.map { it.target }.toSet())
     }
@@ -384,7 +385,7 @@ class ModelSetsTest {
             TransitionEdge(
                 source = S0,
                 target = S1,
-                transition = Transition.SymbolTransition(symbol = sym('a'), sourceState = S0, targetState = S1),
+                transition = Transition.SymbolTransition(symbol = sym('a')),
                 prior = actionRef("A", S0),
             )
         val t2 =
@@ -416,7 +417,7 @@ class ModelSetsTest {
         val t1 =
             TransitionEdge(
                 source = S0,
-                target = S1,
+                target = S2,
                 transition = Transition.SymbolTransition(symbol = sym('a')),
                 prior = actionRef("A", S0),
             )
@@ -517,10 +518,10 @@ class ModelSetsTest {
         val ea = ElementaryActions(mapping)
 
         // Null submachine = wildcard: matches any submachine-call edge.
-        val wildcard = ea.queryCall(S0, submachine = null, target = State.Any)
+        val wildcard = ea.queryCall(S0, submachine = SubmachineRef.Any, target = State.Any)
         assertEquals(setOf(S1, S2), wildcard.map { it.target }.toSet())
 
-        val namedM = ea.queryCall(S0, "M", State.Any)
+        val namedM = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any)
         assertEquals(setOf(S1), namedM.map { it.target }.toSet())
     }
 
@@ -545,13 +546,14 @@ class ModelSetsTest {
         mapping.add(t2)
         val ea = ElementaryActions(mapping)
 
-        val match = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "y"))
+        val match = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any, ActionRef.Free, actionRef("B", "y"))
         assertEquals(setOf(S1), match.map { it.target }.toSet())
 
-        val mismatch = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "w"))
+        val mismatch = ea.queryCall(S0, SubmachineRef.Named("M"), State.Any, ActionRef.Free, actionRef("B", "w"))
         assertTrue(mismatch.isEmpty())
 
-        val arityMismatch = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "y", "z"))
+        val arityMismatch =
+            ea.queryCall(S0, SubmachineRef.Named("M"), State.Any, ActionRef.Free, actionRef("B", "y", "z"))
         assertTrue(arityMismatch.isEmpty())
     }
 

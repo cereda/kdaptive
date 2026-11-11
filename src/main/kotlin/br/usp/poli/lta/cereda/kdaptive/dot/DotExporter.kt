@@ -145,8 +145,8 @@ class DotExporter {
             is Transition.Return -> "return"
         }
         val actions = buildString {
-            edge.prior?.let { append(" | prior=${actionLabel(it)}") }
-            edge.post?.let { append(" | post=${actionLabel(it)}") }
+            (edge.prior as? ActionRef.Bound)?.let { append(" | prior=${actionLabel(it)}") }
+            (edge.post as? ActionRef.Bound)?.let { append(" | post=${actionLabel(it)}") }
         }
         return base + actions
     }

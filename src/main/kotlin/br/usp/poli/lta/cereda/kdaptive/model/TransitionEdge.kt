@@ -5,14 +5,15 @@ import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 
 /**
  * An edge in the transition mapping: a [Transition] plus its source/target
- * states and optional prior/post actions.
+ * states and prior/post actions.
  *
  * Actions are decoupled from the transition itself: they are metadata that
  * the execution engine applies before/after traversing the edge.
  *
- * Only a [ActionRef.Bound] can be attached to an edge, because an edge fires
- * one concrete action with one concrete list of arguments. The other cases of
- * [ActionRef] are filters and never appear here.
+ * The action slots always hold a value: [ActionRef.None] is the empty slot,
+ * and only an [ActionRef.Bound] can be attached to an edge, because an edge
+ * fires one concrete action with one concrete list of arguments. The other
+ * cases of [ActionRef] are filters and are rejected here.
  *
  * Two edges are equal when they have the same endpoints, the same transition
  * and the same actions. The [id] is bookkeeping, not identity: it is not part
@@ -25,11 +26,20 @@ data class TransitionEdge(
     val target: State,
     /** The transition represented by this edge. */
     val transition: Transition,
-    /** The prior action executed before traversing this edge, if any. */
-    val prior: ActionRef.Bound? = null,
-    /** The post action executed after traversing this edge, if any. */
-    val post: ActionRef.Bound? = null,
+    /** The prior action executed before traversing this edge; [ActionRef.None] for none. */
+    val prior: ActionRef = ActionRef.None,
+    /** The post action executed after traversing this edge; [ActionRef.None] for none. */
+    val post: ActionRef = ActionRef.None,
 ) {
+    init {
+        require(prior is ActionRef.Bound || prior === ActionRef.None) {
+            "An edge may bind a concrete action or carry no action at all, but '$prior' is a filter."
+        }
+        require(post is ActionRef.Bound || post === ActionRef.None) {
+            "An edge may bind a concrete action or carry no action at all, but '$post' is a filter."
+        }
+    }
+
     /**
      * The unique identifier of this edge.
      *
@@ -49,8 +59,8 @@ data class TransitionEdge(
         }
         return buildString {
             append("TransitionEdge(id=$id, $source$arrow$target")
-            prior?.let { append(", prior=${it.render()}") }
-            post?.let { append(", post=${it.render()}") }
+            (prior as? ActionRef.Bound)?.let { append(", prior=${it.render()}") }
+            (post as? ActionRef.Bound)?.let { append(", post=${it.render()}") }
             append(")")
         }
     }
@@ -58,8 +68,8 @@ data class TransitionEdge(
     private fun ActionRef.Bound.render(): String = if (args.isEmpty()) name else "$name(${args.joinToString(", ")})"
 
     /** True if this edge has a prior action with the given name. */
-    fun hasPriorAction(name: String): Boolean = prior?.name == name
+    fun hasPriorAction(name: String): Boolean = (prior as? ActionRef.Bound)?.name == name
 
     /** True if this edge has a post action with the given name. */
-    fun hasPostAction(name: String): Boolean = post?.name == name
+    fun hasPostAction(name: String): Boolean = (post as? ActionRef.Bound)?.name == name
 }

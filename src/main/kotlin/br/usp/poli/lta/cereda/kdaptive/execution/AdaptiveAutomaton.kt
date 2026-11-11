@@ -12,6 +12,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import br.usp.poli.lta.cereda.kdaptive.utils.RecognitionPath
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -72,8 +73,8 @@ abstract class AdaptiveAutomaton {
         else -> throw IllegalArgumentException("Cannot resolve '$value' to Symbol")
     }
 
-    private fun resolveActionRef(value: Any?): ActionRef.Bound? = when (value) {
-        null -> null
+    private fun resolveActionRef(value: Any): ActionRef = when (value) {
+        ActionRef.None -> ActionRef.None
 
         is ActionRef.Bound -> value
 
@@ -93,7 +94,7 @@ abstract class AdaptiveAutomaton {
      * @throws IllegalArgumentException if the symbol is a wildcard ([Symbol.Any])
      *   or [Symbol.Epsilon]; use [epsilon] for an epsilon transition
      */
-    fun consume(from: Any, symbol: Any, to: Any, prior: Any? = null, post: Any? = null) {
+    fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
@@ -107,7 +108,7 @@ abstract class AdaptiveAutomaton {
             TransitionEdge(
                 source = s,
                 target = t,
-                transition = Transition.SymbolTransition(symbol = sym, sourceState = s, targetState = t),
+                transition = Transition.SymbolTransition(symbol = sym),
                 prior = p,
                 post = po,
             ),
@@ -119,7 +120,7 @@ abstract class AdaptiveAutomaton {
      *
      * The prior action fires before the move, the post action after it.
      */
-    fun epsilon(from: Any, to: Any, prior: Any? = null, post: Any? = null) {
+    fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         transitions.add(
@@ -140,7 +141,7 @@ abstract class AdaptiveAutomaton {
      * The prior action fires before the call (the return state is not pushed
      * yet), the post action after the jump into the called submachine.
      */
-    fun call(from: Any, submachineName: String, to: Any, prior: Any? = null, post: Any? = null) {
+    fun call(from: Any, submachineName: String, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         transitions.add(
@@ -178,17 +179,17 @@ abstract class AdaptiveAutomaton {
     /** Builder for transitions from a single source state within [AdaptiveAutomaton.setup()]. */
     class FromGroup(private val aa: AdaptiveAutomaton, private val source: Any) {
         /** Adds a symbol-consuming transition. */
-        fun symbol(sym: Any, target: Any, prior: Any? = null, post: Any? = null) {
+        fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.consume(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
-        fun epsilon(target: Any, prior: Any? = null, post: Any? = null) {
+        fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.epsilon(source, target, prior, post)
         }
 
         /** Adds a submachine call transition from the group's source state. */
-        fun call(submachine: String, target: Any, prior: Any? = null, post: Any? = null) {
+        fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.call(source, submachine, target, prior, post)
         }
     }
@@ -363,7 +364,7 @@ abstract class AdaptiveAutomaton {
             }
         }
 
-        val result = paths.values.any { it.done && it.result == true }
+        val result = paths.values.any { it.outcome == PathOutcome.ACCEPTED }
         visitors.toList().forEach { it.onRecognizeEnd(result) }
         return result
     }

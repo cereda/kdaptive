@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
@@ -53,8 +54,8 @@ class ElementaryActionsOverloadsTest {
 
         val edge = mapping.getTransitions().single()
         assertTrue(edge.transition is Transition.Epsilon)
-        assertNull(edge.prior)
-        assertNull(edge.post)
+        assertEquals(ActionRef.None, edge.prior)
+        assertEquals(ActionRef.None, edge.post)
     }
 
     @Test
@@ -62,7 +63,7 @@ class ElementaryActionsOverloadsTest {
         val mapping = TransitionMapping()
         val ea = ElementaryActions(mapping)
 
-        ea.addCall(P0, "M", P1, actionRef("A"), actionRef("B"))
+        ea.addCall(P0, SubmachineRef.Named("M"), P1, actionRef("A"), actionRef("B"))
 
         val edge = mapping.getTransitions().single()
         assertEquals(Transition.Call(submachine = "M"), edge.transition)
@@ -77,8 +78,8 @@ class ElementaryActionsOverloadsTest {
         assertThrows<IllegalArgumentException> { ea.add(State.Any, sym('a'), P1) }
         assertThrows<IllegalArgumentException> { ea.add(P0, Symbol.Any, P1) }
         assertThrows<IllegalArgumentException> { ea.add(P0, sym('a'), State.Any) }
-        assertThrows<IllegalArgumentException> { ea.addCall(State.Any, "M", P1) }
-        assertThrows<IllegalArgumentException> { ea.addCall(P0, "M", State.Any) }
+        assertThrows<IllegalArgumentException> { ea.addCall(State.Any, SubmachineRef.Named("M"), P1) }
+        assertThrows<IllegalArgumentException> { ea.addCall(P0, SubmachineRef.Named("M"), State.Any) }
     }
 
     @Test

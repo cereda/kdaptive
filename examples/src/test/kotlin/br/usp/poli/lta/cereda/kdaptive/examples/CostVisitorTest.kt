@@ -9,7 +9,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -35,7 +34,6 @@ class CostVisitorTest {
 
     /** A pattern over finite filters: two states, one symbol, one target. */
     private fun finitePattern(): TransitionPattern = TransitionPattern(
-        kind = TransitionPatternKind.SYMBOL,
         source = State.anyOf(q0, q1),
         symbol = CharSymbol('a'),
         target = q2,
@@ -45,7 +43,6 @@ class CostVisitorTest {
 
     /** A pattern carrying a wildcard: one of its filters is unbounded. */
     private fun unboundedPattern(): TransitionPattern = TransitionPattern(
-        kind = TransitionPatternKind.SYMBOL,
         source = State.Any,
         symbol = CharSymbol('a'),
         target = q2,
@@ -153,7 +150,6 @@ class CostVisitorTest {
         val visitor = CostVisitor()
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
                 source = q0,
                 symbol = Symbol.Any,
                 target = q1,

@@ -2,6 +2,7 @@
 package br.usp.poli.lta.cereda.kdaptive.dsl
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
+import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
@@ -80,8 +81,8 @@ class AutomatonDslTest {
             }
         assertEquals(1, spec.transitions.size)
         val t = spec.transitions[0]
-        assertEquals("X", t.prior?.name)
-        assertEquals("Y", t.post?.name)
+        assertEquals("X", (t.prior as ActionRef.Bound).name)
+        assertEquals("Y", (t.post as ActionRef.Bound).name)
     }
 
     // -----------------------------------------------------------------------
@@ -173,8 +174,8 @@ class AutomatonDslTest {
                 main("M")
             }
         val t = spec.transitions.single()
-        assertEquals("X", t.prior?.name)
-        assertEquals("Y", t.post?.name)
+        assertEquals("X", (t.prior as ActionRef.Bound).name)
+        assertEquals("Y", (t.post as ActionRef.Bound).name)
     }
 
     // -----------------------------------------------------------------------
@@ -212,8 +213,8 @@ class AutomatonDslTest {
                 main("M")
             }
         val t = spec.transitions.single()
-        assertEquals("X", t.prior?.name)
-        assertEquals("Y", t.post?.name)
+        assertEquals("X", (t.prior as ActionRef.Bound).name)
+        assertEquals("Y", (t.post as ActionRef.Bound).name)
     }
 
     /**

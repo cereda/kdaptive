@@ -154,11 +154,8 @@ class MappingQueriesTest {
 
     @Test
     fun `transition subtypes expose their properties`() {
-        assertTrue(Transition.Epsilon.sourceState == null)
-        assertTrue(Transition.Epsilon.targetState == null)
-        assertTrue(Transition.Return.sourceState == null)
-        assertTrue(Transition.Return.targetState == null)
         assertEquals("M", Transition.Call(submachine = "M").submachine)
+        assertEquals(CharSymbol('a'), Transition.SymbolTransition(symbol = CharSymbol('a')).symbol)
     }
 
     @Test

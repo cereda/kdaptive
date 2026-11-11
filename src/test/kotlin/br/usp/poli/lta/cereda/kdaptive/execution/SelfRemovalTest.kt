@@ -10,6 +10,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
+import br.usp.poli.lta.cereda.kdaptive.utils.PathOutcome
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -111,7 +112,7 @@ class SelfRemovalTest {
         // the new edge consumes the same symbol, so the input is accepted.
         assertTrue(aa.recognize(listOf(CharSymbol('a'))))
         assertEquals(1, aa.getRecognitionPaths().size)
-        assertTrue(aa.getRecognitionPaths().single().result == true)
+        assertEquals(PathOutcome.ACCEPTED, aa.getRecognitionPaths().single().outcome)
     }
 
     @Test

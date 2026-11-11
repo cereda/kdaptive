@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
+import br.usp.poli.lta.cereda.kdaptive.model.SubmachineRef
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
@@ -96,8 +97,8 @@ class ElementaryActionsMarkersTest {
         val ea = ElementaryActions(mapping())
 
         // The epsilon edge of the call family carries no action at all.
-        assertEquals(1, ea.queryCall(State.Any, null, State.Any, ActionRef.None).size)
-        assertEquals(0, ea.queryCall(State.Any, null, State.Any, ActionRef.Any).size)
+        assertEquals(1, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.None).size)
+        assertEquals(0, ea.queryCall(State.Any, SubmachineRef.Any, State.Any, ActionRef.Any).size)
     }
 
     @Test
