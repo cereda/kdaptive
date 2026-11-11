@@ -81,8 +81,8 @@ class SetsAndEdgeTest {
                 source = M0,
                 target = M1,
                 transition = Transition.SymbolTransition(symbol = sym('b')),
-                prior = ActionRef(name = "A"),
-                post = ActionRef(name = "B"),
+                prior = ActionRef.Bound(name = "A"),
+                post = ActionRef.Bound(name = "B"),
             )
 
         assertTrue(symbol.toString().contains("-[Letter(a)]->"))
@@ -101,8 +101,8 @@ class SetsAndEdgeTest {
                 source = M0,
                 target = M1,
                 transition = Transition.SymbolTransition(symbol = sym('a')),
-                prior = ActionRef(name = "A"),
-                post = ActionRef(name = "B"),
+                prior = ActionRef.Bound(name = "A"),
+                post = ActionRef.Bound(name = "B"),
             )
         assertTrue(edge.hasPriorAction("A"))
         assertFalse(edge.hasPriorAction("X"))
@@ -123,8 +123,8 @@ class SetsAndEdgeTest {
                 source = M0,
                 target = M1,
                 transition = Transition.SymbolTransition(symbol = sym('a')),
-                prior = ActionRef(name = "A"),
-                post = ActionRef(name = "B"),
+                prior = ActionRef.Bound(name = "A"),
+                post = ActionRef.Bound(name = "B"),
             )
         val t2 =
             TransitionEdge(

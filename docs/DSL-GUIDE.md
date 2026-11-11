@@ -138,7 +138,9 @@ Rules and conveniences of the builder:
   give that state an owner.
 - **Symbols accept raw `Char`** (mapped to `CharSymbol`), `Symbol` objects, or `sym('c')`.
 - **Action references accept a name `String`** (`prior = "A"`) or an
-  `ActionRef(name, args...)` built by `actionRef("A", p1, p2)`.
+  `ActionRef.Bound` built by `actionRef("A", p1, p2)`. A reference always names one
+  registered action: the filter cases of `ActionRef` belong to queries and removals,
+  never to an edge.
 - **Adaptive actions are registered with `action("A") { ... }`** (see the next
   subsection) and referenced by name or through `ref("A", ...)`.
 - `toSpec()` produces an immutable `AutomatonSpec`, a data class with
@@ -177,7 +179,7 @@ What the handler gets:
 
 | Member | Effect |
 |---|---|
-| `ea` | the `ElementaryActions` facade over the mapping currently being executed (queries, removals, insertions). `ea.query`/`ea.remove` work on symbol transitions, `ea.queryCall` on submachine-call edges |
+| `ea` | the `ElementaryActions` facade over the mapping currently being executed (queries, removals, insertions). `ea.query`/`ea.remove`/`ea.add` work on symbol transitions, `ea.queryCall`/`ea.removeCall`/`ea.addCall` on submachine-call edges |
 | `state(name)` | a **read-only** lookup of a state of the automaton by name; an unknown name is an error, never a new state |
 | `freshState(prefix = "g")` | a new state named `prefix` plus a number, unique within the run, restarting at zero for every recognition and skipping names the automaton already uses |
 | `ref(name, args...)` | an `ActionRef` built at runtime, for arguments only known while running |
@@ -265,7 +267,7 @@ the library never interprets it.
 data class DomainSize(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
-    val matched = ea.query(state("q0"), CharSymbol('b'), null)
+    val matched = ea.query(state("q0"), CharSymbol('b'), State.Any)
     observe(DomainSize(matched.map { it.source }.distinct().size))
 }
 ```
@@ -343,7 +345,7 @@ consume(q0, myToken, q1, post = actionRef("Lexer", token))   // with an argument
 - `from` / `to`: `State` objects (Style A) or names (Style B).
 - `symbol`: anything `Symbol` or `Char`. Subclass `Symbol()` for your own algebra,
   see `LexerExampleKt`, where tokens like lexer words are first-class symbols.
-- `prior` / `post`: action references (`String` name, `ActionRef`, or `null`).
+- `prior` / `post`: action references (`String` name, `ActionRef.Bound`, or `null`).
 
 #### Types: what `consume` keeps, converts, and rejects
 

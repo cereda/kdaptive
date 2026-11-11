@@ -81,15 +81,19 @@ interface ExecutionVisitor {
 
     /**
      * Called immediately before an action handler executes.
+     *
+     * @param actionRef the concrete action about to fire, with its arguments
      * @param isPrior true for a prior action, false for a post action
      */
-    fun onBeforeAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) = Unit
+    fun onBeforeAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) = Unit
 
     /**
      * Called immediately after an action handler executes.
+     *
+     * @param actionRef the concrete action that fired, with its arguments
      * @param isPrior true for a prior action, false for a post action
      */
-    fun onAfterAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) = Unit
+    fun onAfterAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) = Unit
 
     // -----------------------------------------------------------------------
     // Topology mutation

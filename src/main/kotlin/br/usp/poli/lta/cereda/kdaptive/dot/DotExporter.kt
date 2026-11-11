@@ -27,9 +27,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
  */
 class DotExporter {
 
-    /** Characters that are not allowed in a DOT identifier. */
-    private val nonIdentifierCharacter = "[^a-zA-Z0-9_]".toRegex()
-
     /**
      * Renders [transitions] and [submachines] as a DOT document.
      *
@@ -154,12 +151,41 @@ class DotExporter {
         return base + actions
     }
 
-    private fun actionLabel(ref: ActionRef): String {
-        val name = ref.name ?: "unnamed"
+    private fun actionLabel(ref: ActionRef.Bound): String {
+        val name = ref.name
         return if (ref.args.isEmpty()) name else "$name(${ref.args.joinToString(",")})"
     }
 
-    private fun escapeId(id: String): String = id.replace(nonIdentifierCharacter, "_")
+    /**
+     * Escapes [id] into a DOT identifier.
+     *
+     * The escape is injective: two different identifiers never produce the
+     * same DOT identifier. Letters and digits are kept, an underscore is
+     * written as `_005f`, and any other character is written as its
+     * underscore-prefixed four-digit code point. Since an underscore in the
+     * output always introduces such an escape, the original identifier can be
+     * recovered, so `"a-b"` and `"a_b"` remain two different clusters.
+     */
+    private fun escapeId(id: String): String = buildString {
+        for (character in id) {
+            when {
+                character in 'a'..'z' || character in 'A'..'Z' || character in '0'..'9' -> append(character)
+                character == '_' -> append(UNDERSCORE_ESCAPE)
+                else -> append("_").append(character.code.toString(HEX_RADIX).padStart(CODE_POINT_WIDTH, '0'))
+            }
+        }
+    }
+
+    private companion object {
+        /** The escape written for an underscore. */
+        const val UNDERSCORE_ESCAPE = "_005f"
+
+        /** The radix the code points are written in. */
+        const val HEX_RADIX = 16
+
+        /** The number of digits a code point is padded to. */
+        const val CODE_POINT_WIDTH = 4
+    }
 
     /** Escapes the characters that would otherwise break a quoted DOT label. */
     private fun escapeLabel(label: String): String = label

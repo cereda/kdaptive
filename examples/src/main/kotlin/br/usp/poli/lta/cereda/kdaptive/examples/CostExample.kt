@@ -5,6 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
+import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
 import br.usp.poli.lta.cereda.kdaptive.model.actions.actionRef
@@ -62,9 +63,9 @@ class CostExample : AdaptiveAutomaton() {
         actions.add(
             Action(name = "Reshape") { transitions, _, _ ->
                 val ea = ElementaryActions(transitions)
-                val matched = ea.query(q0, CharSymbol('b'), null)
+                val matched = ea.query(q0, CharSymbol('b'), State.Any)
                 transitions.observe(DomainSize(matched.map { it.source }.distinct().size))
-                ea.remove(k, CharSymbol('a'), null)
+                ea.remove(k, CharSymbol('a'), State.Any)
                 ea.add(k, CharSymbol('a'), k)
             },
         )

@@ -17,10 +17,11 @@ import org.junit.jupiter.api.Test
  * `query(null, null, null)` and `remove(priorAction = ..., source = ...,
  * symbol = ..., target = ...)` did not compile at all.
  *
- * The fix gives each family at most one overload per arity, with the
- * prior-action filter first and the post-action filter last. **This file
- * compiling is the actual regression test**: every call shape below used to be
- * ambiguous, and none of them is any more.
+ * The API now offers **one method per operation and family** — `query`,
+ * `remove` and `add` for symbols, `queryCall`, `removeCall` and `addCall`
+ * for submachine calls — and every filter is an explicit value, never a
+ * null. **This file compiling is the actual regression test**: every call
+ * shape below used to be ambiguous, and none of them is any more.
  */
 class ElementaryActionsResolutionTest {
 
@@ -32,7 +33,7 @@ class ElementaryActionsResolutionTest {
         override fun toString(): String = "r1"
     }
 
-    /** A mapping with one symbol edge and one call edge. */
+    /** A mapping with two symbol edges, one epsilon edge and one call edge. */
     private fun mapping(): TransitionMapping {
         val m = TransitionMapping()
         m.add(
@@ -42,6 +43,20 @@ class ElementaryActionsResolutionTest {
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
                 prior = actionRef("A"),
                 post = actionRef("B"),
+            ),
+        )
+        m.add(
+            TransitionEdge(
+                source = R0,
+                target = R1,
+                transition = Transition.SymbolTransition(symbol = CharSymbol('b')),
+            ),
+        )
+        m.add(
+            TransitionEdge(
+                source = R0,
+                target = R1,
+                transition = Transition.Epsilon,
             ),
         )
         m.add(
@@ -60,82 +75,100 @@ class ElementaryActionsResolutionTest {
     fun `every query arity resolves positionally`() {
         val ea = ElementaryActions(mapping())
 
-        // Three nulls used to be ambiguous between the symbol and call families.
-        assertEquals(2, ea.query(null, null, null).size)
-        // Four nulls used to be ambiguous between two call-family shapes.
-        assertEquals(2, ea.query(null, null, null, null).size)
-        // Five nulls used to be ambiguous between two call-family shapes.
-        assertEquals(2, ea.query(null, null, null, null, null).size)
+        // The symbol family never sees the epsilon or the call edge.
+        assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any).size)
+        assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Free).size)
+        assertEquals(2, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Free, ActionRef.Free).size)
 
         // The call family has the same shape, under its own name.
-        assertEquals(1, ea.queryCall(null, null, null).size)
-        assertEquals(1, ea.queryCall(null, null, null, null).size)
-        assertEquals(1, ea.queryCall(null, null, null, null, null).size)
+        assertEquals(1, ea.queryCall(State.Any, null, State.Any).size)
+        assertEquals(1, ea.queryCall(State.Any, null, State.Any, ActionRef.Free).size)
+        assertEquals(1, ea.queryCall(State.Any, null, State.Any, ActionRef.Free, ActionRef.Free).size)
     }
 
     @Test
     fun `every query arity resolves by named argument`() {
         val ea = ElementaryActions(mapping())
 
-        assertEquals(2, ea.query(source = null, symbol = null, target = null).size)
+        assertEquals(2, ea.query(source = State.Any, symbol = Symbol.Any, target = State.Any).size)
         assertEquals(
             2,
-            ea.query(priorAction = null, source = null, symbol = null, target = null).size,
+            ea.query(prior = ActionRef.Free, source = State.Any, symbol = Symbol.Any, target = State.Any).size,
         )
         assertEquals(
             2,
-            ea.query(priorAction = null, source = null, symbol = null, target = null, postAction = null).size,
+            ea.query(
+                post = ActionRef.Free,
+                prior = ActionRef.Free,
+                source = State.Any,
+                symbol = Symbol.Any,
+                target = State.Any,
+            ).size,
         )
 
         assertEquals(
             1,
-            ea.queryCall(source = null, submachine = null, target = null).size,
+            ea.queryCall(source = State.Any, submachine = null, target = State.Any).size,
         )
         assertEquals(
             1,
-            ea.queryCall(priorAction = null, source = null, submachine = null, target = null).size,
+            ea.queryCall(prior = ActionRef.Free, source = State.Any, submachine = null, target = State.Any).size,
         )
         assertEquals(
             1,
             ea.queryCall(
-                priorAction = null,
-                source = null,
+                post = ActionRef.Free,
+                prior = ActionRef.Free,
+                source = State.Any,
                 submachine = null,
-                target = null,
-                postAction = null,
+                target = State.Any,
             ).size,
         )
     }
 
     @Test
     fun `every remove arity resolves positionally and by named argument`() {
-        // The two four-argument removals used to declare the same parameter
-        // names in a different order, so even a fully named call was ambiguous.
         val positional = mapping()
-        ElementaryActions(positional).remove(null, null, null)
-        assertEquals(0, positional.size())
+        ElementaryActions(positional).remove(State.Any, Symbol.Any, State.Any)
+        assertEquals(2, positional.size())
 
         val prior = mapping()
-        ElementaryActions(prior).remove(null, null, null, null)
-        assertEquals(0, prior.size())
+        ElementaryActions(prior).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free)
+        assertEquals(2, prior.size())
 
         val both = mapping()
-        ElementaryActions(both).remove(null, null, null, null, null)
-        assertEquals(0, both.size())
+        ElementaryActions(both).remove(State.Any, Symbol.Any, State.Any, ActionRef.Free, ActionRef.Free)
+        assertEquals(2, both.size())
 
         val named = mapping()
-        ElementaryActions(named).remove(priorAction = null, source = null, symbol = null, target = null)
-        assertEquals(0, named.size())
+        ElementaryActions(named).remove(
+            prior = ActionRef.Free,
+            source = State.Any,
+            symbol = Symbol.Any,
+            target = State.Any,
+        )
+        assertEquals(2, named.size())
 
         val namedBoth = mapping()
         ElementaryActions(namedBoth).remove(
-            priorAction = null,
-            source = null,
-            symbol = null,
-            target = null,
-            postAction = null,
+            post = ActionRef.Free,
+            prior = ActionRef.Free,
+            source = State.Any,
+            symbol = Symbol.Any,
+            target = State.Any,
         )
-        assertEquals(0, namedBoth.size())
+        assertEquals(2, namedBoth.size())
+    }
+
+    @Test
+    fun `every removeCall arity resolves positionally and by named argument`() {
+        val positional = mapping()
+        ElementaryActions(positional).removeCall(State.Any, null, State.Any)
+        assertEquals(3, positional.size())
+
+        val named = mapping()
+        ElementaryActions(named).removeCall(source = State.Any, submachine = null, target = State.Any)
+        assertEquals(3, named.size())
     }
 
     @Test
@@ -146,20 +179,24 @@ class ElementaryActionsResolutionTest {
         assertEquals(2, ea.query { }.size)
         assertEquals(1, ea.queryCall { }.size)
         ea.remove { }
-        assertEquals(0, m.size())
+        // The symbol family leaves; the epsilon and the call edge stay.
+        assertEquals(2, m.size())
     }
 
     @Test
     fun `the action filters still discriminate`() {
         val ea = ElementaryActions(mapping())
 
-        // Prior "A" and post "B" are carried by both edges.
-        assertEquals(2, ea.query(actionRef("A"), null, null, null).size)
-        assertEquals(2, ea.query(null, null, null, null, actionRef("B")).size)
-        assertEquals(2, ea.query(actionRef("A"), null, null, null, actionRef("B")).size)
+        // Prior "A" and post "B" are carried by the symbol edge and the call edge.
+        assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, actionRef("A")).size)
+        assertEquals(1, ea.query(State.Any, Symbol.Any, State.Any, ActionRef.Free, actionRef("B")).size)
+        assertEquals(
+            1,
+            ea.query(State.Any, Symbol.Any, State.Any, actionRef("A"), actionRef("B")).size,
+        )
 
         // A reference that matches nothing narrows the result down.
-        assertTrue(ea.query(actionRef("nope"), null, null, null).isEmpty())
-        assertTrue(ea.queryCall(actionRef("nope"), null, null, null).isEmpty())
+        assertTrue(ea.query(State.Any, Symbol.Any, State.Any, actionRef("nope")).isEmpty())
+        assertTrue(ea.queryCall(State.Any, null, State.Any, actionRef("nope")).isEmpty())
     }
 }

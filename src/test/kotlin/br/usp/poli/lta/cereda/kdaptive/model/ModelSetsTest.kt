@@ -321,7 +321,7 @@ class ModelSetsTest {
         val result =
             ea.query {
                 source = S0
-                symbol = sym('a')
+                symbol = Symbol.Epsilon
                 // target omitted → wildcard
             }
 
@@ -341,7 +341,7 @@ class ModelSetsTest {
 
         val ea = ElementaryActions(mapping)
 
-        val result = ea.queryCall(S0, "M", null)
+        val result = ea.queryCall(S0, "M", State.Any)
 
         assertEquals(setOf(S1), result.map { it.target }.toSet())
     }
@@ -462,11 +462,14 @@ class ModelSetsTest {
         assertEquals(emptyList<TransitionEdge>(), mapping.withSourceState(r0))
 
         val clone = mapping.copy()
+        // The copy holds the same edges, with their own identifiers: the
+        // identifier is bookkeeping, not identity.
         assertEquals(
-            clone.withSourceState(q0).map { it.id },
-            mapping.withSourceState(q0).map { it.id },
+            clone.withSourceState(q0).map { it.transition },
+            mapping.withSourceState(q0).map { it.transition },
         )
-        assertEquals(listOf(t3.id), clone.withSourceState(q1).map { it.id })
+        assertEquals(listOf(t3.transition), clone.withSourceState(q1).map { it.transition })
+        assertEquals(mapping.size(), clone.size())
     }
 
     @Test
@@ -514,10 +517,10 @@ class ModelSetsTest {
         val ea = ElementaryActions(mapping)
 
         // Null submachine = wildcard: matches any submachine-call edge.
-        val wildcard = ea.queryCall(S0, submachine = null, target = null)
+        val wildcard = ea.queryCall(S0, submachine = null, target = State.Any)
         assertEquals(setOf(S1, S2), wildcard.map { it.target }.toSet())
 
-        val namedM = ea.queryCall(S0, "M", null)
+        val namedM = ea.queryCall(S0, "M", State.Any)
         assertEquals(setOf(S1), namedM.map { it.target }.toSet())
     }
 
@@ -542,13 +545,13 @@ class ModelSetsTest {
         mapping.add(t2)
         val ea = ElementaryActions(mapping)
 
-        val match = ea.queryCall(null, S0, "M", null, actionRef("B", "y"))
+        val match = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "y"))
         assertEquals(setOf(S1), match.map { it.target }.toSet())
 
-        val mismatch = ea.queryCall(null, S0, "M", null, actionRef("B", "w"))
+        val mismatch = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "w"))
         assertTrue(mismatch.isEmpty())
 
-        val arityMismatch = ea.queryCall(null, S0, "M", null, actionRef("B", "y", "z"))
+        val arityMismatch = ea.queryCall(S0, "M", State.Any, ActionRef.Free, actionRef("B", "y", "z"))
         assertTrue(arityMismatch.isEmpty())
     }
 
@@ -581,15 +584,15 @@ class ModelSetsTest {
         mapping.add(t3)
         val ea = ElementaryActions(mapping)
 
-        // Removing by (prior, source, symbol, target) with exact arguments only
+        // Removing by (source, symbol, target, prior) with exact arguments only
         // removes the edge whose arguments and arity match.
-        ea.remove(actionRef("A", "x", 1), null, null, null)
+        ea.remove(State.Any, Symbol.Any, State.Any, actionRef("A", "x", 1))
         assertFalse(mapping.hasIdentifier(t1.id))
         assertTrue(mapping.hasIdentifier(t2.id))
         assertTrue(mapping.hasIdentifier(t3.id))
 
-        // A wildcard (null-name) action reference matches any edge with a prior action.
-        ea.remove(ActionRef(name = null), null, null, null)
+        // An "any action" filter matches every edge carrying a prior action.
+        ea.remove(State.Any, Symbol.Any, State.Any, ActionRef.Any)
         assertFalse(mapping.hasIdentifier(t2.id))
         assertFalse(mapping.hasIdentifier(t3.id))
     }

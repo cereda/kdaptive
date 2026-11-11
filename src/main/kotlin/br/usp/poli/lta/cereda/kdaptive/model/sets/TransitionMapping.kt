@@ -67,7 +67,12 @@ class TransitionMapping {
         onEdgeAdded?.invoke(t)
     }
 
-    /** Returns all transitions in the mapping. */
+    /**
+     * Returns all transitions in the mapping.
+     *
+     * The set is live: it reflects the mapping as it is, and mutating it
+     * mutates the mapping.
+     */
     fun getTransitions(): Set<TransitionEdge> = transitions
 
     /** Checks whether a transition with the given ID exists. */
@@ -171,18 +176,45 @@ class TransitionMapping {
                 )
         }.toList()
 
-    /** Removes the transition with the given identifier from the mapping. */
+    /**
+     * Removes the transition with the given identifier from the mapping.
+     *
+     * One [onEdgeRemoved] event is fired per edge that leaves the mapping, so
+     * the topology channel always balances the number of edges removed.
+     */
     fun removeFromIdentifier(id: Int) {
-        val removed = transitions.firstOrNull { it.id == id }
-        transitions.removeIf { it.id == id }
+        val removed = transitions.filter { it.id == id }
+        if (removed.isEmpty()) return
+        removed.forEach { transitions.remove(it) }
         bySource = null
-        removed?.let { onEdgeRemoved?.invoke(it) }
+        removed.forEach { onEdgeRemoved?.invoke(it) }
     }
 
-    /** Creates a copy of this mapping with copies of all transitions. */
+    /**
+     * Removes every transition from this mapping, keeping the callbacks.
+     *
+     * This is a reset, not a mutation: no [onEdgeRemoved] event is fired,
+     * because the edges were never observed as leaving one by one.
+     */
+    fun clear() {
+        transitions.clear()
+        bySource = null
+    }
+
+    /**
+     * Creates a copy of this mapping with copies of all transitions.
+     *
+     * The callbacks are carried over, so the copy keeps reporting to the same
+     * observers. Copying the edges fires no event: they were duplicated, not
+     * added.
+     */
     fun copy(): TransitionMapping {
         val m = TransitionMapping()
         transitions.forEach { m.add(it.copy()) }
+        m.onEdgeAdded = onEdgeAdded
+        m.onEdgeRemoved = onEdgeRemoved
+        m.onOperation = onOperation
+        m.onObservation = onObservation
         return m
     }
 

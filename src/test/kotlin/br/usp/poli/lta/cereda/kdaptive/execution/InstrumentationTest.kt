@@ -8,6 +8,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
@@ -126,7 +127,7 @@ class InstrumentationTest {
         m.onOperation = { operations.add(it) }
 
         val ea = ElementaryActions(m)
-        val matched = ea.query(null, CharSymbol('a'), null)
+        val matched = ea.query(State.Any, CharSymbol('a'), State.Any)
 
         assertEquals(2, matched.size)
         assertEquals(1, operations.size)
@@ -145,7 +146,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).queryCall(null, null, null)
+        ElementaryActions(m).queryCall(State.Any, null, State.Any)
 
         val query = operations.single() as MappingOperation.Query
         assertEquals(TransitionPatternKind.SUBMACHINE, query.pattern.kind)
@@ -158,7 +159,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).remove(null, CharSymbol('a'), null)
+        ElementaryActions(m).remove(State.Any, CharSymbol('a'), State.Any)
 
         assertEquals(1, operations.size)
 
@@ -175,7 +176,7 @@ class InstrumentationTest {
         val operations = mutableListOf<MappingOperation>()
         m.onOperation = { operations.add(it) }
 
-        ElementaryActions(m).remove(null, CharSymbol('z'), null)
+        ElementaryActions(m).remove(State.Any, CharSymbol('z'), State.Any)
 
         val removal = operations.single() as MappingOperation.Remove
         assertEquals(0, removal.edges.size)
@@ -207,8 +208,8 @@ class InstrumentationTest {
     fun `no operation is reported when no observer is registered`() {
         val m = mapping()
         val ea = ElementaryActions(m)
-        ea.query(null, null, null)
-        ea.remove(null, CharSymbol('a'), null)
+        ea.query(State.Any, Symbol.Any, State.Any)
+        ea.remove(State.Any, CharSymbol('a'), State.Any)
         ea.add(Q0, CharSymbol('z'), G0)
         assertEquals(2, m.size())
     }

@@ -195,7 +195,7 @@ class ExecutionVisitorTest {
                 accepting(q0)
             }
             action("A") { _, _ ->
-                ea.add(q1, sym('a'), q0)
+                ea.add(q1, sym('c'), q0)
             }
             consume(q0, sym('a'), q1, prior = "A")
             consume(q0, sym('b'), q0)
@@ -239,10 +239,10 @@ class ExecutionVisitorTest {
     fun `visitor receives action lifecycle events`() {
         val events = mutableListOf<String>()
         val visitor = object : ExecutionVisitor {
-            override fun onBeforeAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) {
+            override fun onBeforeAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) {
                 events.add("before:${actionRef.name}:$isPrior")
             }
-            override fun onAfterAction(pathId: Int, actionRef: ActionRef, isPrior: Boolean) {
+            override fun onAfterAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) {
                 events.add("after:${actionRef.name}:$isPrior")
             }
         }

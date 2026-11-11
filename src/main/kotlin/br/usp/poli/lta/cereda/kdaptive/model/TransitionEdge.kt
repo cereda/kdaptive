@@ -9,6 +9,14 @@ import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
  *
  * Actions are decoupled from the transition itself: they are metadata that
  * the execution engine applies before/after traversing the edge.
+ *
+ * Only a [ActionRef.Bound] can be attached to an edge, because an edge fires
+ * one concrete action with one concrete list of arguments. The other cases of
+ * [ActionRef] are filters and never appear here.
+ *
+ * Two edges are equal when they have the same endpoints, the same transition
+ * and the same actions. The [id] is bookkeeping, not identity: it is not part
+ * of equality, so adding an edge that is already present is a no-op.
  */
 data class TransitionEdge(
     /** The source state of this edge. */
@@ -17,13 +25,20 @@ data class TransitionEdge(
     val target: State,
     /** The transition represented by this edge. */
     val transition: Transition,
-    /** The prior action reference executed before traversing this edge, if any. */
-    val prior: ActionRef? = null,
-    /** The post action reference executed after traversing this edge, if any. */
-    val post: ActionRef? = null,
-    /** The unique identifier of this edge. */
-    val id: Int = IdentifierUtils.nextTransitionId(),
+    /** The prior action executed before traversing this edge, if any. */
+    val prior: ActionRef.Bound? = null,
+    /** The post action executed after traversing this edge, if any. */
+    val post: ActionRef.Bound? = null,
 ) {
+    /**
+     * The unique identifier of this edge.
+     *
+     * The identifier is deliberately outside the equality of the edge: it
+     * tells this particular edge apart from the others, but it does not make
+     * two otherwise identical edges different.
+     */
+    val id: Int = IdentifierUtils.nextTransitionId()
+
     /** Returns a human-readable representation of this edge, rendered as a graph arrow. */
     override fun toString(): String {
         val arrow = when (val t = transition) {
@@ -40,10 +55,7 @@ data class TransitionEdge(
         }
     }
 
-    private fun ActionRef.render(): String {
-        val name = name ?: "unnamed"
-        return if (args.isEmpty()) name else "$name(${args.joinToString(", ")})"
-    }
+    private fun ActionRef.Bound.render(): String = if (args.isEmpty()) name else "$name(${args.joinToString(", ")})"
 
     /** True if this edge has a prior action with the given name. */
     fun hasPriorAction(name: String): Boolean = prior?.name == name

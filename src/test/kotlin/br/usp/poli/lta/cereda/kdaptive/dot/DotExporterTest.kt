@@ -182,7 +182,7 @@ class DotExporterTest {
                 source = initial,
                 target = initial,
                 transition = Transition.SymbolTransition(symbol = CharSymbol('z')),
-                prior = ActionRef(name = "A", args = listOf("x", 1)),
+                prior = ActionRef.Bound(name = "A", args = listOf("x", 1)),
             ),
         )
         val dot = exporter.toDot(a.transitions, a.submachines)
@@ -273,6 +273,36 @@ class DotExporterTest {
         assertTrue(dot.contains("label=\"q\\\"0\""))
         assertTrue(dot.contains("label=\"q\\\\0\""))
         assertTrue(dot.contains("label=\"q\\n0\""))
+    }
+
+    @Test
+    fun `cluster identifiers do not collide`() {
+        // "a-b" and "a_b" are two different submachines: their clusters must
+        // stay two different clusters.
+        val spec = automaton {
+            val q0 = state("q0")
+            val q1 = state("q1")
+            val q2 = state("q2")
+            val q3 = state("q3")
+            submachine("a-b") {
+                initial(q0)
+                state(q1)
+                accepting(q1)
+            }
+            submachine("a_b") {
+                initial(q2)
+                state(q3)
+                accepting(q3)
+            }
+            main("a-b")
+        }
+        val a = specToAutomaton(spec)
+        a.setup()
+        val dot = exporter.toDot(a.transitions, a.submachines)
+
+        val clusters = dot.lines().filter { line -> line.startsWith("  subgraph cluster_") }
+        assertEquals(2, clusters.size)
+        assertEquals(2, clusters.toSet().size)
     }
 
     @Test

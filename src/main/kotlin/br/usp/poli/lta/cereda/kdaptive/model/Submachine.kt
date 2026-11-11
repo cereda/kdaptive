@@ -6,15 +6,16 @@ import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
 /**
  * Formal definition of a submachine.
  *
- * @param id the unique identifier for this submachine
+ * Two submachines are equal when they have the same name and the same states.
+ * The [id] is bookkeeping, not identity: it is not part of equality, so
+ * declaring the same submachine twice does not duplicate it.
+ *
  * @param name the name of this submachine
  * @param states the set of all states in this submachine
  * @param initialState the initial state of this submachine
  * @param acceptingStates the set of accepting states
  */
 data class Submachine(
-    /** The unique identifier for this submachine. */
-    val id: Int = IdentifierUtils.nextSubmachineId(),
     /** The name of this submachine. */
     val name: String,
     /** The set of all states in this submachine. */
@@ -24,6 +25,13 @@ data class Submachine(
     /** The set of accepting states. */
     val acceptingStates: Set<State>,
 ) {
+    /**
+     * The unique identifier of this submachine.
+     *
+     * The identifier is deliberately outside the equality of the submachine.
+     */
+    val id: Int = IdentifierUtils.nextSubmachineId()
+
     init {
         require(
             states.contains(initialState) && states.containsAll(acceptingStates),

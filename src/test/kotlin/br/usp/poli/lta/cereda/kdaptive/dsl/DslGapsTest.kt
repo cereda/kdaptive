@@ -273,7 +273,7 @@ class DslGapsTest {
     }
 
     @Test
-    fun `an action without references and a nameless reference are accepted by the builder`() {
+    fun `an action without references is accepted by the builder`() {
         val spec =
             automaton {
                 submachine("M") {
@@ -281,12 +281,26 @@ class DslGapsTest {
                     accepting("q1")
                 }
                 action("Unused", arity = 2) { _, _ -> }
-                // A nameless reference cannot be checked; the engine reports it.
-                on("q0").on('a').to("q1", post = ActionRef(name = null))
+                on("q0").on('a').to("q1")
                 main("M")
             }
         assertEquals(1, spec.transitions.size)
         assertEquals(1, spec.actions.size)
+    }
+
+    @Test
+    fun `a filter reference is rejected as an edge binding`() {
+        // An edge fires one concrete action: a filter has no place there.
+        assertThrows<IllegalArgumentException> {
+            automaton {
+                submachine("M") {
+                    initial("q0")
+                    accepting("q1")
+                }
+                on("q0").on('a').to("q1", post = ActionRef.Named("A"))
+                main("M")
+            }
+        }
     }
 
     @Test

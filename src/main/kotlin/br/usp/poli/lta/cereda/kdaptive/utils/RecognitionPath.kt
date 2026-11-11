@@ -6,7 +6,9 @@ import br.usp.poli.lta.cereda.kdaptive.model.State
 /**
  * A recognition path: all transitions traversed during recognition of an input string.
  *
- * @param id the unique identifier for this path
+ * @param id the unique identifier for this path; it is the key under which
+ *   the path is reported in the recognition map, and it stays the same for
+ *   the whole life of the path
  * @param path the list of transition IDs in order
  * @param cursor the current cursor position in the input
  * @param state the current state, or null if none

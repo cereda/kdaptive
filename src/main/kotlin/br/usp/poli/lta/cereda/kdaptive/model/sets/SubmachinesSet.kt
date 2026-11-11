@@ -25,7 +25,10 @@ class SubmachinesSet {
     /**
      * Returns all submachines in the set.
      *
-     * @return an unmodifiable set of all submachines
+     * The set is live: it reflects the set as it is, and mutating it mutates
+     * the set of submachines.
+     *
+     * @return the live set of all submachines
      */
     fun getSubmachines(): Set<Submachine> = submachines
 

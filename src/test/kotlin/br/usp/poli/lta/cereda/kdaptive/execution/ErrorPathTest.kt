@@ -6,6 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
+import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -62,29 +63,50 @@ class ErrorPathTest {
         assertTrue(ex.message!!.contains("recognize() must be called"))
     }
 
+    /** An automaton exposing its states, so the edge-building guards can be exercised. */
+    private class PlainAa : AdaptiveAutomaton() {
+        val q0 = object : State() {}
+        val q1 = object : State() {}
+
+        override fun newInstance(): AdaptiveAutomaton = PlainAa()
+
+        override fun setup() {
+            mainSubmachine = "M"
+        }
+    }
+
     @Test
-    fun `unnamed prior action fails loudly`() {
-        val aa = FaultAa { it.copy(prior = ActionRef(name = null)) }
-        val ex = assertThrows<IllegalStateException> { aa.recognize(aa.char('a')) }
-        assertTrue(ex.message!!.contains("Recognition path"))
-        assertTrue(ex.message!!.contains("has no name"))
+    fun `a filter reference cannot be attached to an edge`() {
+        // An edge fires one concrete action: a filter has no place there.
+        val aa = PlainAa()
+        val ex =
+            assertThrows<IllegalArgumentException> {
+                aa.consume(aa.q0, 'a', aa.q1, prior = ActionRef.Named("A"))
+            }
+        assertTrue(ex.message!!.contains("is a filter"))
+    }
+
+    @Test
+    fun `a wildcard symbol cannot be consumed`() {
+        val aa = PlainAa()
+        assertThrows<IllegalArgumentException> { aa.consume(aa.q0, Symbol.Any, aa.q1) }
+        assertThrows<IllegalArgumentException> { aa.consume(aa.q0, Symbol.Epsilon, aa.q1) }
     }
 
     @Test
     fun `unknown post action name fails loudly`() {
-        val aa = FaultAa { it.copy(post = ActionRef(name = "no-such-action")) }
+        val aa = FaultAa { it.copy(post = ActionRef.Bound(name = "no-such-action")) }
         val ex = assertThrows<IllegalStateException> { aa.recognize(aa.char('a')) }
         assertTrue(ex.message!!.contains("Recognition path"))
         assertTrue(ex.message!!.contains("No action with name 'no-such-action'."))
     }
 
     @Test
-    fun `unnamed post action registration unresolved fails loudly`() {
-        // An action reference without arguments is still valid; ensure a null-name post
-        // action is also rejected instead of silently being skipped.
-        val aa = FaultAa { it.copy(post = ActionRef(name = null)) }
+    fun `an unknown prior action name fails loudly`() {
+        val aa = FaultAa { it.copy(prior = ActionRef.Bound(name = "no-such-action")) }
         val ex = assertThrows<IllegalStateException> { aa.recognize(aa.char('a')) }
         assertTrue(ex.message!!.contains("Recognition path"))
+        assertTrue(ex.message!!.contains("No action with name 'no-such-action'."))
     }
 
     @Test

@@ -85,6 +85,22 @@ class PathExecutor(
 ) {
     private val logger: Logger = LoggerFactory.getLogger(javaClass)
 
+    /**
+     * The consumer's own callbacks, captured before the engine chains its
+     * visitor dispatch onto them.
+     *
+     * The engine reports every mutation of the path's mapping to its
+     * visitors; the callbacks the consumer registered on the mapping must
+     * keep firing, exactly once per event. A forked path inherits a copy of
+     * the mapping, and therefore a copy of these callbacks — it must not
+     * inherit the parent's dispatch, which reports under the parent's path
+     * identifier.
+     */
+    private val consumerOnEdgeAdded = config.transitions.onEdgeAdded
+    private val consumerOnEdgeRemoved = config.transitions.onEdgeRemoved
+    private val consumerOnOperation = config.transitions.onOperation
+    private val consumerOnObservation = config.transitions.onObservation
+
     // Convenience accessors delegating to [config].
 
     /** The call stack used for submachine calls and returns. */
@@ -128,11 +144,15 @@ class PathExecutor(
         logger.debug("Path $id started run()")
 
         // Wire topology mutation callbacks so visitors observe every edge
-        // add/remove on this path's transition mapping.
+        // add/remove on this path's transition mapping. The consumer's own
+        // callbacks are chained, not replaced: they still fire, once per
+        // event.
         config.transitions.onEdgeAdded = { edge ->
+            consumerOnEdgeAdded?.invoke(edge)
             config.visitors.forEach { it.onEdgeAdded(id, edge, config.transitions, config.submachines) }
         }
         config.transitions.onEdgeRemoved = { edge ->
+            consumerOnEdgeRemoved?.invoke(edge)
             config.visitors.forEach { it.onEdgeRemoved(id, edge, config.transitions, config.submachines) }
         }
 
@@ -140,12 +160,14 @@ class PathExecutor(
         // operations performed on this path's mapping, including the reads
         // that change nothing and would otherwise be invisible.
         config.transitions.onOperation = { operation ->
+            consumerOnOperation?.invoke(operation)
             config.visitors.forEach { it.onMappingOperation(id, operation) }
         }
 
         // Wire the fact channel, so visitors observe what action code
         // publishes about this path.
         config.transitions.onObservation = { observation ->
+            consumerOnObservation?.invoke(observation)
             config.visitors.forEach { it.onObservation(id, observation) }
         }
 
@@ -208,11 +230,7 @@ class PathExecutor(
         config.visitors.forEach { it.onBeforeAction(id, ref, isPrior = true) }
 
         logger.debug("[Path $id] Executing prior action ${ref.name} on transition ${tr.id}.")
-        val name = ref.name
-            ?: error(
-                "Prior action on transition ${tr.id} has no name; an action reference must name a registered action.",
-            )
-        actions.fromName(name).handler(transitions, tr.transition, ref.args)
+        actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
         config.enablePriorAction = false
         config.visitors.forEach { it.onAfterAction(id, ref, isPrior = true) }
 
@@ -253,12 +271,8 @@ class PathExecutor(
         val ref = tr.post ?: return
         config.visitors.forEach { it.onBeforeAction(id, ref, isPrior = false) }
 
-        val name = ref.name
-            ?: error(
-                "Post action on transition ${tr.id} has no name; an action reference must name a registered action.",
-            )
-        logger.debug("[Path $id] Executing post action $name on transition ${tr.id}.")
-        actions.fromName(name).handler(transitions, tr.transition, ref.args)
+        logger.debug("[Path $id] Executing post action ${ref.name} on transition ${tr.id}.")
+        actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
         config.visitors.forEach { it.onAfterAction(id, ref, isPrior = false) }
     }
 
@@ -352,6 +366,11 @@ class PathExecutor(
      * Creates a child path for [transition], inheriting this path's stack,
      * actions, topology and visitor chain.
      *
+     * The child owns a private copy of the topology, so a mutation on one
+     * path never reaches its siblings. The copy also carries the consumer's
+     * callbacks, but not the parent's visitor dispatch: the child reports
+     * under its own path identifier.
+     *
      * @return the child path, carrying the edge it was created for
      */
     private fun fork(
@@ -361,13 +380,18 @@ class PathExecutor(
         curSubmachine: String?,
         enablePrior: Boolean,
     ): ForkedPath {
+        val childTransitions = transitions.copy()
+        childTransitions.onEdgeAdded = consumerOnEdgeAdded
+        childTransitions.onEdgeRemoved = consumerOnEdgeRemoved
+        childTransitions.onOperation = consumerOnOperation
+        childTransitions.onObservation = consumerOnObservation
         val k =
             PathExecutor(
                 config =
                 PathExecutorConfig(
                     stack = stack.copy(),
                     actions = actions.copy(),
-                    transitions = transitions.copy(),
+                    transitions = childTransitions,
                     submachines = submachines.copy(),
                     input = input,
                     cursor = curCursor,
@@ -381,7 +405,8 @@ class PathExecutor(
                 threads = threads,
                 paths = paths,
             )
-        paths[k.id] = paths[id]?.addStep(transition.toString()) ?: RecognitionPath().addStep(transition.toString())
+        val steps = paths[id]?.path.orEmpty() + transition.toString()
+        paths[k.id] = RecognitionPath(id = k.id, path = steps)
         threads.add(k)
         logger.debug("[Path $id] Forked path ${k.id} for transition ${transition.id}.")
         return ForkedPath(k.id, transition)
@@ -389,13 +414,13 @@ class PathExecutor(
 
     private fun accept(state: State?, cursor: Int) {
         paths[id] = paths[id]?.copy(result = true, cursor = cursor, state = state)
-            ?: RecognitionPath(result = true, cursor = cursor, state = state)
+            ?: RecognitionPath(id = id, result = true, cursor = cursor, state = state)
         logger.debug("[Path $id] String accepted.")
     }
 
     private fun reject(state: State?, cursor: Int) {
         paths[id] = paths[id]?.copy(result = false, cursor = cursor, state = state)
-            ?: RecognitionPath(result = false, cursor = cursor, state = state)
+            ?: RecognitionPath(id = id, result = false, cursor = cursor, state = state)
         logger.debug("[Path $id] String rejected.")
     }
 }

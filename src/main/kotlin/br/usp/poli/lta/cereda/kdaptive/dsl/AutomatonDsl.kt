@@ -60,10 +60,10 @@ class DslActionContext internal constructor(
     fun freshState(prefix: String = "g"): State = newStateSupplier(prefix)
 
     /**
-     * Builds an [ActionRef] with the given runtime [args], which are passed
-     * through unchanged (they are values known only during execution).
+     * Builds an [ActionRef.Bound] with the given runtime [args], which are
+     * passed through unchanged (they are values known only during execution).
      */
-    fun ref(name: String, vararg args: Any): ActionRef = ActionRef(name = name, args = args.toList())
+    fun ref(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound(name = name, args = args.toList())
 
     /**
      * Publishes a fact about this action to the observation sink of the
@@ -211,10 +211,18 @@ class AutomatonBuilder {
         else -> throw IllegalArgumentException("Cannot resolve '$value' to Symbol")
     }
 
-    private fun resolveActionRef(value: Any?): ActionRef? = when (value) {
+    private fun resolveActionRef(value: Any?): ActionRef.Bound? = when (value) {
         null -> null
-        is ActionRef -> value
-        is String -> ActionRef(name = value)
+
+        is ActionRef.Bound -> value
+
+        is String -> ActionRef.Bound(name = value)
+
+        is ActionRef -> throw IllegalArgumentException(
+            "An edge must bind a concrete action, but '$value' is a filter. " +
+                "Use ActionRef.Bound(name, args) to attach an action to an edge.",
+        )
+
         else -> throw IllegalArgumentException("Cannot resolve '$value' to ActionRef")
     }
 
@@ -259,9 +267,10 @@ class AutomatonBuilder {
     }
 
     /**
-     * Builds an [ActionRef] with build-time argument resolution: [String]
-     * arguments become the corresponding named [State], [Char] arguments
-     * become a [CharSymbol] and any other value is passed through unchanged.
+     * Builds an [ActionRef.Bound] with build-time argument resolution:
+     * [String] arguments become the corresponding named [State], [Char]
+     * arguments become a [CharSymbol] and any other value is passed through
+     * unchanged.
      *
      * A string argument names a state of the automaton: the builder checks at
      * the end of the block that every named state really belongs to the
@@ -269,7 +278,7 @@ class AutomatonBuilder {
      * Use plain `actionRef` or [ActionRef] directly to pass string payloads
      * or when the arguments are already typed objects.
      */
-    fun ref(name: String, vararg args: Any): ActionRef {
+    fun ref(name: String, vararg args: Any): ActionRef.Bound {
         val resolved = args.map { argument ->
             when (argument) {
                 is State -> argument
@@ -287,7 +296,7 @@ class AutomatonBuilder {
                 else -> argument
             }
         }
-        return ActionRef(name = name, args = resolved)
+        return ActionRef.Bound(name = name, args = resolved)
     }
 
     // -----------------------------------------------------------------------
@@ -446,9 +455,8 @@ class AutomatonBuilder {
     }
 
     /** Records that an edge refers to [reference], for the arity contract. */
-    private fun recordReference(reference: ActionRef) {
-        val name = reference.name ?: return
-        actionReferences.getOrPut(name) { mutableListOf() }.add(reference.args.size)
+    private fun recordReference(reference: ActionRef.Bound) {
+        actionReferences.getOrPut(reference.name) { mutableListOf() }.add(reference.args.size)
     }
 
     /** Checks every reference against the arity declared by its action. */

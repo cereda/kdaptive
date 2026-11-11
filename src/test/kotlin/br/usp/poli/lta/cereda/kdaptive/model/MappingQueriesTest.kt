@@ -40,8 +40,8 @@ class MappingQueriesTest {
                 source = Q0,
                 target = Q1,
                 transition = Transition.SymbolTransition(symbol = CharSymbol('a')),
-                prior = ActionRef(name = "PA"),
-                post = ActionRef(name = "PB", args = listOf(1)),
+                prior = ActionRef.Bound(name = "PA"),
+                post = ActionRef.Bound(name = "PB", args = listOf(1)),
             ),
         )
         m.add(
@@ -55,7 +55,7 @@ class MappingQueriesTest {
                 source = Q2,
                 target = Q0,
                 transition = Transition.SymbolTransition(symbol = CharSymbol('b')),
-                prior = ActionRef(name = "PA"),
+                prior = ActionRef.Bound(name = "PA"),
             ),
         )
         return m
@@ -177,9 +177,9 @@ class MappingQueriesTest {
         assertFalse(isOrdinary(callEdge))
         assertTrue(isSubmachineReturn(TransitionEdge(source = Q0, target = Q0, transition = Transition.Return)))
         assertFalse(isSubmachineReturn(edge))
-        assertTrue(hasPriorAction(edge.copy(prior = ActionRef(name = "A"))))
+        assertTrue(hasPriorAction(edge.copy(prior = ActionRef.Bound(name = "A"))))
         assertFalse(hasPriorAction(edge))
-        assertTrue(hasPostAction(edge.copy(post = ActionRef(name = "B"))))
+        assertTrue(hasPostAction(edge.copy(post = ActionRef.Bound(name = "B"))))
         assertTrue(isEpsilon(TransitionEdge(source = Q0, target = Q1, transition = Transition.Epsilon)))
         assertFalse(isEpsilon(callEdge))
     }

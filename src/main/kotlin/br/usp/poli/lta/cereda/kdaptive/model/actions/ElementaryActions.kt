@@ -12,11 +12,9 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPatternKind
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.TransitionPredicate
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.allOf
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.anyOf
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.hasPostAction
-import br.usp.poli.lta.cereda.kdaptive.model.predicates.hasPriorAction
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isEpsilon
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSubmachineCall
+import br.usp.poli.lta.cereda.kdaptive.model.predicates.isSymbolConsumption
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.sourceState
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.submachineCall
 import br.usp.poli.lta.cereda.kdaptive.model.predicates.symbol
@@ -24,72 +22,74 @@ import br.usp.poli.lta.cereda.kdaptive.model.predicates.targetState
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
 /**
- * A reference to an action with optional arguments.
+ * Builds a concrete reference to the action named [name], called with [args].
+ *
+ * The result is a binding: it can be attached to an edge, and it constrains
+ * the action slots of a query exactly as it describes them.
+ *
+ * @param name the name of the action
+ * @param args the arguments the action is called with
+ * @return the binding to [name]
  */
-fun actionRef(name: String, vararg args: Any): ActionRef = ActionRef(name, args.toList())
+fun actionRef(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound(name = name, args = args.toList())
 
 /**
- * Specification for querying symbol transitions using the builder DSL.
+ * Specification for querying or removing symbol and epsilon transitions using
+ * the builder DSL.
  *
- * All fields are nullable: `null` means wildcard (matches anything).
+ * Every field carries an explicit value: a wildcard is a value in its own
+ * right, never a null.
  *
- * @property source the source state filter (null = wildcard)
- * @property symbol the symbol filter (null = wildcard)
- * @property target the target state filter (null = wildcard)
- * @property prior the prior action filter (null = wildcard)
- * @property post the post action filter (null = wildcard)
+ * @property source the source state filter ([State.Any] = wildcard)
+ * @property symbol the symbol filter ([Symbol.Any] = any symbol-consuming
+ *   transition, [Symbol.Epsilon] = an epsilon transition)
+ * @property target the target state filter ([State.Any] = wildcard)
+ * @property prior the prior action filter ([ActionRef.Free] = no constraint)
+ * @property post the post action filter ([ActionRef.Free] = no constraint)
  */
-data class SymbolQuerySpec(
-    var source: State? = null,
-    var symbol: Symbol? = null,
-    var target: State? = null,
-    var prior: ActionRef? = null,
-    var post: ActionRef? = null,
+data class SymbolSpec(
+    /** The source state filter. */
+    var source: State = State.Any,
+    /** The symbol filter. */
+    var symbol: Symbol = Symbol.Any,
+    /** The target state filter. */
+    var target: State = State.Any,
+    /** The prior action filter. */
+    var prior: ActionRef = ActionRef.Free,
+    /** The post action filter. */
+    var post: ActionRef = ActionRef.Free,
 )
 
 /**
- * Specification for querying submachine-call transitions using the builder DSL.
+ * Specification for querying or removing submachine-call transitions using
+ * the builder DSL.
  *
- * All fields are nullable: `null` means wildcard (matches anything). A `null`
- * [submachine] matches any submachine-call edge.
- *
- * @property source the source state filter (null = wildcard)
- * @property submachine the submachine name filter (null = wildcard)
- * @property target the target state filter (null = wildcard)
- * @property prior the prior action filter (null = wildcard)
- * @property post the post action filter (null = wildcard)
+ * @property source the source state filter ([State.Any] = wildcard)
+ * @property submachine the submachine name filter (null = any submachine call)
+ * @property target the target state filter ([State.Any] = wildcard)
+ * @property prior the prior action filter ([ActionRef.Free] = no constraint)
+ * @property post the post action filter ([ActionRef.Free] = no constraint)
  */
-data class CallQuerySpec(
-    var source: State? = null,
+data class CallSpec(
+    /** The source state filter. */
+    var source: State = State.Any,
+    /** The submachine name filter; null matches any submachine call. */
     var submachine: String? = null,
-    var target: State? = null,
-    var prior: ActionRef? = null,
-    var post: ActionRef? = null,
-)
-
-/**
- * Specification for removing symbol transitions using the builder DSL.
- *
- * All fields are nullable: `null` means wildcard (matches anything).
- *
- * @property source the source state filter (null = wildcard)
- * @property symbol the symbol filter (null = wildcard)
- * @property target the target state filter (null = wildcard)
- * @property prior the prior action filter (null = wildcard)
- * @property post the post action filter (null = wildcard)
- */
-data class SymbolRemoveSpec(
-    var source: State? = null,
-    var symbol: Symbol? = null,
-    var target: State? = null,
-    var prior: ActionRef? = null,
-    var post: ActionRef? = null,
+    /** The target state filter. */
+    var target: State = State.Any,
+    /** The prior action filter. */
+    var prior: ActionRef = ActionRef.Free,
+    /** The post action filter. */
+    var post: ActionRef = ActionRef.Free,
 )
 
 /**
  * Casts a value to [T], throwing [ClassCastException] if it is not an instance.
  *
  * Useful for extracting typed parameters from an action's `parameters: List<Any>`.
+ *
+ * @throws ClassCastException if the value is not an instance of [T]
+ * @throws NullPointerException if the value is null and [T] is not nullable
  */
 inline fun <reified T> Any?.castOrThrow(): T = this as T
 
@@ -111,25 +111,29 @@ inline fun <reified S : Symbol> Any?.asSymbol(): S = castOrThrow<S>()
 fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentException("Value must not be null")
 
 /**
- * Elementary actions: query, insert and removal of transitions according to a
- * search pattern, using nullable parameters instead of logic variables.
+ * Elementary actions: query, insertion and removal of transitions according to
+ * a search pattern.
  *
- * A `null` parameter acts as a wildcard (matches anything). A non-null
- * parameter acts as a filter. The query methods return the matching
- * transitions; callers extract the fields they need from the result.
+ * The API is organised in two **families**, one per kind of payload a
+ * transition may carry:
  *
- * The API is organised in two **families**, one per kind of transition:
+ * - [query], [remove] and [add] work on symbol-consuming transitions, and on
+ *   epsilon transitions, which are named by [Symbol.Epsilon];
+ * - [queryCall], [removeCall] and [addCall] work on submachine-call
+ *   transitions.
  *
- * - [query] and [remove] work on symbol-consuming transitions;
- * - [queryCall] works on submachine-call transitions.
+ * Each family offers **one method per operation**, whose filters are all
+ * optional, so no call is ever ambiguous. Every filter carries an explicit
+ * value: a wildcard is a value in its own right ([State.Any], [Symbol.Any],
+ * [ActionRef.Free]), never a null. Epsilon is a value too ([Symbol.Epsilon]),
+ * because it denotes the empty word and is not part of the input alphabet.
  *
- * Each family offers **at most one overload per arity**, so no call is ever
- * ambiguous. The filters are always laid out the same way: the **prior-action
- * filter comes first** and the **post-action filter comes last**, bracketing
- * the transition filters the way the actions themselves fire.
+ * The families never overlap: the symbol family never selects a submachine
+ * call, and the call family never selects a symbol-consuming transition.
+ * Neither of them selects the engine's internal return transitions.
  *
- * Builder-style DSL is available via the `query`, `queryCall` and `remove`
- * lambdas, which hide wildcard `null`s behind named fields.
+ * Builder-style DSL is available through the `query`, `remove`, `queryCall`
+ * and `removeCall` lambdas, which hide the wildcards behind named fields.
  */
 class ElementaryActions(private val transitions: TransitionMapping) {
 
@@ -151,262 +155,72 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     // -----------------------------------------------------------------------
 
     /**
-     * Queries symbol transitions by source, symbol, and target states.
+     * Queries symbol-consuming or epsilon transitions.
      *
-     * A `null` symbol filter matches any edge, whatever its kind; a non-null
-     * one also matches epsilon edges (see the class documentation).
+     * The [symbol] filter selects the kind of transition: [Symbol.Any] selects
+     * every symbol-consuming transition, [Symbol.Epsilon] selects the epsilon
+     * transitions, and any other symbol selects the transitions consuming it.
      *
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun query(source: State?, symbol: Symbol?, target: State?): List<TransitionEdge> {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
-                source = source,
-                symbol = symbol,
-                target = target,
-            )
-        val predicates = listOf(sourcePredicate(source), symbolPredicate(symbol), targetPredicate(target))
-        return performQuery(pattern, allOf(predicates))
-    }
-
-    /**
-     * Queries symbol transitions by prior action, source, symbol, and target
-     * states.
+     * The [prior] and [post] filters constrain the action slots of the edge;
+     * [ActionRef.Free] leaves them unconstrained.
      *
-     * The prior-action filter comes first, so that every overload of this
-     * family lays its filters out the same way.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun query(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?): List<TransitionEdge> {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
-                source = source,
-                symbol = symbol,
-                target = target,
-                prior = priorAction,
-            )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                symbolPredicate(symbol),
-                targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
-            )
-        return performQuery(pattern, allOf(predicates))
-    }
-
-    /**
-     * Queries symbol transitions by prior action, source, symbol, target, and
-     * post action.
-     *
-     * The prior-action filter comes first and the post-action filter comes
-     * last, bracketing the transition filters the way the actions fire.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @param postAction the post action filter (nullable = wildcard)
+     * @param source the source state filter ([State.Any] = wildcard)
+     * @param symbol the symbol filter ([Symbol.Any] = wildcard)
+     * @param target the target state filter ([State.Any] = wildcard)
+     * @param prior the prior action filter ([ActionRef.Free] = no constraint)
+     * @param post the post action filter ([ActionRef.Free] = no constraint)
      * @return list of matching [TransitionEdge] instances
      */
     fun query(
-        priorAction: ActionRef?,
-        source: State?,
-        symbol: Symbol?,
-        target: State?,
-        postAction: ActionRef?,
+        source: State = State.Any,
+        symbol: Symbol = Symbol.Any,
+        target: State = State.Any,
+        prior: ActionRef = ActionRef.Free,
+        post: ActionRef = ActionRef.Free,
     ): List<TransitionEdge> {
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
+                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
-                prior = priorAction,
-                post = postAction,
+                prior = prior,
+                post = post,
             )
         val predicates =
             listOf(
                 sourcePredicate(source),
                 symbolPredicate(symbol),
                 targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
-                actionRefPredicate(postAction, isPost = true),
+                actionPredicate(prior, isPost = false),
+                actionPredicate(post, isPost = true),
             )
         return performQuery(pattern, allOf(predicates))
     }
 
-    // -----------------------------------------------------------------------
-    // symbol family: query { ... }
-    // -----------------------------------------------------------------------
-
     /**
-     * Queries symbol transitions using a builder DSL. Unset fields are
-     * wildcards (match anything).
+     * Queries symbol-consuming or epsilon transitions using a builder DSL.
+     * Unset fields carry their wildcard.
      *
      * Example:
      * ```
      * val results = ea.query {
      *     symbol = CharSymbol('a')
      *     target = p1
-     *     // source omitted → wildcard
+     *     // source omitted → State.Any
      * }
      *
-     * val filtered = ea.query {
-     *     symbol = CharSymbol('a')
-     *     prior = actionRef("A")
-     * }
-     * ```
-     *
-     * @param configure the block that fills the [SymbolQuerySpec]
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun query(configure: SymbolQuerySpec.() -> Unit): List<TransitionEdge> {
-        val spec = SymbolQuerySpec().also(configure)
-        return when {
-            spec.prior == null && spec.post == null -> query(spec.source, spec.symbol, spec.target)
-            spec.post == null -> query(spec.prior, spec.source, spec.symbol, spec.target)
-            else -> query(spec.prior, spec.source, spec.symbol, spec.target, spec.post)
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // call family: queryCall
-    // -----------------------------------------------------------------------
-
-    /**
-     * Queries submachine-call transitions by source, submachine name, and
-     * target states.
-     *
-     * A `null` submachine filter matches any submachine-call edge.
-     *
-     * @param source the source state filter (nullable = wildcard)
-     * @param submachine the submachine name filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun queryCall(source: State?, submachine: String?, target: State?): List<TransitionEdge> {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
-                source = source,
-                target = target,
-                submachine = submachine,
-            )
-        val predicates = listOf(sourcePredicate(source), submachinePredicate(submachine), targetPredicate(target))
-        return performQuery(pattern, allOf(predicates))
-    }
-
-    /**
-     * Queries submachine-call transitions by prior action, source, submachine
-     * name, and target.
-     *
-     * The prior-action filter comes first, so that every overload of this
-     * family lays its filters out the same way.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param submachine the submachine name filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun queryCall(priorAction: ActionRef?, source: State?, submachine: String?, target: State?): List<TransitionEdge> {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
-                source = source,
-                target = target,
-                submachine = submachine,
-                prior = priorAction,
-            )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                submachinePredicate(submachine),
-                targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
-            )
-        return performQuery(pattern, allOf(predicates))
-    }
-
-    /**
-     * Queries submachine-call transitions by prior action, source, submachine
-     * name, target, and post action.
-     *
-     * The prior-action filter comes first and the post-action filter comes
-     * last, bracketing the transition filters the way the actions fire.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param submachine the submachine name filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @param postAction the post action filter (nullable = wildcard)
-     * @return list of matching [TransitionEdge] instances
-     */
-    fun queryCall(
-        priorAction: ActionRef?,
-        source: State?,
-        submachine: String?,
-        target: State?,
-        postAction: ActionRef?,
-    ): List<TransitionEdge> {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SUBMACHINE,
-                source = source,
-                target = target,
-                submachine = submachine,
-                prior = priorAction,
-                post = postAction,
-            )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                submachinePredicate(submachine),
-                targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
-                actionRefPredicate(postAction, isPost = true),
-            )
-        return performQuery(pattern, allOf(predicates))
-    }
-
-    // -----------------------------------------------------------------------
-    // call family: queryCall { ... }
-    // -----------------------------------------------------------------------
-
-    /**
-     * Queries submachine-call transitions using a builder DSL. Unset fields
-     * are wildcards (match anything).
-     *
-     * Example:
-     * ```
-     * val results = ea.queryCall {
-     *     submachine = "M"
-     *     target = p1
-     *     // source omitted → wildcard
+     * val epsilons = ea.query {
+     *     symbol = Symbol.Epsilon
      * }
      * ```
      *
-     * @param configure the block that fills the [CallQuerySpec]
+     * @param configure the block that fills the [SymbolSpec]
      * @return list of matching [TransitionEdge] instances
      */
-    fun queryCall(configure: CallQuerySpec.() -> Unit): List<TransitionEdge> {
-        val spec = CallQuerySpec().also(configure)
-        return when {
-            spec.prior == null && spec.post == null -> queryCall(spec.source, spec.submachine, spec.target)
-            spec.post == null -> queryCall(spec.prior, spec.source, spec.submachine, spec.target)
-            else -> queryCall(spec.prior, spec.source, spec.submachine, spec.target, spec.post)
-        }
+    fun query(configure: SymbolSpec.() -> Unit): List<TransitionEdge> {
+        val spec = SymbolSpec().also(configure)
+        return query(spec.source, spec.symbol, spec.target, spec.prior, spec.post)
     }
 
     // -----------------------------------------------------------------------
@@ -414,122 +228,67 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     // -----------------------------------------------------------------------
 
     /**
-     * Removes symbol transitions by source, symbol, and target states.
+     * Removes the symbol-consuming or epsilon transitions matching the filters.
      *
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
+     * The filters mean exactly what they mean in [query].
+     *
+     * @param source the source state filter ([State.Any] = wildcard)
+     * @param symbol the symbol filter ([Symbol.Any] = wildcard)
+     * @param target the target state filter ([State.Any] = wildcard)
+     * @param prior the prior action filter ([ActionRef.Free] = no constraint)
+     * @param post the post action filter ([ActionRef.Free] = no constraint)
      */
-    fun remove(source: State?, symbol: Symbol?, target: State?) {
+    fun remove(
+        source: State = State.Any,
+        symbol: Symbol = Symbol.Any,
+        target: State = State.Any,
+        prior: ActionRef = ActionRef.Free,
+        post: ActionRef = ActionRef.Free,
+    ) {
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
+                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
-            )
-        val predicates = listOf(sourcePredicate(source), symbolPredicate(symbol), targetPredicate(target))
-        performRemove(pattern, allOf(predicates))
-    }
-
-    /**
-     * Removes symbol transitions by prior action, source, symbol, and target
-     * states.
-     *
-     * The prior-action filter comes first, so that every overload of this
-     * family lays its filters out the same way.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     */
-    fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?) {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
-                source = source,
-                symbol = symbol,
-                target = target,
-                prior = priorAction,
+                prior = prior,
+                post = post,
             )
         val predicates =
             listOf(
                 sourcePredicate(source),
                 symbolPredicate(symbol),
                 targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
+                actionPredicate(prior, isPost = false),
+                actionPredicate(post, isPost = true),
             )
         performRemove(pattern, allOf(predicates))
     }
 
     /**
-     * Removes symbol transitions by prior action, source, symbol, target, and
-     * post action.
-     *
-     * The prior-action filter comes first and the post-action filter comes
-     * last, bracketing the transition filters the way the actions fire.
-     *
-     * @param priorAction the prior action filter (nullable = wildcard)
-     * @param source the source state filter (nullable = wildcard)
-     * @param symbol the symbol filter (nullable = wildcard)
-     * @param target the target state filter (nullable = wildcard)
-     * @param postAction the post action filter (nullable = wildcard)
-     */
-    fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?, postAction: ActionRef?) {
-        val pattern =
-            TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
-                source = source,
-                symbol = symbol,
-                target = target,
-                prior = priorAction,
-                post = postAction,
-            )
-        val predicates =
-            listOf(
-                sourcePredicate(source),
-                symbolPredicate(symbol),
-                targetPredicate(target),
-                actionRefPredicate(priorAction, isPost = false),
-                actionRefPredicate(postAction, isPost = true),
-            )
-        performRemove(pattern, allOf(predicates))
-    }
-
-    // -----------------------------------------------------------------------
-    // symbol family: remove { ... }
-    // -----------------------------------------------------------------------
-
-    /**
-     * Removes symbol transitions using a builder DSL. Unset fields are
-     * wildcards (match anything).
+     * Removes the symbol-consuming or epsilon transitions matching the filters
+     * given in the builder DSL. Unset fields carry their wildcard.
      *
      * Example:
      * ```
      * ea.remove {
      *     symbol = CharSymbol('b')
      *     target = p1
-     *     // source omitted → wildcard
      * }
      *
      * ea.remove {
      *     source = q1
      *     symbol = CharSymbol('a')
      *     target = q1
-     *     prior = actionRef("A", p1, p2)
+     *     prior = ActionRef.Named("A")
      * }
      * ```
      *
-     * @param configure the block that fills the [SymbolRemoveSpec]
+     * @param configure the block that fills the [SymbolSpec]
      */
-    fun remove(configure: SymbolRemoveSpec.() -> Unit) {
-        val spec = SymbolRemoveSpec().also(configure)
-        when {
-            spec.prior == null && spec.post == null -> remove(spec.source, spec.symbol, spec.target)
-            spec.post == null -> remove(spec.prior, spec.source, spec.symbol, spec.target)
-            else -> remove(spec.prior, spec.source, spec.symbol, spec.target, spec.post)
-        }
+    fun remove(configure: SymbolSpec.() -> Unit) {
+        val spec = SymbolSpec().also(configure)
+        remove(spec.source, spec.symbol, spec.target, spec.prior, spec.post)
     }
 
     // -----------------------------------------------------------------------
@@ -537,52 +296,210 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     // -----------------------------------------------------------------------
 
     /**
-     * Adds a symbol-consuming transition.
+     * Adds a transition to the mapping.
+     *
+     * A [Symbol.Epsilon] symbol adds an epsilon transition, which consumes no
+     * input; any other symbol adds a symbol-consuming transition. The
+     * wildcard [Symbol.Any] is not a symbol and is rejected.
      *
      * @param source the source state
-     * @param symbol the symbol to consume
+     * @param symbol the symbol to consume, or [Symbol.Epsilon]
      * @param target the target state
+     * @param prior the prior action executed before the edge is traversed
+     * @param post the post action executed after the edge is traversed
+     * @throws IllegalArgumentException if a wildcard state or symbol is given
      */
-    fun add(source: State, symbol: Symbol, target: State) {
+    fun add(
+        source: State,
+        symbol: Symbol,
+        target: State,
+        prior: ActionRef.Bound? = null,
+        post: ActionRef.Bound? = null,
+    ) {
+        require(source !== State.Any) { "The source of an added transition must be a concrete state." }
+        require(target !== State.Any) { "The target of an added transition must be a concrete state." }
+        require(symbol !== Symbol.Any) { "The symbol of an added transition must be a concrete symbol." }
+        val transition =
+            if (symbol === Symbol.Epsilon) {
+                Transition.Epsilon
+            } else {
+                Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target)
+            }
         val edge =
             TransitionEdge(
                 source = source,
                 target = target,
-                transition = Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target),
+                transition = transition,
+                prior = prior,
+                post = post,
             )
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
+                kind = symbolKind(symbol),
                 source = source,
                 symbol = symbol,
                 target = target,
+                prior = prior ?: ActionRef.None,
+                post = post ?: ActionRef.None,
             )
         performAdd(pattern, edge)
     }
 
+    // -----------------------------------------------------------------------
+    // call family: queryCall
+    // -----------------------------------------------------------------------
+
     /**
-     * Adds a symbol-consuming transition with a prior action.
+     * Queries submachine-call transitions.
+     *
+     * A null [submachine] filter matches any submachine-call edge.
+     *
+     * @param source the source state filter ([State.Any] = wildcard)
+     * @param submachine the submachine name filter (null = any call)
+     * @param target the target state filter ([State.Any] = wildcard)
+     * @param prior the prior action filter ([ActionRef.Free] = no constraint)
+     * @param post the post action filter ([ActionRef.Free] = no constraint)
+     * @return list of matching [TransitionEdge] instances
+     */
+    fun queryCall(
+        source: State = State.Any,
+        submachine: String? = null,
+        target: State = State.Any,
+        prior: ActionRef = ActionRef.Free,
+        post: ActionRef = ActionRef.Free,
+    ): List<TransitionEdge> {
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                submachine = submachine,
+                target = target,
+                prior = prior,
+                post = post,
+            )
+        val predicates =
+            listOf(
+                sourcePredicate(source),
+                submachinePredicate(submachine),
+                targetPredicate(target),
+                actionPredicate(prior, isPost = false),
+                actionPredicate(post, isPost = true),
+            )
+        return performQuery(pattern, allOf(predicates))
+    }
+
+    /**
+     * Queries submachine-call transitions using a builder DSL. Unset fields
+     * carry their wildcard.
+     *
+     * Example:
+     * ```
+     * val results = ea.queryCall {
+     *     submachine = "M"
+     *     target = p1
+     * }
+     * ```
+     *
+     * @param configure the block that fills the [CallSpec]
+     * @return list of matching [TransitionEdge] instances
+     */
+    fun queryCall(configure: CallSpec.() -> Unit): List<TransitionEdge> {
+        val spec = CallSpec().also(configure)
+        return queryCall(spec.source, spec.submachine, spec.target, spec.prior, spec.post)
+    }
+
+    // -----------------------------------------------------------------------
+    // call family: removeCall
+    // -----------------------------------------------------------------------
+
+    /**
+     * Removes the submachine-call transitions matching the filters.
+     *
+     * The filters mean exactly what they mean in [queryCall].
+     *
+     * @param source the source state filter ([State.Any] = wildcard)
+     * @param submachine the submachine name filter (null = any call)
+     * @param target the target state filter ([State.Any] = wildcard)
+     * @param prior the prior action filter ([ActionRef.Free] = no constraint)
+     * @param post the post action filter ([ActionRef.Free] = no constraint)
+     */
+    fun removeCall(
+        source: State = State.Any,
+        submachine: String? = null,
+        target: State = State.Any,
+        prior: ActionRef = ActionRef.Free,
+        post: ActionRef = ActionRef.Free,
+    ) {
+        val pattern =
+            TransitionPattern(
+                kind = TransitionPatternKind.SUBMACHINE,
+                source = source,
+                submachine = submachine,
+                target = target,
+                prior = prior,
+                post = post,
+            )
+        val predicates =
+            listOf(
+                sourcePredicate(source),
+                submachinePredicate(submachine),
+                targetPredicate(target),
+                actionPredicate(prior, isPost = false),
+                actionPredicate(post, isPost = true),
+            )
+        performRemove(pattern, allOf(predicates))
+    }
+
+    /**
+     * Removes the submachine-call transitions matching the filters given in
+     * the builder DSL. Unset fields carry their wildcard.
+     *
+     * @param configure the block that fills the [CallSpec]
+     */
+    fun removeCall(configure: CallSpec.() -> Unit) {
+        val spec = CallSpec().also(configure)
+        removeCall(spec.source, spec.submachine, spec.target, spec.prior, spec.post)
+    }
+
+    // -----------------------------------------------------------------------
+    // call family: addCall
+    // -----------------------------------------------------------------------
+
+    /**
+     * Adds a submachine-call transition to the mapping.
      *
      * @param source the source state
-     * @param symbol the symbol to consume
-     * @param target the target state
-     * @param priorAction the prior action reference
+     * @param submachine the name of the submachine to call
+     * @param target the return state, owned by the calling submachine
+     * @param prior the prior action executed before the call
+     * @param post the post action executed after the jump into the submachine
+     * @throws IllegalArgumentException if a wildcard state is given
      */
-    fun add(source: State, symbol: Symbol, target: State, priorAction: ActionRef) {
+    fun addCall(
+        source: State,
+        submachine: String,
+        target: State,
+        prior: ActionRef.Bound? = null,
+        post: ActionRef.Bound? = null,
+    ) {
+        require(source !== State.Any) { "The source of an added transition must be a concrete state." }
+        require(target !== State.Any) { "The target of an added transition must be a concrete state." }
         val edge =
             TransitionEdge(
                 source = source,
                 target = target,
-                transition = Transition.SymbolTransition(symbol = symbol, sourceState = source, targetState = target),
-                prior = priorAction,
+                transition = Transition.Call(submachine = submachine),
+                prior = prior,
+                post = post,
             )
         val pattern =
             TransitionPattern(
-                kind = TransitionPatternKind.SYMBOL,
+                kind = TransitionPatternKind.SUBMACHINE,
                 source = source,
-                symbol = symbol,
+                submachine = submachine,
                 target = target,
-                prior = priorAction,
+                prior = prior ?: ActionRef.None,
+                post = post ?: ActionRef.None,
             )
         performAdd(pattern, edge)
     }
@@ -636,61 +553,68 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         transitions.onOperation?.invoke(MappingOperation.Add(pattern, edge, before, after))
     }
 
-    /** The source-state filter: a `null` filter matches any source state. */
-    private fun sourcePredicate(source: State?): TransitionPredicate =
-        if (source == null) { _: TransitionEdge -> true } else sourceState(source)
+    /** The source-state filter: [State.Any] matches any source state. */
+    private fun sourcePredicate(source: State): TransitionPredicate =
+        if (source === State.Any) { _: TransitionEdge -> true } else sourceState(source)
 
-    /** The target-state filter: a `null` filter matches any target state. */
-    private fun targetPredicate(target: State?): TransitionPredicate =
-        if (target == null) { _: TransitionEdge -> true } else targetState(target)
+    /** The target-state filter: [State.Any] matches any target state. */
+    private fun targetPredicate(target: State): TransitionPredicate =
+        if (target === State.Any) { _: TransitionEdge -> true } else targetState(target)
 
     /**
-     * The symbol filter: a `null` filter matches any edge, while a non-null one
-     * also matches epsilon edges, mirroring the engine's own semantics.
+     * The symbol filter: [Symbol.Epsilon] selects the epsilon transitions,
+     * [Symbol.Any] selects every symbol-consuming transition, and any other
+     * symbol selects the transitions consuming it.
      */
-    private fun symbolPredicate(filter: Symbol?): TransitionPredicate =
-        if (filter == null) { _: TransitionEdge -> true } else anyOf(listOf(symbol(filter), isEpsilon))
+    private fun symbolPredicate(filter: Symbol): TransitionPredicate = when {
+        filter === Symbol.Epsilon -> isEpsilon
+        filter === Symbol.Any -> isSymbolConsumption
+        else -> symbol(filter)
+    }
 
     /**
-     * The submachine filter: a `null` filter matches any submachine-call edge,
+     * The submachine filter: a null filter matches any submachine-call edge,
      * while a non-null one matches calls to that submachine only.
      */
     private fun submachinePredicate(filter: String?): TransitionPredicate =
         if (filter == null) isSubmachineCall else submachineCall(filter)
 
-    private fun actionRefPredicate(aq: ActionRef?, isPost: Boolean): TransitionPredicate {
-        if (aq == null) return { _: TransitionEdge -> true }
+    /** The family a symbol filter belongs to. */
+    private fun symbolKind(filter: Symbol): TransitionPatternKind =
+        if (filter === Symbol.Epsilon) TransitionPatternKind.EPSILON else TransitionPatternKind.SYMBOL
 
-        val namePred =
-            if (aq.name == null) {
-                if (isPost) hasPostAction else hasPriorAction
-            } else {
-                if (isPost) {
-                    { t: TransitionEdge -> t.post?.name == aq.name }
-                } else {
-                    { t: TransitionEdge -> t.prior?.name == aq.name }
-                }
-            }
+    /**
+     * The action-slot filter, applied to the prior or the post action of the
+     * edge.
+     *
+     * @param filter the constraint on the slot
+     * @param isPost whether the constraint applies to the post action
+     */
+    private fun actionPredicate(filter: ActionRef, isPost: Boolean): TransitionPredicate {
+        val slot = { edge: TransitionEdge -> if (isPost) edge.post else edge.prior }
+        return when (filter) {
+            is ActionRef.Free -> { _: TransitionEdge -> true }
+            is ActionRef.Any -> { edge: TransitionEdge -> slot(edge) != null }
+            is ActionRef.None -> { edge: TransitionEdge -> slot(edge) == null }
+            is ActionRef.Named -> { edge: TransitionEdge -> slot(edge)?.name == filter.name }
+            is ActionRef.Bound -> { edge: TransitionEdge -> matchesBinding(slot(edge), filter) }
+        }
+    }
 
-        val argPreds =
-            if (aq.args.isEmpty()) {
-                emptyList<TransitionPredicate>()
-            } else {
-                aq.args.mapIndexed { i, arg ->
-                    { t: TransitionEdge ->
-                        val args = if (isPost) t.post?.args ?: emptyList() else t.prior?.args ?: emptyList()
-                        args.getOrElse(i) { null } == arg
-                    }
-                } +
-                    listOf(
-                        { t: TransitionEdge ->
-                            val args = if (isPost) t.post?.args ?: emptyList() else t.prior?.args ?: emptyList()
-                            args.size == aq.args.size
-                        },
-                    )
-            }
-
-        return allOf(listOf(namePred) + argPreds)
+    /**
+     * Checks the actual binding of an action slot against the expected one.
+     *
+     * The expected binding fixes the arity; an expected argument equal to
+     * [ActionRef.Free] leaves that position unconstrained.
+     */
+    private fun matchesBinding(actual: ActionRef.Bound?, expected: ActionRef.Bound): Boolean {
+        if (actual == null) return false
+        if (actual.name != expected.name) return false
+        if (actual.args.size != expected.args.size) return false
+        return expected.args.indices.all { index ->
+            val wanted = expected.args[index]
+            wanted === ActionRef.Free || actual.args[index] == wanted
+        }
     }
 }
 

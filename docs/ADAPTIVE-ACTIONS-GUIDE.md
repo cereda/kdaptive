@@ -116,13 +116,14 @@ epsilon(q0, q1, post = "A")                  // epsilon edges carry actions too
 call(q0, "S", q1, prior = "A")               // and so do submachine calls
 ```
 
-All of them resolve to `ActionRef(name: String?, args: List<Any>)`.
+All of them resolve to an `ActionRef.Bound(name, args)`: a concrete reference to one
+registered action, called with exactly those arguments.
 
-> **Pitfall**: an `ActionRef` with a null **name** is a runtime error, not a modeling
-> choice: name-less references are rejected loudly by the executor ("Prior action on
-> transition N has no name; an action reference must name a registered action."). The
-> same check exists for post actions. This is deliberate: the original implementation
-> silently stopped; the port fails fast instead.
+> **Note**: `ActionRef` is a sealed interface with two jobs, and the compiler keeps them
+> apart. `Bound` is what an **edge** carries — one concrete action, one concrete list of
+> arguments. `Free`, `Any`, `None` and `Named` are **filters**: they constrain an action
+> slot in a query or a removal (§4.3). A filter can never be attached to an edge, and a
+> binding always means the same thing on an edge and in a filter.
 
 ### Firing order, precisely
 
@@ -193,51 +194,74 @@ This is the single most important runtime-model fact:
 
 ## 4. `ElementaryActions`, the complete API
 
-Signatures are grouped; `null` **always means wildcard** ("match anything") and a
-non-null parameter always acts as a filter.
-
 The API is organised in two **families**, one per kind of transition:
 
 | Family | Methods | Works on |
 |---|---|---|
-| symbol | `query`, `remove`, `add` | symbol-consuming transitions |
-| call | `queryCall` | submachine-call transitions |
+| symbol | `query`, `remove`, `add` | symbol-consuming transitions, and the epsilon transitions named by `Symbol.Epsilon` |
+| call | `queryCall`, `removeCall`, `addCall` | submachine-call transitions |
 
-Each family offers **at most one overload per arity**, and the filters are always laid
-out the same way:
+Each family offers **one method per operation**, and every filter carries a default, so
+**no call is ever ambiguous** — not positionally, and not with named arguments.
 
-```
-prior-action filter → source → transition filter → target → post-action filter
-```
+### 4.0 The marker doctrine: a wildcard is a value
 
-The prior-action filter comes **first** and the post-action filter comes **last**,
-bracketing the transition filters the way the actions themselves fire. Because there is
-exactly one overload per arity, **no call is ever ambiguous** — not positionally, and
-not with named arguments.
+No filter is a `null`. The only exception is the `submachine` filter of the call family,
+where `null` means "any call". Everywhere else, a wildcard is a value in its own right:
 
-### 4.1 Symbol queries/removals
+| Marker | Selects |
+|---|---|
+| `State.Any` | any state |
+| `Symbol.Any` | any **symbol-consuming** transition |
+| `Symbol.Epsilon` | an **epsilon** transition (the empty word) |
+| `ActionRef.Free` | the action slot is unconstrained: the edge may or may not carry an action there |
+| `ActionRef.Any` | the slot must carry **some** action, whatever its name and arguments |
+| `ActionRef.None` | the slot must carry **no** action at all |
+| `ActionRef.Named("A")` | the slot must carry the action named "A", its arguments unconstrained |
+| `ActionRef.Bound("A", x, y)` | the slot must carry the action named "A", called with **exactly** these arguments |
+
+Epsilon is **not** part of the input alphabet: it denotes the empty word, and the
+automaton models it as a distinct transition kind (`Transition.Epsilon`). `Symbol.Epsilon`
+exists so that a pattern can name those transitions explicitly, instead of overloading a
+null symbol.
+
+> **Note**: an edge fires one concrete action, so an edge carries an `ActionRef.Bound` —
+> the filter cases never appear on an edge. The two roles never disagree:
+> `Bound("A", x)` means the same thing on an edge and in a filter.
+
+### 4.1 Symbol family
 
 ```kotlin
-fun query(source: State?, symbol: Symbol?, target: State?): List<TransitionEdge>
-fun query(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?): List<TransitionEdge>
 fun query(
-    priorAction: ActionRef?, source: State?, symbol: Symbol?,
-    target: State?, postAction: ActionRef?,
-): List<TransitionEdge]
+    source: State = State.Any,
+    symbol: Symbol = Symbol.Any,
+    target: State = State.Any,
+    prior: ActionRef = ActionRef.Free,
+    post: ActionRef = ActionRef.Free,
+): List<TransitionEdge>
 
-fun remove(source: State?, symbol: Symbol?, target: State?)
-fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?)
 fun remove(
-    priorAction: ActionRef?, source: State?, symbol: Symbol?,
-    target: State?, postAction: ActionRef?,
+    source: State = State.Any,
+    symbol: Symbol = Symbol.Any,
+    target: State = State.Any,
+    prior: ActionRef = ActionRef.Free,
+    post: ActionRef = ActionRef.Free,
+)
+
+fun add(
+    source: State,
+    symbol: Symbol,
+    target: State,
+    prior: ActionRef.Bound? = null,
+    post: ActionRef.Bound? = null,
 )
 ```
 
-and, using the builder block (unset fields stay wildcards):
+and, using the builder block (unset fields keep their wildcard):
 
 ```kotlin
 val results = ea.query {
-    target = p1            // source omitted → wildcard
+    target = p1            // source omitted → State.Any
     symbol = CharSymbol('b')
 }
 
@@ -248,36 +272,47 @@ ea.remove {
 
 ea.query {
     symbol = CharSymbol('b')
-    prior = actionRef("A")     // the prior filter comes first in the positional form
-    post = actionRef("B")      // ... and the post filter last
+    prior = ActionRef.Named("A")
+    post = ActionRef.Bound("B", p2)
 }
 ```
 
-> **Non-obvious, faithful to the original**: the "symbol" filters also match **epsilon**
-> edges (`anyOf(listOf(symbol(symbol), isEpsilon))`). The original device treated
-> `null`-ish symbol patterns as "any edges that could be reached without consuming",
-> which includes spontaneous moves. If you want strictly symbol-consuming edges, filter
-> the result yourself: `.filter { it.transition is Transition.SymbolTransition }`, or use
-> the predicates API (§5).
+The symbol filter selects the kind of transition: `Symbol.Any` selects every
+symbol-consuming transition, `Symbol.Epsilon` selects the epsilon transitions, and any
+other symbol selects the transitions consuming it.
 
-### 4.2 Call queries (the matrix)
+> **Note**: the symbol family never selects a submachine call, and a concrete symbol
+> never selects an epsilon edge. Epsilon has its own filter.
 
-Submachine-call edges have their own family, under the name `queryCall`. A `null`
-`submachine` matches any `Call` edge (`isSubmachineCall` predicate); a given name
-matches only calls to that submachine. `null` prior/post references are wildcards too.
+### 4.2 Call family
+
+Submachine-call edges have their own family. A `null` `submachine` matches any call
+edge; a given name matches only the calls to that submachine.
 
 ```kotlin
-// source, submachine, target
-fun queryCall(source: State?, submachine: String?, target: State?): List<TransitionEdge>
-
-// prior reference, source, submachine, target
-fun queryCall(priorAction: ActionRef?, source: State?, submachine: String?, target: State?): List<TransitionEdge>
-
-// prior reference, source, submachine, target, post reference
 fun queryCall(
-    priorAction: ActionRef?, source: State?, submachine: String?,
-    target: State?, postAction: ActionRef?,
+    source: State = State.Any,
+    submachine: String? = null,
+    target: State = State.Any,
+    prior: ActionRef = ActionRef.Free,
+    post: ActionRef = ActionRef.Free,
 ): List<TransitionEdge>
+
+fun removeCall(
+    source: State = State.Any,
+    submachine: String? = null,
+    target: State = State.Any,
+    prior: ActionRef = ActionRef.Free,
+    post: ActionRef = ActionRef.Free,
+)
+
+fun addCall(
+    source: State,
+    submachine: String,
+    target: State,
+    prior: ActionRef.Bound? = null,
+    post: ActionRef.Bound? = null,
+)
 ```
 
 or, using the builder block:
@@ -286,7 +321,7 @@ or, using the builder block:
 val results = ea.queryCall {
     submachine = "M"
     target = p2
-    prior = actionRef("A")
+    prior = ActionRef.Named("A")
 }
 ```
 
@@ -298,74 +333,84 @@ val results = ea.queryCall {
 
 ### 4.3 Action-reference matching rules (the argument algebra)
 
-Matching a **prior/post reference filter** against an edge works like this
-(private `actionRefPredicate` semantics, worth knowing precisely):
+Matching a **prior/post reference filter** against an edge works like this:
 
 | Filter | Matches edges where… |
 |---|---|
-| `null` filter | wildcard (matches anything) |
-| `ActionRef(name = "A")` (zero args) | the edge has a prior/post **named "A"**, regardless of how many arguments that reference-site carries (the "wildcard arity" rule) |
-| `ActionRef(name = "A", x, y)` | name matches **and** the reference-site's arguments match **position-by-position** (`x` at 0, `y` at 1, using `equals`) **and** have exactly the same arity (2) |
-| `ActionRef(name = null)` | the edge has **some** prior/post action at all (any name) |
+| `ActionRef.Free` | the slot is unconstrained: the edge may or may not carry an action there |
+| `ActionRef.Any` | the slot carries **some** action, whatever its name and arguments |
+| `ActionRef.None` | the slot carries **no** action at all |
+| `ActionRef.Named("A")` | the slot carries the action **named "A"**, whatever its arguments |
+| `ActionRef.Bound("A", x, y)` | the slot carries the action **named "A"**, called with **exactly** these arguments (same arity, same values) |
+| `ActionRef.Bound("A", ActionRef.Free, y)` | same arity, but the first position is unconstrained: the marker fixes the shape of the call, not every value |
 
 > **Pitfall**: position matters, **type equality matters, not assignability**:
 > `p1` matching `p1` compares with `equals` on `Any`; `CharSymbol('a')` does NOT match
 > `Letter('a')` even if conceptually the same letter. Use your own value-equality
 > symbols/states (so their `equals` is sane) and be deliberate about argument order.
 
-### 4.4 Removals with action filters
+### 4.4 Removals
 
-```kotlin
-fun remove(priorAction: ActionRef?, source: State?, symbol: Symbol?, target: State?)
-fun remove(
-    priorAction: ActionRef?, source: State?, symbol: Symbol?,
-    target: State?, postAction: ActionRef?,
-)
-```
-
-Same semantics as §4.1 with extra action filters. The builder block covers every
-combination:
+`remove` and `removeCall` take the same filters as their query counterpart, and remove
+every edge that matches. The builder block covers every combination:
 
 ```kotlin
 ea.remove {
     source = q1
     symbol = CharSymbol('a')
     target = q1
-    prior = actionRef("A", p1, p2)     // setting `prior` routes to the 4-part removal
+    prior = ActionRef.Bound("A", p1, p2)
 }
 
 ea.remove {
     symbol = CharSymbol('a')
-    post = actionRef("B")              // setting `post` routes to the 5-part removal
+    post = ActionRef.Named("B")
+}
+
+ea.removeCall {
+    submachine = "M"
 }
 ```
 
-> **Note**: the prior-action filter comes **first**. The four-argument removal used to
-> accept the prior filter both first and last; the two spellings declared the same
-> parameter names in a different order, so even a fully named call was ambiguous. Only
-> one survives.
+> **Warning**: an over-broad pattern (e.g. all wildcards) removes MORE than you
+> intended, including edges you didn't mean to touch. Compose the narrowest filter that
+> expresses the intent.
 
 ### 4.5 Adding edges
 
 ```kotlin
-fun add(source: State, symbol: Symbol, target: State)                       // symbol edge
-fun add(source: State, symbol: Symbol, target: State, priorAction: ActionRef) // symbol edge with prior action
-```
+fun add(
+    source: State,
+    symbol: Symbol,
+    target: State,
+    prior: ActionRef.Bound? = null,
+    post: ActionRef.Bound? = null,
+)
 
-Both insert a `SymbolTransition` edge into the mapping (with a fresh edge id, i.e.
-`IdentifierUtils.nextTransitionId()`). If you need to add *epsilon*, *call* or any
-other edge kind, construct the `TransitionEdge` directly and `transitions.add(...)`:
-
-```kotlin
-transitions.add(
-    TransitionEdge(source = p0, target = p1, transition = Transition.Call(submachine = "M")),
+fun addCall(
+    source: State,
+    submachine: String,
+    target: State,
+    prior: ActionRef.Bound? = null,
+    post: ActionRef.Bound? = null,
 )
 ```
 
-> **Pitfall**: the `add()` helpers create **symbol** edges only. For epsilon/call/return
-> edges, build a `TransitionEdge` yourself and `transitions.add(edge)` directly. Also
-> be careful when creating epsilon edges at runtime: an epsilon self-loop makes the
-> query-for-next-step loop forever (see DSL guide, §4).
+`add` inserts a symbol-consuming edge, or an **epsilon** edge when the symbol is
+`Symbol.Epsilon`; `addCall` inserts a submachine-call edge. Both accept the prior and
+the post action, symmetrically with the removals:
+
+```kotlin
+ea.add(p0, CharSymbol('a'), p1, prior = actionRef("A"), post = actionRef("B"))
+ea.add(p0, Symbol.Epsilon, p1)
+ea.addCall(p0, "M", p1, prior = actionRef("A"))
+```
+
+The wildcards are rejected where a concrete value is required: `add` refuses
+`State.Any` and `Symbol.Any`, and `addCall` refuses `State.Any`.
+
+> **Pitfall**: an epsilon self-loop makes the query-for-next-step loop forever (see the
+> DSL guide, §4).
 
 ### 4.6 Removal is by identity, id-verified
 
@@ -419,7 +464,8 @@ val eps = transitions.withEpsilonFromSourceState(q0)
 // The edge carries prior = actionRef("A"); after firing once, the edge disappears.
 actions.add(Action(name = "A") { transitions, _, _ ->
     val ea = ElementaryActions(transitions)
-    ea.remove { prior = actionRef("A") }   // wildcard everything but my own name
+    // Wildcard everything but my own name: "Named" ignores the arguments.
+    ea.remove { prior = ActionRef.Named("A") }
 })
 ```
 
@@ -471,8 +517,9 @@ actions.add(Action(name = "Lexer") { _, transition, _ ->
   and `AdaptiveAutomaton.toString()` render labeled, indented dumps, safe to print from
   any point inside actions (they only read, never mutate).
 - `RecognitionPath(id=..., result=true) { step-1, step-2 }` logs the transitions a
-  terminating path took. After `recognize()`, `getRecognitionPaths()` returns them all;
-  before it, calls throw (fail fast).
+  terminating path took. After `recognize()`, `getRecognitionPaths()` returns the paths
+  that **reached a verdict** — a path replaced by its children is not one of them;
+  before `recognize()`, calls throw (fail fast).
 - SLF4J debug logging in `PathExecutor` reports path starts, prior/post firings, forks
   and accept/reject: use your backend's level knobs, not printlns, inside the engine.
 
@@ -593,10 +640,13 @@ A removal that matched nothing is still reported: it scanned the whole mapping e
 though it changed nothing. A metric that cannot see it is blind to exactly the case it
 exists to catch.
 
-The `pattern` describes what was **asked for**, not what was found. Its nullable filters
-are read per family, and the family is part of the pattern because the two disagree:
-`TransitionPatternKind.SYMBOL` and `TransitionPatternKind.SUBMACHINE` treat a null
-submachine filter differently.
+The `pattern` describes what was **asked for**, not what was found. Its filters are read
+per family, and the family is part of the pattern because the two disagree:
+`TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON` and
+`TransitionPatternKind.SUBMACHINE` give the same filter different meanings. Every filter
+is an explicit value — a wildcard is `State.Any`, `Symbol.Any` or `ActionRef.Free`, never
+a null; the only null left is the `submachine` filter of the call family, where it means
+"any call".
 
 #### Facts published by an action
 
@@ -608,9 +658,9 @@ whether it is worth anything:
 data class DomainSize(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
-    val matched = ea.query(q0, sym('b'), null)
+    val matched = ea.query(q0, sym('b'), State.Any)
     observe(DomainSize(matched.map { it.source }.distinct().size))
-    ea.remove(k, sym('a'), null)
+    ea.remove(k, sym('a'), State.Any)
     ea.add(k, sym('a'), k)
 }
 ```
@@ -647,8 +697,9 @@ Changing the cost model means changing `CostVisitor` and nothing else.
 
 ## 8. Catalogue of pitfalls and warnings
 
-1. **Unnamed action references** (`ActionRef(name = null)`) throw at runtime, loudly
-   (prior and post slots alike). Always name your references to registered actions.
+1. **Action references name registered actions** (§2): a reference to an unknown name
+   throws at runtime, loudly (prior and post slots alike). The filters (`Free`, `Any`,
+   `None`, `Named`) belong to queries and removals, never to an edge.
 2. **`fromName("Unknown")` inside handlers throws** `IllegalStateException`; action
    names in references must correspond to registered `Action`s.
 3. **Handler exceptions terminate `recognize()`**, wrapped in
@@ -657,16 +708,19 @@ Changing the cost model means changing `CostVisitor` and nothing else.
    effects; do NOT mutate captured shared state in nondeterministic settings (§6.3).
 5. **Epsilon self-loops** hang the engine (no epsilon-cycle detection, faithful to the
    original). Applies to adaptively added epsilon edges too (§4.5).
-6. **"Symbol" filters also match epsilon edges** (§4.1); filter by kind if you care.
+6. **The families never overlap** (§4.1, §4.2): the symbol family never selects a
+   submachine call, and a concrete symbol never selects an epsilon edge — ask for
+   epsilon explicitly with `Symbol.Epsilon`.
 7. **Argument matching compares position-by-position with `equals` and requires equal
    arity** (§4.3); use value-equality types on both sides.
-8. **The prior-action filter comes first** (§4.1, §4.2, §4.4): write
-   `remove(priorAction = ..., source = ..., symbol = ..., target = ...)`, never
-   `remove(source = ..., symbol = ..., target = ..., priorAction = ...)`. The latter
-   spelling no longer exists; it used to be ambiguous with the former.
-9. **The `remove`-matching pattern uses wildcard `null` fields**: an over-broad pattern
-   (e.g. all wildcards) removes MORE than you intended, including edges you didn't mean
-   to touch. Compose the narrowest filter that expresses the intent.
+8. **One method per operation and family** (§4.1, §4.2): `query`/`remove`/`add` for
+   symbols, `queryCall`/`removeCall`/`addCall` for calls. The prior and post filters
+   come **last**, after the transition filters, and there is a single spelling of each
+   call — no overload can ever be ambiguous.
+9. **A wildcard filter is a value, not a null** (§4.0): `State.Any`, `Symbol.Any`,
+   `Symbol.Epsilon`, `ActionRef.Free`. An over-broad pattern (e.g. all wildcards) removes
+   MORE than you intended, including edges you didn't mean to touch. Compose the
+   narrowest filter that expresses the intent.
 10. **Ids are engine-internal counters** (`IdentifierUtils`); never fabricate them, and
     they reset per-process (see `IdentifierUtils.reset()` for tests).
 11. **`recognize()` runs `setup()` on a clone**, so setup-side effects repeat per call.

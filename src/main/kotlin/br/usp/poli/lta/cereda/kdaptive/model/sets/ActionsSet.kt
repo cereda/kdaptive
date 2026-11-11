@@ -15,16 +15,25 @@ class ActionsSet {
     /**
      * Adds an action to the set.
      *
+     * An action is identified by its name: adding an action whose name is
+     * already taken replaces the previous one, so the set never holds two
+     * actions under the same name. This mirrors the builder DSL, which
+     * rejects a duplicate name outright.
+     *
      * @param action the action to add
      */
     fun add(action: Action) {
+        actions.removeIf { it.name == action.name }
         actions.add(action)
     }
 
     /**
      * Returns all actions in the set.
      *
-     * @return an unmodifiable set of all actions
+     * The set is live: it reflects the set as it is, and mutating it mutates
+     * the set of actions.
+     *
+     * @return the live set of all actions
      */
     fun getActions(): Set<Action> = actions
 

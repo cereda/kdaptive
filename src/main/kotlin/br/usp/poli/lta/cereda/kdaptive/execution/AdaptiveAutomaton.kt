@@ -35,7 +35,12 @@ abstract class AdaptiveAutomaton {
     /** The set of actions of the adaptive automaton. */
     var actions: ActionsSet = ActionsSet()
 
-    /** The stack used during recognition. */
+    /**
+     * The stack used during recognition.
+     *
+     * Recognition runs on a clone, and each path keeps its own copy of the
+     * stack; this field holds the stack the clone starts from.
+     */
     var stack: Stack = Stack()
 
     /**
@@ -66,18 +71,35 @@ abstract class AdaptiveAutomaton {
         else -> throw IllegalArgumentException("Cannot resolve '$value' to Symbol")
     }
 
-    private fun resolveActionRef(value: Any?): ActionRef? = when (value) {
+    private fun resolveActionRef(value: Any?): ActionRef.Bound? = when (value) {
         null -> null
-        is ActionRef -> value
-        is String -> ActionRef(name = value)
+
+        is ActionRef.Bound -> value
+
+        is String -> ActionRef.Bound(name = value)
+
+        is ActionRef -> throw IllegalArgumentException(
+            "An edge must bind a concrete action, but '$value' is a filter. " +
+                "Use ActionRef.Bound(name, args) to attach an action to an edge.",
+        )
+
         else -> throw IllegalArgumentException("Cannot resolve '$value' to ActionRef")
     }
 
-    /** Adds a symbol-consuming transition. Accepts raw [Char] for symbols. */
+    /**
+     * Adds a symbol-consuming transition. Accepts raw [Char] for symbols.
+     *
+     * @throws IllegalArgumentException if the symbol is a wildcard ([Symbol.Any])
+     *   or [Symbol.Epsilon]; use [epsilon] for an epsilon transition
+     */
     fun consume(from: Any, symbol: Any, to: Any, prior: Any? = null, post: Any? = null) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
+        require(sym !== Symbol.Any && sym !== Symbol.Epsilon) {
+            "Cannot consume '$sym': a transition consumes a concrete symbol. " +
+                "Use epsilon(from, to) for an epsilon transition."
+        }
         val p = resolveActionRef(prior)
         val po = resolveActionRef(post)
         transitions.add(
@@ -170,8 +192,6 @@ abstract class AdaptiveAutomaton {
         }
     }
 
-    private val input = mutableListOf<Symbol>()
-
     private val threads = mutableListOf<PathExecutor>()
     private val paths = mutableMapOf<Int, RecognitionPath>()
 
@@ -183,29 +203,44 @@ abstract class AdaptiveAutomaton {
     /** Visitors observing recognition lifecycle and path execution events. */
     var visitors: MutableList<ExecutionVisitor> = mutableListOf()
 
-    /** Defines the initial configuration of the adaptive automaton. */
+    /**
+     * Defines the initial configuration of the adaptive automaton.
+     *
+     * The engine calls [setup] on a clone for every recognition, so it must
+     * be safe to call more than once: declaring the same transition, the same
+     * submachine or the same action twice does not duplicate it.
+     */
     abstract fun setup()
 
     /** Creates a new empty instance of the concrete subclass (for cloning). */
     protected abstract fun newInstance(): AdaptiveAutomaton
 
-    /** Returns the recognition paths collected during the last recognition, keyed by path ID.
+    /**
+     * Returns the recognition paths collected during the last recognition,
+     * keyed by path ID.
+     *
+     * Only the paths that reached a verdict are reported: a path replaced by
+     * its children is not one of them.
      *
      * @throws IllegalStateException if [recognize] has not been called yet.
      */
     fun getRecognitionMap(): Map<Int, RecognitionPath> = reference?.getRecognitionMapOnce()
         ?: error("recognize() must be called before querying recognition paths.")
 
-    /** Returns the recognition paths collected during the last recognition.
+    /**
+     * Returns the recognition paths collected during the last recognition.
+     *
+     * Only the paths that reached a verdict are reported: a path replaced by
+     * its children is not one of them.
      *
      * @throws IllegalStateException if [recognize] has not been called yet.
      */
     fun getRecognitionPaths(): List<RecognitionPath> = reference?.getRecognitionPathsOnce()
         ?: error("recognize() must be called before querying recognition paths.")
 
-    private fun getRecognitionMapOnce(): Map<Int, RecognitionPath> = paths
+    private fun getRecognitionMapOnce(): Map<Int, RecognitionPath> = paths.filterValues { it.done }
 
-    private fun getRecognitionPathsOnce(): List<RecognitionPath> = paths.values.toList()
+    private fun getRecognitionPathsOnce(): List<RecognitionPath> = paths.values.filter { it.done }
 
     /**
      * Recognises a list of symbols representing the input string.
@@ -217,24 +252,30 @@ abstract class AdaptiveAutomaton {
         return ref.recognizeOnce(input)
     }
 
-    private fun clone(): AdaptiveAutomaton = newInstance().apply {
-        transitions = this@AdaptiveAutomaton.transitions.copy()
-        submachines = this@AdaptiveAutomaton.submachines.copy()
-        actions = this@AdaptiveAutomaton.actions.copy()
-        stack = this@AdaptiveAutomaton.stack.copy()
-        mainSubmachine = this@AdaptiveAutomaton.mainSubmachine
-        stopAtFirstFinishedRecognitionPath = this@AdaptiveAutomaton.stopAtFirstFinishedRecognitionPath
-        visitors = this@AdaptiveAutomaton.visitors.toMutableList()
+    private fun clone(): AdaptiveAutomaton {
+        val instance = newInstance()
+        require(instance !== this) { "newInstance() must return a fresh automaton, not this one." }
+        instance.transitions = transitions.copy()
+        instance.submachines = submachines.copy()
+        instance.actions = actions.copy()
+        instance.stack = stack.copy()
+        instance.mainSubmachine = mainSubmachine
+        instance.stopAtFirstFinishedRecognitionPath = stopAtFirstFinishedRecognitionPath
+        instance.visitors = visitors.toMutableList()
+        return instance
     }
 
     private fun recognizeOnce(input: List<Symbol>): Boolean {
         setup()
 
+        // The main submachine must exist before recognition starts. Checking it
+        // here guarantees that the lifecycle events always pair: no start
+        // without an end, and no end without a start.
+        val mainSub = requireNotNull(mainSubmachine) { "Main submachine cannot be null." }
+
         // The lifecycle events fire on the clone, after setup() materialised its
         // topology, so a visitor sees the automaton it is about to execute.
         visitors.forEach { it.onRecognizeStart(this) }
-
-        val mainSub = requireNotNull(mainSubmachine) { "Main submachine cannot be null." }
 
         threads.clear()
         paths.clear()
@@ -268,7 +309,7 @@ abstract class AdaptiveAutomaton {
         k.config.transition = t
         k.config.currentState = null
 
-        paths[k.id] = RecognitionPath()
+        paths[k.id] = RecognitionPath(id = k.id)
         threads.add(k)
 
         while (threads.isNotEmpty() && !atLeastOneRecognitionPathIsDone()) {
@@ -277,11 +318,7 @@ abstract class AdaptiveAutomaton {
                 try {
                     threads[i].run()
                 } catch (e: Exception) {
-                    // Surface path failures to the caller instead of killing the JVM.
-                    throw IllegalStateException(
-                        "Recognition path ${threads[i].id} failed: ${e.message}",
-                        e,
-                    )
+                    failPath(threads[i], e)
                 }
                 // When run() returns, the path is finished (accepted, rejected,
                 // or forked). Remove it from the worklist.
@@ -293,6 +330,26 @@ abstract class AdaptiveAutomaton {
         val result = paths.values.any { it.done && it.result == true }
         visitors.forEach { it.onRecognizeEnd(result) }
         return result
+    }
+
+    /**
+     * Reports the failure of [failed] and closes the recognition.
+     *
+     * A failing path terminates like any other: the path-end and the
+     * recognition-end events are fired before the failure propagates, so every
+     * path ends exactly once and the lifecycle events always pair.
+     *
+     * @param failed the path that failed
+     * @param cause the exception that killed it
+     */
+    private fun failPath(failed: PathExecutor, cause: Exception): Nothing {
+        visitors.forEach { it.onPathEnd(failed.id, accepted = false, cursor = failed.cursor) }
+        visitors.forEach { it.onRecognizeEnd(false) }
+        // Surface path failures to the caller instead of killing the JVM.
+        throw IllegalStateException(
+            "Recognition path ${failed.id} failed: ${cause.message}",
+            cause,
+        )
     }
 
     private fun atLeastOneRecognitionPathIsDone(): Boolean {

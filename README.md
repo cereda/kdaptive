@@ -302,10 +302,12 @@ sealed interface MappingOperation {
   case it exists to catch;
 - an **`Add`** carries the edge it inserted and the mapping size before and after.
 
-The `pattern` says what was *asked for*, not what was found. Its nullable filters are
-documented per family: `TransitionPatternKind.SYMBOL` and `TransitionPatternKind.SUBMACHINE`
-disagree on what a null submachine filter means, which is why the kind is part of the
-pattern.
+The `pattern` says what was *asked for*, not what was found. Its filters are documented
+per family: `TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON` and
+`TransitionPatternKind.SUBMACHINE` give the same filter different meanings, which is why
+the kind is part of the pattern. Every filter is an explicit value — a wildcard is
+`State.Any`, `Symbol.Any` or `ActionRef.Free`, never a null; the only null left is the
+`submachine` filter of the call family, where it means "any call".
 
 ### Facts published by an action
 
@@ -317,9 +319,9 @@ whether it is worth anything:
 data class DomainSize(val count: Int) : Observation
 
 action("Reshape") { _, _ ->
-    val matched = ea.query(q0, sym('b'), null)
+    val matched = ea.query(q0, sym('b'), State.Any)
     observe(DomainSize(matched.map { it.source }.distinct().size))
-    ea.remove(k, sym('a'), null)
+    ea.remove(k, sym('a'), State.Any)
     ea.add(k, sym('a'), k)
 }
 ```
@@ -358,9 +360,9 @@ Changing that cost model means changing `CostVisitor` and nothing else.
 | `Symbol` / `CharSymbol` | Input alphabet. `CharSymbol('a')` is the bread-and-butter symbol; subclass `Symbol()` for richer tokens (lexer-like recognizers). |
 | `State` | Abstract base. Subclass with value-based `equals`/`hashCode` (see `ExampleState`); transitions compare states by equality. |
 | `Transition` (sealed) | Exactly one of `SymbolTransition`, `Epsilon`, `Call`, `Return`. |
-| `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and optional prior/post `ActionRef`s. |
+| `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and optional prior/post `ActionRef.Bound`s. |
 | `Submachine` | A named automaton fragment with its own initial/accepting states; called via `call(...)` and returning via a synthetic return transition. |
-| `Action` / `ActionRef` / `ActionHandler` | A named action with its Kotlin handler; `ActionRef(name, args)` references it with arguments on an edge. |
+| `Action` / `ActionRef` / `ActionHandler` | A named action with its Kotlin handler; `ActionRef.Bound(name, args)` references it with arguments on an edge, while `Free`/`Any`/`None`/`Named` filter an action slot in a query or a removal. |
 | `Stack` | The call stack backing submachine call/return discipline. |
 | `TransitionMapping` | The mutable set of edges; O(1) filtered lookups via `withSourceState` and friends. |
 | `RecognitionPath` | The trail of one recognizer path: transition `toString()`s, termination cursor/state, accepted/rejected result. |
@@ -508,32 +510,51 @@ All commands assume the Gradle wrapper:
   Java 11+ or desugared Kotlin stdlib.
 - Choose any SLF4J backend you like (`slf4j-simple` is prewired for tests/examples).
 
-### Changes in 1.2.0
+### Changes in 2.0.0
 
-- **`ExecutionVisitor.onPathFork` changed signature**, from
-  `onPathFork(pathId: Int, childPathIds: List<Int>)` to
-  `onPathFork(pathId: Int, children: List<ForkedPath>)`. Each child now carries the
-  transition edge it was created for, so a consumer no longer has to infer it from the
-  child's first traversal. Implementations of `ExecutionVisitor` written against 1.1.0
-  need this one method updated.
-- **`ElementaryActions` no longer has ambiguous overloads.** The API is split into two
-  families — `query`/`remove`/`add` for symbol transitions, `queryCall` for
-  submachine-call transitions — with **at most one overload per arity** in each. The
-  prior-action filter comes **first** and the post-action filter comes **last**. What
-  this breaks:
-  - the submachine query overloads moved from `query` to **`queryCall`**;
-  - `remove(source, symbol, target, priorAction)` is **gone** — write
-    `remove(priorAction, source, symbol, target)` instead (the two spellings used to
-    declare the same parameter names in a different order, which made even a fully named
-    call ambiguous);
-  - the post-only submachine query is now `queryCall(null, source, submachine, target,
-    postAction)`.
-  What this adds: prior/post filters on symbol queries and removals, `queryCall { }`,
-  and `prior`/`post` fields on the builder specs. See §4 of the
-  [adaptive actions guide](docs/ADAPTIVE-ACTIONS-GUIDE.md).
-- New: `MappingOperation`, `Observation`, `TransitionPattern`, `ForkedPath`, the
-  `onMappingOperation` and `onObservation` visitor events, and the `observe()` helpers on
-  `TransitionMapping`, `ElementaryActions` and the DSL action context. All additive.
+This is a **breaking** release: the elementary actions were reworked, epsilon got an
+explicit marker, and six engine defects were fixed.
+
+- **`ElementaryActions` has two families and one method per operation.** The symbol
+  family is `query` / `remove` / `add`, the call family is `queryCall` / `removeCall` /
+  `addCall`. Every method lays the transition filters out first and the action filters
+  out last, and every filter has a default. What this breaks:
+  - the prior-action filter no longer comes **first**: it now comes **after** the
+    transition filters, so `remove(priorAction, source, symbol, target)` becomes
+    `remove(source, symbol, target, prior)`;
+  - the parameter names `priorAction` / `postAction` are now `prior` / `post`;
+  - the submachine family is spelled `queryCall` / `removeCall` / `addCall`.
+- **No filter is a null any more.** A wildcard is a value in its own right:
+  `State.Any` (any state), `Symbol.Any` (any symbol-consuming transition),
+  `Symbol.Epsilon` (an epsilon transition) and `ActionRef.Free` (an unconstrained
+  action slot). The only null left is the `submachine` filter of the call family, where
+  it means "any call".
+- **`ActionRef` is a sealed interface.** `Bound` is the concrete reference an edge
+  carries; `Free`, `Any`, `None` and `Named` are the filters a query or a removal uses.
+  `Named("A")` matches an action by name whatever its arguments; `Bound("A", x)` matches
+  exactly these arguments. The old "a reference with zero arguments matches any arity"
+  rule is gone — and with it the ambiguity between the two roles.
+- **Epsilon is named explicitly.** `Symbol.Epsilon` selects the epsilon transitions and
+  `Symbol.Any` selects the symbol-consuming ones; a symbol filter no longer matches
+  epsilon edges.
+- **The additions gained symmetry.** `add` accepts a prior and a post action,
+  `add(source, Symbol.Epsilon, target)` inserts an epsilon edge, and `addCall` inserts
+  a submachine call.
+- **Six engine defects were fixed**: `setup()` no longer duplicates the topology; every
+  edge that leaves a mapping fires its own `onEdgeRemoved`; a copied mapping keeps its
+  callbacks; a symbol filter no longer matches epsilon; `getRecognitionPaths()` reports
+  only the paths that reached a verdict (a path replaced by its children is not one of
+  them); and the recognition lifecycle events always pair, even when a path fails.
+- `ExecutionVisitor.onBeforeAction` / `onAfterAction` now receive an
+  `ActionRef.Bound` instead of an `ActionRef`, and `TransitionEdge.prior` / `.post` are
+  `ActionRef.Bound?` — a filter can no longer be attached to an edge.
+- New in 1.2.0 and kept: `MappingOperation`, `Observation`, `TransitionPattern`,
+  `ForkedPath`, the `onMappingOperation` and `onObservation` visitor events, and the
+  `observe()` helpers on `TransitionMapping`, `ElementaryActions` and the DSL action
+  context.
+
+See §4 of the [adaptive actions guide](docs/ADAPTIVE-ACTIONS-GUIDE.md) for the complete
+API.
 
 ## License
 

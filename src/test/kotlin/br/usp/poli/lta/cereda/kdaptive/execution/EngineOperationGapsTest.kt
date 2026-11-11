@@ -65,7 +65,7 @@ class EngineOperationGapsTest {
                 Submachine(name = "M", states = setOf(Aq0, Aq1), initialState = Aq0, acceptingStates = setOf(Aq1)),
             )
             actions.add(Action(name = "P", handler = handler))
-            val ref = ActionRef(name = "P")
+            val ref = ActionRef.Bound(name = "P")
             val edge =
                 when (mode) {
                     Mode.PRIOR ->
