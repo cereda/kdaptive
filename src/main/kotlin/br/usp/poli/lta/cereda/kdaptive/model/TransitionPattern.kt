@@ -16,6 +16,15 @@ enum class TransitionPatternKind {
 
     /** Operations over submachine-call transitions. */
     SUBMACHINE,
+
+    /**
+     * Operations whose symbol filter names both symbol-consuming and epsilon
+     * transitions.
+     *
+     * A symbol domain may name the empty word among its members, and then it
+     * selects the two kinds at once.
+     */
+    MIXED,
 }
 
 /**
@@ -24,6 +33,10 @@ enum class TransitionPatternKind {
  * Every filter carries an explicit value: a wildcard is a value in its own
  * right ([State.Any], [Symbol.Any], [ActionRef.Free]), never a null. Epsilon
  * is named by [Symbol.Epsilon] and submachine calls by [submachine].
+ *
+ * A filter may also name a *domain* — a set of states or symbols built with
+ * [State.anyOf] or [Symbol.anyOf] — and then it selects every member of that
+ * domain.
  *
  * The pattern describes what was *asked for*, not what was found: the edges
  * that actually matched are reported separately by
@@ -59,4 +72,94 @@ data class TransitionPattern(
     val prior: ActionRef = ActionRef.Free,
     /** The post-action filter; [ActionRef.Free] means no constraint. */
     val post: ActionRef = ActionRef.Free,
-)
+) {
+    /**
+     * The number of source states this pattern may select.
+     *
+     * A concrete state names one state, a domain names as many states as it
+     * has members, and the wildcard [State.Any] names an unbounded number of
+     * them — which is reported as null.
+     */
+    val sourceDomainSize: Int?
+        get() = when {
+            source === State.Any -> null
+            source is StateDomain -> source.size
+            else -> 1
+        }
+
+    /**
+     * The number of symbols this pattern may select.
+     *
+     * A concrete symbol — [Symbol.Epsilon] included — names one symbol, a
+     * domain names as many symbols as it has members, and the wildcard
+     * [Symbol.Any] names an unbounded number of them — which is reported as
+     * null. In the [TransitionPatternKind.SUBMACHINE] family the filter does
+     * not apply, and the size is one.
+     */
+    val symbolDomainSize: Int?
+        get() = when (kind) {
+            TransitionPatternKind.SUBMACHINE -> 1
+
+            else -> when {
+                symbol === Symbol.Any -> null
+                symbol is SymbolDomain -> symbol.size
+                else -> 1
+            }
+        }
+
+    /**
+     * The number of target states this pattern may select.
+     *
+     * A concrete state names one state, a domain names as many states as it
+     * has members, and the wildcard [State.Any] names an unbounded number of
+     * them — which is reported as null.
+     */
+    val targetDomainSize: Int?
+        get() = when {
+            target === State.Any -> null
+            target is StateDomain -> target.size
+            else -> 1
+        }
+
+    /**
+     * The number of submachines this pattern may select.
+     *
+     * In the [TransitionPatternKind.SUBMACHINE] family, a null filter names
+     * an unbounded number of submachines — which is reported as null — while
+     * a named one names exactly one. In the other families the filter does
+     * not apply, and the size is one.
+     */
+    val submachineDomainSize: Int?
+        get() = when (kind) {
+            TransitionPatternKind.SUBMACHINE -> if (submachine == null) null else 1
+            else -> 1
+        }
+
+    /**
+     * The number of prior actions this pattern may select.
+     *
+     * A concrete filter — [ActionRef.None], [ActionRef.Named] or
+     * [ActionRef.Bound] — names one action, while [ActionRef.Free] and
+     * [ActionRef.Any] name an unbounded number of them — which is reported as
+     * null.
+     */
+    val priorDomainSize: Int?
+        get() = when (prior) {
+            is ActionRef.Free, is ActionRef.Any -> null
+            else -> 1
+        }
+
+    /**
+     * The number of post actions this pattern may select.
+     *
+     * A concrete filter — [ActionRef.None], [ActionRef.Named] or
+     * [ActionRef.Bound] — names one action, while [ActionRef.Free] and
+     * [ActionRef.Any] name an unbounded number of them — which is reported as
+     * null.
+     */
+    val postDomainSize: Int?
+        get() = when (post) {
+            is ActionRef.Free, is ActionRef.Any -> null
+            else -> 1
+        }
+}

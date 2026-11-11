@@ -26,7 +26,13 @@ sealed class Transition {
         val symbol: Symbol,
         override val sourceState: State? = null,
         override val targetState: State? = null,
-    ) : Transition()
+    ) : Transition() {
+        init {
+            require(symbol !is SymbolDomain) {
+                "A symbol transition consumes a concrete symbol, not a domain."
+            }
+        }
+    }
 
     /** Consumes no input (spontaneous transition). */
     object Epsilon : Transition() {

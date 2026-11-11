@@ -3,6 +3,7 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
+import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
@@ -57,15 +58,27 @@ class CostExample : AdaptiveAutomaton() {
         submachines.add(sm)
 
         // Action "Reshape": after consuming an 'a', inspect the 'b' transitions
-        // leaving q0, retire the marker edge installed by the previous firing,
-        // and install a fresh one. The first firing retires nothing: the
-        // removal matches no edge, and is still reported.
+        // leaving the candidate states, retire the marker edge installed by the
+        // previous firing, and install a fresh one. The first firing retires
+        // nothing: the removal matches no edge, and is still reported.
+        //
+        // The query names a *domain* of candidate states, and the removal
+        // names the concrete state of the bookkeeping edge together with the
+        // action slots it leaves empty: the filters are finite, so the
+        // consumer can price them.
         actions.add(
             Action(name = "Reshape") { transitions, _, _ ->
                 val ea = ElementaryActions(transitions)
-                val matched = ea.query(q0, CharSymbol('b'), State.Any)
+                val matched =
+                    ea.query(
+                        source = State.anyOf(q0, q1),
+                        symbol = CharSymbol('b'),
+                        target = q1,
+                        prior = ActionRef.None,
+                        post = ActionRef.None,
+                    )
                 transitions.observe(DomainSize(matched.map { it.source }.distinct().size))
-                ea.remove(k, CharSymbol('a'), State.Any)
+                ea.remove(k, CharSymbol('a'), k, prior = ActionRef.None, post = ActionRef.None)
                 ea.add(k, CharSymbol('a'), k)
             },
         )

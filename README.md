@@ -284,6 +284,7 @@ action can do to the mapping:
 
 ```kotlin
 sealed interface MappingOperation {
+    val pattern: TransitionPattern
     val edges: List<TransitionEdge>
     val mappingSizeBefore: Int
     val mappingSizeAfter: Int
@@ -303,11 +304,18 @@ sealed interface MappingOperation {
 - an **`Add`** carries the edge it inserted and the mapping size before and after.
 
 The `pattern` says what was *asked for*, not what was found. Its filters are documented
-per family: `TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON` and
-`TransitionPatternKind.SUBMACHINE` give the same filter different meanings, which is why
-the kind is part of the pattern. Every filter is an explicit value — a wildcard is
-`State.Any`, `Symbol.Any` or `ActionRef.Free`, never a null; the only null left is the
-`submachine` filter of the call family, where it means "any call".
+per family: `TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON`,
+`TransitionPatternKind.MIXED` and `TransitionPatternKind.SUBMACHINE` give the same filter
+different meanings, which is why the kind is part of the pattern. Every filter is an
+explicit value — a wildcard is `State.Any`, `Symbol.Any` or `ActionRef.Free`, never a
+null; the only null left is the `submachine` filter of the call family, where it means
+"any call".
+
+The pattern also reports **how many values each filter may select**:
+`sourceDomainSize`, `symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`,
+`priorDomainSize` and `postDomainSize`. A concrete filter reports `1`, a **domain**
+reports the number of its members, and a wildcard reports `null` — unbounded. These are
+facts, not costs.
 
 ### Facts published by an action
 
@@ -333,7 +341,9 @@ library never has to learn about them. The imperative API reaches the same chann
 ### A consumer, end to end
 
 Nothing here is known to the engine. `br.usp.poli.lta.cereda.kdaptive.examples.CostVisitor`
-prices the work — a query and a removal scan the mapping, an addition inserts one edge:
+prices the work: a query costs the scan of the mapping, and a removal or an addition
+costs that scan once per edge shape its pattern may touch — the product of the domain
+sizes the pattern reports:
 
 ```kotlin
 val visitor = CostVisitor()
@@ -359,6 +369,7 @@ Changing that cost model means changing `CostVisitor` and nothing else.
 |---|---|
 | `Symbol` / `CharSymbol` | Input alphabet. `CharSymbol('a')` is the bread-and-butter symbol; subclass `Symbol()` for richer tokens (lexer-like recognizers). |
 | `State` | Abstract base. Subclass with value-based `equals`/`hashCode` (see `ExampleState`); transitions compare states by equality. |
+| `StateDomain` / `SymbolDomain` | The set-valued filters built by `State.anyOf(...)` and `Symbol.anyOf(...)`: a domain names several states or symbols at once, and an addition over domains produces their Cartesian product. |
 | `Transition` (sealed) | Exactly one of `SymbolTransition`, `Epsilon`, `Call`, `Return`. |
 | `TransitionEdge` | An edge of the mapping: source, target, a `Transition`, and optional prior/post `ActionRef.Bound`s. |
 | `Submachine` | A named automaton fragment with its own initial/accepting states; called via `call(...)` and returning via a synthetic return transition. |
@@ -379,8 +390,8 @@ These semantics come straight from the original Java implementation and are pres
 1. **Input** is a list of `Symbol`; no string parsing is imposed on you.
 2. A **prior action** runs *before* its edge is applied and **may mutate the transition
    mapping**; if the action removes the very edge the path was about to traverse, the
-   path simply considers itself stuck at that point (normal termination rules apply
-   again from the current configuration).
+   path **re-plans**: it stays at the source state of the removed edge and chooses again
+   among the transitions applicable there. The prior action does not fire twice.
 3. Symbol consumption **advances the cursor**; `epsilon` moves without consuming;
    `call` pushes the return state and jumps to the called submachine's initial state;
    the **implicit return** pops the stack when a submachine cannot continue but input
@@ -509,6 +520,47 @@ All commands assume the Gradle wrapper:
 - No Android-specific code; it should run on the JVM and in Android modules that ship
   Java 11+ or desugared Kotlin stdlib.
 - Choose any SLF4J backend you like (`slf4j-simple` is prewired for tests/examples).
+
+### Changes in 2.1.0
+
+This release completes the work begun in 2.0.0: the equality contract is explicit, the
+engine is safe under concurrent use, the two APIs validate the same topologies, a prior
+action that removes its own edge no longer kills the path, and the elementary actions
+learned **set-valued domains**.
+
+- **Filters may name a set of values.** `State.anyOf(q0, q1)` and
+  `Symbol.anyOf(sym('a'), sym('e'))` build a **domain**: a filter marker that selects
+  every member it names. A domain may name `Symbol.Epsilon` among its members, and then
+  it selects the epsilon edges as well; it may not contain a wildcard, another domain,
+  or nothing at all. An addition over domains produces the **Cartesian product** of its
+  domains — one edge per combination — and reports **one operation per edge inserted**.
+- **The pattern reports the size of every domain.** `TransitionPattern` now carries
+  `sourceDomainSize`, `symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`,
+  `priorDomainSize` and `postDomainSize`: a concrete filter reports `1`, a domain
+  reports the number of its members, and a wildcard reports `null` (unbounded). These
+  are facts, not costs — the consumer decides what they are worth. The example
+  `CostVisitor` was re-derived on top of them.
+- **`TransitionPatternKind.MIXED` was added**, for a symbol domain that names the empty
+  word among its members: such a filter selects symbol-consuming *and* epsilon edges.
+- **`MappingOperation` exposes its `pattern` uniformly**, so a consumer can read the
+  filters of any operation without a `when` over the three cases.
+- **The equality contract is explicit.** The identifiers the library hands out — the
+  edge id, the submachine id, the action id — are *bookkeeping*, not identity: they are
+  outside the equality of the object they belong to. `Action.id` moved out of the
+  constructor, and `State` and `Symbol` now document that the library compares them by
+  value.
+- **The engine is safe under concurrent use.** The identifiers are generated atomically,
+  the recognition results are published only once the recognition is over, and the
+  visitor list is snapshotted: two recognitions may run at the same time on the same
+  automaton.
+- **The two APIs validate the same topologies.** The rules live in one place
+  (`TopologyValidator`), so the builder DSL and the imperative API reject the same
+  automata, with the same messages. A domain is not a concrete state: it is rejected
+  wherever a concrete state is required.
+- **A prior action that removes its own edge no longer kills the path.** The path
+  re-plans from the source state of the removed edge and chooses again; the prior action
+  does not fire twice. (This also fixed a latent defect: a forked path referenced the
+  parent's edge object, whose identifier is not in the child's own copy of the mapping.)
 
 ### Changes in 2.0.0
 

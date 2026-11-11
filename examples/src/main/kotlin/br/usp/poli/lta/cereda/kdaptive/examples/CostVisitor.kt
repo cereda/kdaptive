@@ -5,6 +5,7 @@ import br.usp.poli.lta.cereda.kdaptive.execution.ExecutionVisitor
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
+import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
 import br.usp.poli.lta.cereda.kdaptive.model.sets.SubmachinesSet
 import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
 
@@ -16,12 +17,26 @@ import br.usp.poli.lta.cereda.kdaptive.model.sets.TransitionMapping
  * and changing this cost model requires no change to the library at all.
  *
  * The model prices the work the elementary actions performed over the
- * transition mapping:
+ * transition mapping. It was re-derived for version 2.1.0, when the library
+ * learned to report the *size of every filter domain*:
  *
- * - a **query** scans the whole mapping, so it costs the size of the mapping;
- * - a **removal** scans the whole mapping and then deletes the edges it
- *   matched, so it costs the size of the mapping plus the edges removed;
- * - an **addition** inserts a single edge, so it costs one.
+ * - **ω(x) = x / 2** is the cost of scanning a collection of x elements;
+ * - the **product** of a pattern is the number of edge shapes its filters may
+ *   select: the product of the domain sizes of its six filters. A filter that
+ *   does not narrow the search — a wildcard — has an unbounded domain, and an
+ *   unbounded domain contributes zero to the product: the number of
+ *   combinations it admits is not a finite number, so the model does not
+ *   price it;
+ * - a **query** scans the mapping once: ω(size);
+ * - a **removal** scans the mapping once per shape it may touch, and then
+ *   takes those shapes out of the mapping: product·ω(size) − product;
+ * - an **addition** scans the mapping once per shape it may touch, and then
+ *   inserts those shapes into the mapping: product·ω(size) + product.
+ *
+ * The size is the size of the mapping when the operation ran. A pattern whose
+ * filters are all finite — concrete states, concrete symbols, concrete
+ * actions — is therefore priced by the number of shapes it may touch, while a
+ * pattern carrying a wildcard is priced by the scan alone.
  *
  * The facts that action code publishes ([Observation]) are counted but not
  * priced: the engine cannot know what they are worth, and neither can this
@@ -119,10 +134,48 @@ class CostVisitor : ExecutionVisitor {
         }
     }
 
-    /** Prices a single operation. */
-    private fun price(operation: MappingOperation): Double = when (operation) {
-        is MappingOperation.Query -> operation.mappingSizeBefore.toDouble()
-        is MappingOperation.Remove -> operation.mappingSizeBefore.toDouble() + operation.edges.size
-        is MappingOperation.Add -> 1.0
+    /**
+     * Prices a single operation.
+     *
+     * The price follows the model described in the KDoc of this class: the
+     * scan costs ω(size), and the shapes the pattern may touch multiply it.
+     *
+     * @param operation the operation to price
+     * @return the cost of the operation
+     */
+    private fun price(operation: MappingOperation): Double {
+        val size = operation.mappingSizeBefore.toDouble()
+        val shapes = product(operation.pattern)
+        return when (operation) {
+            is MappingOperation.Query -> omega(size)
+            is MappingOperation.Remove -> shapes * omega(size) - shapes
+            is MappingOperation.Add -> shapes * omega(size) + shapes
+        }
+    }
+
+    /** The cost of scanning a collection of [size] elements. */
+    private fun omega(size: Double): Double = size / 2.0
+
+    /**
+     * The number of edge shapes the filters of [pattern] may select.
+     *
+     * The number is the product of the domain sizes of the six filters of the
+     * pattern. An unbounded filter contributes zero: the number of
+     * combinations it admits is not a finite number.
+     *
+     * @param pattern the pattern to measure
+     * @return the number of shapes the pattern may select
+     */
+    private fun product(pattern: TransitionPattern): Int {
+        val sizes =
+            listOf(
+                pattern.sourceDomainSize,
+                pattern.symbolDomainSize,
+                pattern.targetDomainSize,
+                pattern.submachineDomainSize,
+                pattern.priorDomainSize,
+                pattern.postDomainSize,
+            )
+        return sizes.fold(1) { shapes, size -> shapes * (size ?: 0) }
     }
 }

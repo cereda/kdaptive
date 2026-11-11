@@ -237,6 +237,34 @@ class EngineContractTest {
     }
 
     @Test
+    fun `a forked path takes the edge it forked on`() {
+        val aa = ForkingMutatingAa()
+        val traversed = mutableListOf<Pair<Int, TransitionEdge>>()
+        aa.visitors.add(
+            object : ExecutionVisitor {
+                override fun onAfterTraverse(pathId: Int, edge: TransitionEdge) {
+                    traversed.add(pathId to edge)
+                }
+            },
+        )
+
+        aa.recognize(listOf(CharSymbol('a')))
+
+        // Every child traverses the edge it forked on, in its own mapping:
+        // the child owns a copy of the topology, and its edges have their own
+        // identifiers. A child that referenced the parent's edge would be
+        // killed by the very first check it makes on it.
+        val symbols = traversed.filter { (_, edge) -> edge.transition is Transition.SymbolTransition }
+        assertEquals(2, symbols.size)
+        assertEquals(2, symbols.map { it.first }.toSet().size)
+
+        // One child ends in an accepting state, the other does not.
+        val verdicts = aa.getRecognitionPaths().map { it.result }
+        assertEquals(1, verdicts.count { it == true })
+        assertEquals(1, verdicts.count { it == false })
+    }
+
+    @Test
     fun `a forked path reports under its own identifier`() {
         val aa = ForkingMutatingAa()
         val reported = mutableListOf<Int>()

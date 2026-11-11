@@ -25,6 +25,9 @@ package br.usp.poli.lta.cereda.kdaptive.model
  */
 sealed interface MappingOperation {
 
+    /** The pattern the operation matched against the mapping. */
+    val pattern: TransitionPattern
+
     /** The edges the operation concerned. */
     val edges: List<TransitionEdge>
 
@@ -42,7 +45,7 @@ sealed interface MappingOperation {
      */
     data class Query(
         /** The pattern that was matched against the mapping. */
-        val pattern: TransitionPattern,
+        override val pattern: TransitionPattern,
         /** The edges the pattern selected. */
         override val edges: List<TransitionEdge>,
         /** The number of edges in the mapping when the query ran. */
@@ -62,7 +65,7 @@ sealed interface MappingOperation {
      */
     data class Remove(
         /** The pattern that was matched against the mapping. */
-        val pattern: TransitionPattern,
+        override val pattern: TransitionPattern,
         /** The edges the pattern selected, and which were removed. */
         override val edges: List<TransitionEdge>,
         /** The number of edges in the mapping before the removal. */
@@ -79,7 +82,7 @@ sealed interface MappingOperation {
      */
     data class Add(
         /** The pattern describing the transition that was added. */
-        val pattern: TransitionPattern,
+        override val pattern: TransitionPattern,
         /** The edge that was added. */
         val edge: TransitionEdge,
         /** The number of edges in the mapping before the addition. */

@@ -229,6 +229,41 @@ null symbol.
 > the filter cases never appear on an edge. The two roles never disagree:
 > `Bound("A", x)` means the same thing on an edge and in a filter.
 
+### 4.0.1 Domains: naming several states or symbols at once
+
+A wildcard says "any". A **domain** says "any of *these*": a set of states or symbols
+built with `State.anyOf` and `Symbol.anyOf`.
+
+```kotlin
+val left = State.anyOf(q0, q1)                    // a set of states
+val vowels = Symbol.anyOf(CharSymbol('a'), CharSymbol('e'))  // a set of symbols
+```
+
+A domain is a **filter marker**, like `State.Any`: it never belongs to the state set of
+an automaton, and it is rejected wherever a concrete state is required.
+
+| Rule | Consequence |
+|---|---|
+| a domain matches an edge when the edge's endpoint (or consumed symbol) is one of its members | a filter over a domain is a *union* of the members |
+| a domain may name `Symbol.Epsilon` among its members | the filter then selects the epsilon edges **and** the symbol-consuming ones |
+| a domain may **not** contain `State.Any`, `Symbol.Any`, or another domain | a domain names finitely many concrete values |
+| a domain may **not** be empty | an empty domain would match nothing, which is what "no filter" is for |
+
+An addition over domains produces the **Cartesian product** of its domains — one edge
+per combination — and reports **one operation per edge inserted**:
+
+```kotlin
+ea.add(State.anyOf(q0, q1), CharSymbol('a'), State.anyOf(p0, p1))
+// four edges: q0 -a-> p0, q0 -a-> p1, q1 -a-> p0, q1 -a-> p1
+```
+
+> **Pitfall**: a domain that names `Symbol.Epsilon` inserts an epsilon edge for that
+> member. An epsilon self-loop makes the query-for-next-step loop forever (see the DSL
+> guide, §4).
+
+The size of every domain is reported on the pattern of the operation, so a consumer can
+price an operation without knowing anything about the filters: see §7.3.
+
 ### 4.1 Symbol family
 
 ```kotlin
@@ -279,7 +314,8 @@ ea.query {
 
 The symbol filter selects the kind of transition: `Symbol.Any` selects every
 symbol-consuming transition, `Symbol.Epsilon` selects the epsilon transitions, and any
-other symbol selects the transitions consuming it.
+other symbol selects the transitions consuming it. A **domain** of symbols selects the
+transitions consuming any of its members — epsilon included, when the domain names it.
 
 > **Note**: the symbol family never selects a submachine call, and a concrete symbol
 > never selects an epsilon edge. Epsilon has its own filter.
@@ -407,7 +443,15 @@ ea.addCall(p0, "M", p1, prior = actionRef("A"))
 ```
 
 The wildcards are rejected where a concrete value is required: `add` refuses
-`State.Any` and `Symbol.Any`, and `addCall` refuses `State.Any`.
+`State.Any` and `Symbol.Any`, and `addCall` refuses `State.Any`. **Domains are
+accepted**: they expand into the concrete values they name, and the addition produces
+the Cartesian product of its domains, one edge — and one reported operation — per
+combination.
+
+```kotlin
+ea.add(State.anyOf(p0, p1), CharSymbol('a'), State.anyOf(q0, q1))  // four edges
+ea.addCall(State.anyOf(p0, p1), "M", q0)                           // two edges
+```
 
 > **Pitfall**: an epsilon self-loop makes the query-for-next-step loop forever (see the
 > DSL guide, §4).
@@ -642,11 +686,18 @@ exists to catch.
 
 The `pattern` describes what was **asked for**, not what was found. Its filters are read
 per family, and the family is part of the pattern because the two disagree:
-`TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON` and
-`TransitionPatternKind.SUBMACHINE` give the same filter different meanings. Every filter
-is an explicit value — a wildcard is `State.Any`, `Symbol.Any` or `ActionRef.Free`, never
-a null; the only null left is the `submachine` filter of the call family, where it means
-"any call".
+`TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON`,
+`TransitionPatternKind.MIXED` (a symbol domain that names the empty word among its
+members) and `TransitionPatternKind.SUBMACHINE` give the same filter different meanings.
+Every filter is an explicit value — a wildcard is `State.Any`, `Symbol.Any` or
+`ActionRef.Free`, never a null; the only null left is the `submachine` filter of the
+call family, where it means "any call".
+
+The pattern also reports **how many values each filter may select**: `sourceDomainSize`,
+`symbolDomainSize`, `targetDomainSize`, `submachineDomainSize`, `priorDomainSize` and
+`postDomainSize`. A concrete filter reports `1`, a domain reports the number of its
+members, and a wildcard reports `null` — it names an unbounded number of values. These
+are facts, not costs: what they are worth is the consumer's business.
 
 #### Facts published by an action
 
@@ -672,8 +723,22 @@ channel through `transitions.observe(fact)`.
 #### A consumer, end to end
 
 `br.usp.poli.lta.cereda.kdaptive.examples.CostVisitor` is a complete example of a
-consumer: it prices a query and a removal as a scan of the mapping, and an addition as
-one unit.
+consumer. Its model was re-derived for 2.1.0, when the library learned to report the
+size of every filter domain:
+
+- **ω(x) = x / 2** is the cost of scanning a collection of x elements;
+- the **product** of a pattern is the number of edge shapes its filters may select: the
+  product of the six domain sizes. A wildcard has an unbounded domain, and an unbounded
+  domain contributes zero to the product — the number of combinations it admits is not a
+  finite number, so the model does not price it;
+- a **query** costs `ω(size)`;
+- a **removal** costs `product·ω(size) − product`;
+- an **addition** costs `product·ω(size) + product`.
+
+The size is the size of the mapping when the operation ran. A pattern whose filters are
+all finite — concrete states, concrete symbols, concrete actions — is therefore priced
+by the number of shapes it may touch, while a pattern carrying a wildcard is priced by
+the scan alone.
 
 ```kotlin
 val visitor = CostVisitor()

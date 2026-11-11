@@ -275,6 +275,23 @@ action("Reshape") { _, _ ->
 `Observation` is an open marker interface, so the fact type is yours to define. See
 §7.3 of the [adaptive actions guide](ADAPTIVE-ACTIONS-GUIDE.md) for the whole facility.
 
+#### Searching a set of states at once
+
+The filters of the elementary actions accept **domains** — sets of states or symbols
+built with `State.anyOf(...)` and `Symbol.anyOf(...)`. A domain selects every member it
+names, and an addition over domains produces their Cartesian product:
+
+```kotlin
+action("Spread") { _, _ ->
+    // one edge per combination: q0 -a-> q1, q0 -a-> q2, q3 -a-> q1, q3 -a-> q2
+    ea.add(State.anyOf(state("q0"), state("q3")), CharSymbol('a'), State.anyOf(state("q1"), state("q2")))
+}
+```
+
+The domain is a **filter**, not a state: it never belongs to the state set of the
+automaton, and it is rejected wherever a concrete state is required — an edge endpoint,
+for instance. See §4.0.1 of the [adaptive actions guide](ADAPTIVE-ACTIONS-GUIDE.md).
+
 ### Fluent step chain (optional)
 
 The builder also exposes a formula-style alternative for writing single edges:

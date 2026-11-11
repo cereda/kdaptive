@@ -9,6 +9,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.TopologyValidator
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.actions.ElementaryActions
@@ -443,8 +444,9 @@ class AutomatonBuilder {
         val submachines = submachineBuilders.mapValues { (name, builder) -> builder.build(name) }
         validateArities()
         validateArgumentStates(submachines.values)
-        validateMain(submachines)
-        validateTransitions(submachines.values)
+        // The topology rules are shared with the imperative API: a topology
+        // the DSL accepts is executable, and the other way round.
+        TopologyValidator.validate(transitions, submachines.values, main)
         return AutomatonSpec(
             states = states.toMap(),
             submachines = submachines,
@@ -495,59 +497,6 @@ class AutomatonBuilder {
             }
         }
     }
-
-    /**
-     * Checks that a main submachine is declared and exists: recognition starts
-     * there, so a missing one is a modeling mistake, not a runtime detail.
-     */
-    private fun validateMain(submachines: Map<String, Submachine>) {
-        val mainName =
-            requireNotNull(main) {
-                "The automaton must declare a main submachine, for example main(\"M\")."
-            }
-        require(mainName in submachines) {
-            "Main submachine '$mainName' is not declared. " +
-                "Declared submachines: ${submachines.keys.joinToString(", ")}."
-        }
-    }
-
-    /**
-     * Checks the shape of every edge:
-     *
-     * - both endpoints belong to a submachine, otherwise the executor cannot
-     *   tell which submachine is running when the edge is taken;
-     * - a call names a declared submachine;
-     * - a call returns to a state owned by the calling submachine, otherwise
-     *   the return would switch the running submachine.
-     */
-    private fun validateTransitions(submachines: Collection<Submachine>) {
-        val names = submachines.map { it.name }.toSet()
-        transitions.forEach { edge ->
-            val sourceOwners = ownersOf(edge.source, submachines)
-            val targetOwners = ownersOf(edge.target, submachines)
-            require(sourceOwners.isNotEmpty()) { unownedStateMessage(edge.source) }
-            require(targetOwners.isNotEmpty()) { unownedStateMessage(edge.target) }
-            val call = edge.transition as? Transition.Call ?: return@forEach
-            require(call.submachine in names) {
-                "Call to undeclared submachine '${call.submachine}'. " +
-                    "Declared submachines: ${names.joinToString(", ")}."
-            }
-            require(targetOwners.any { it in sourceOwners }) {
-                "Call to submachine '${call.submachine}' returns to '${edge.target}', owned by " +
-                    "${targetOwners.joinToString(", ")} and not by the calling submachine " +
-                    "${sourceOwners.joinToString(", ")}. A call must return to a state of its caller."
-            }
-        }
-    }
-
-    /** Returns the names of the submachines owning [state]. */
-    private fun ownersOf(state: State, submachines: Collection<Submachine>): Set<String> =
-        submachines.filter { state in it.states }.map { it.name }.toSet()
-
-    /** Builds the error message for a state owned by no submachine. */
-    private fun unownedStateMessage(state: State): String =
-        "State '$state' is not part of any submachine. Declare it inside a submachine block, " +
-            "for example submachine(\"M\") { state(\"$state\") }."
 }
 
 /**

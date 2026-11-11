@@ -6,6 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Stack
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.TopologyValidator
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.sets.ActionsSet
@@ -195,6 +196,15 @@ abstract class AdaptiveAutomaton {
     private val threads = mutableListOf<PathExecutor>()
     private val paths = mutableMapOf<Int, RecognitionPath>()
 
+    /**
+     * The clone that ran the last recognition, published once that recognition
+     * is over.
+     *
+     * The field is volatile: it is written by the thread that ran the
+     * recognition and read by whoever asks for the results, possibly from
+     * another thread.
+     */
+    @Volatile
     private var reference: AdaptiveAutomaton? = null
 
     /** When true, recognition stops as soon as the first path finishes (whether accepted or rejected). */
@@ -222,6 +232,9 @@ abstract class AdaptiveAutomaton {
      * Only the paths that reached a verdict are reported: a path replaced by
      * its children is not one of them.
      *
+     * When several recognitions run concurrently on the same automaton, the
+     * paths of the most recent one are reported.
+     *
      * @throws IllegalStateException if [recognize] has not been called yet.
      */
     fun getRecognitionMap(): Map<Int, RecognitionPath> = reference?.getRecognitionMapOnce()
@@ -232,6 +245,9 @@ abstract class AdaptiveAutomaton {
      *
      * Only the paths that reached a verdict are reported: a path replaced by
      * its children is not one of them.
+     *
+     * When several recognitions run concurrently on the same automaton, the
+     * paths of the most recent one are reported.
      *
      * @throws IllegalStateException if [recognize] has not been called yet.
      */
@@ -244,12 +260,23 @@ abstract class AdaptiveAutomaton {
 
     /**
      * Recognises a list of symbols representing the input string.
+     *
+     * The recognition runs on a clone, so the automaton itself is never
+     * mutated: several recognitions may run concurrently on the same
+     * automaton, and each of them sees the topology the automaton had when it
+     * started.
+     *
      * @return true if the adaptive automaton recognised the input string.
      */
     fun recognize(input: List<Symbol>): Boolean {
         val ref = clone()
-        reference = ref
-        return ref.recognizeOnce(input)
+        try {
+            return ref.recognizeOnce(input)
+        } finally {
+            // The results are published once the recognition is over, so a
+            // reader never sees a half-finished run.
+            reference = ref
+        }
     }
 
     private fun clone(): AdaptiveAutomaton {
@@ -268,6 +295,15 @@ abstract class AdaptiveAutomaton {
     private fun recognizeOnce(input: List<Symbol>): Boolean {
         setup()
 
+        // The topology follows the same rules as the one the builder DSL
+        // produces: the imperative API and the declarative API accept exactly
+        // the same automata.
+        TopologyValidator.validate(
+            edges = transitions.getTransitions(),
+            submachines = submachines.getSubmachines(),
+            mainSubmachine = mainSubmachine,
+        )
+
         // The main submachine must exist before recognition starts. Checking it
         // here guarantees that the lifecycle events always pair: no start
         // without an end, and no end without a start.
@@ -275,7 +311,7 @@ abstract class AdaptiveAutomaton {
 
         // The lifecycle events fire on the clone, after setup() materialised its
         // topology, so a visitor sees the automaton it is about to execute.
-        visitors.forEach { it.onRecognizeStart(this) }
+        visitors.toList().forEach { it.onRecognizeStart(this) }
 
         threads.clear()
         paths.clear()
@@ -328,7 +364,7 @@ abstract class AdaptiveAutomaton {
         }
 
         val result = paths.values.any { it.done && it.result == true }
-        visitors.forEach { it.onRecognizeEnd(result) }
+        visitors.toList().forEach { it.onRecognizeEnd(result) }
         return result
     }
 
@@ -343,8 +379,8 @@ abstract class AdaptiveAutomaton {
      * @param cause the exception that killed it
      */
     private fun failPath(failed: PathExecutor, cause: Exception): Nothing {
-        visitors.forEach { it.onPathEnd(failed.id, accepted = false, cursor = failed.cursor) }
-        visitors.forEach { it.onRecognizeEnd(false) }
+        visitors.toList().forEach { it.onPathEnd(failed.id, accepted = false, cursor = failed.cursor) }
+        visitors.toList().forEach { it.onRecognizeEnd(false) }
         // Surface path failures to the caller instead of killing the JVM.
         throw IllegalStateException(
             "Recognition path ${failed.id} failed: ${cause.message}",

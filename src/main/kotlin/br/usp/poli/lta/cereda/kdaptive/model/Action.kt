@@ -11,15 +11,34 @@ import br.usp.poli.lta.cereda.kdaptive.utils.IdentifierUtils
  */
 typealias ActionHandler = (transitions: TransitionMapping, transition: Transition, parameters: List<Any>) -> Unit
 
-/** An action of the adaptive automaton, executed when a transition references it by name. */
+/**
+ * An action of the adaptive automaton, executed when a transition references
+ * it by name.
+ *
+ * Two actions are equal when they have the same name and the same handler.
+ * The [id] is bookkeeping, not identity: it is not part of equality, so
+ * registering the same action twice does not produce two different actions.
+ * The set of actions identifies an action by its name anyway, and a name
+ * registered twice replaces the previous handler.
+ *
+ * @property name the name of this action
+ * @property handler the handler function executed when this action fires
+ */
 data class Action(
-    /** The unique identifier for this action. */
-    val id: Int = IdentifierUtils.nextActionId(),
     /** The name of this action. */
     val name: String,
     /** The handler function executed when this action fires. */
     val handler: ActionHandler,
 ) {
+    /**
+     * The unique identifier for this action.
+     *
+     * The identifier is deliberately outside the equality of the action: it
+     * tells this particular action apart from the others, but it does not
+     * make two otherwise identical actions different.
+     */
+    val id: Int = IdentifierUtils.nextActionId()
+
     /** Returns a human-readable representation of this action. */
     override fun toString(): String = "Action(id=$id, name=$name)"
 }

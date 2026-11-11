@@ -5,7 +5,9 @@ import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.MappingOperation
 import br.usp.poli.lta.cereda.kdaptive.model.Observation
 import br.usp.poli.lta.cereda.kdaptive.model.State
+import br.usp.poli.lta.cereda.kdaptive.model.StateDomain
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
+import br.usp.poli.lta.cereda.kdaptive.model.SymbolDomain
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionPattern
@@ -131,6 +133,11 @@ fun <T : Any> requireNonNull(value: T?): T = value ?: throw IllegalArgumentExcep
  * The families never overlap: the symbol family never selects a submachine
  * call, and the call family never selects a symbol-consuming transition.
  * Neither of them selects the engine's internal return transitions.
+ *
+ * The state and symbol filters may also name a **domain** — a set built with
+ * [State.anyOf] or [Symbol.anyOf]. A domain selects every member it names,
+ * and an addition over domains produces the Cartesian product of its
+ * domains.
  *
  * Builder-style DSL is available through the `query`, `remove`, `queryCall`
  * and `removeCall` lambdas, which hide the wildcards behind named fields.
@@ -302,9 +309,16 @@ class ElementaryActions(private val transitions: TransitionMapping) {
      * input; any other symbol adds a symbol-consuming transition. The
      * wildcard [Symbol.Any] is not a symbol and is rejected.
      *
-     * @param source the source state
-     * @param symbol the symbol to consume, or [Symbol.Epsilon]
-     * @param target the target state
+     * The endpoints and the symbol may be **domains** — sets built with
+     * [State.anyOf] and [Symbol.anyOf]. An addition over domains produces
+     * the Cartesian product of its domains: one edge per combination, and one
+     * [MappingOperation.Add] operation per edge inserted. A domain naming
+     * [Symbol.Epsilon] among its members produces an epsilon edge for that
+     * member.
+     *
+     * @param source the source state, or a domain of source states
+     * @param symbol the symbol to consume, or [Symbol.Epsilon], or a domain
+     * @param target the target state, or a domain of target states
      * @param prior the prior action executed before the edge is traversed
      * @param post the post action executed after the edge is traversed
      * @throws IllegalArgumentException if a wildcard state or symbol is given
@@ -316,9 +330,23 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         prior: ActionRef.Bound? = null,
         post: ActionRef.Bound? = null,
     ) {
-        require(source !== State.Any) { "The source of an added transition must be a concrete state." }
-        require(target !== State.Any) { "The target of an added transition must be a concrete state." }
-        require(symbol !== Symbol.Any) { "The symbol of an added transition must be a concrete symbol." }
+        val sources = concreteStates(source, "source")
+        val symbols = concreteSymbols(symbol)
+        val targets = concreteStates(target, "target")
+        for (from in sources) {
+            for (consumed in symbols) {
+                for (to in targets) {
+                    addOne(from, consumed, to, prior, post)
+                }
+            }
+        }
+    }
+
+    /**
+     * Adds a single transition with concrete endpoints, and reports it as one
+     * [MappingOperation.Add] operation.
+     */
+    private fun addOne(source: State, symbol: Symbol, target: State, prior: ActionRef.Bound?, post: ActionRef.Bound?) {
         val transition =
             if (symbol === Symbol.Epsilon) {
                 Transition.Epsilon
@@ -468,7 +496,12 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     /**
      * Adds a submachine-call transition to the mapping.
      *
-     * @param source the source state
+     * The endpoints may be **domains** — sets built with [State.anyOf]. An
+     * addition over domains produces the Cartesian product of its domains:
+     * one edge per combination, and one [MappingOperation.Add] operation per
+     * edge inserted.
+     *
+     * @param source the source state, or a domain of source states
      * @param submachine the name of the submachine to call
      * @param target the return state, owned by the calling submachine
      * @param prior the prior action executed before the call
@@ -482,8 +515,26 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         prior: ActionRef.Bound? = null,
         post: ActionRef.Bound? = null,
     ) {
-        require(source !== State.Any) { "The source of an added transition must be a concrete state." }
-        require(target !== State.Any) { "The target of an added transition must be a concrete state." }
+        val sources = concreteStates(source, "source")
+        val targets = concreteStates(target, "target")
+        for (from in sources) {
+            for (to in targets) {
+                addCallOne(from, submachine, to, prior, post)
+            }
+        }
+    }
+
+    /**
+     * Adds a single submachine-call transition with concrete endpoints, and
+     * reports it as one [MappingOperation.Add] operation.
+     */
+    private fun addCallOne(
+        source: State,
+        submachine: String,
+        target: State,
+        prior: ActionRef.Bound?,
+        post: ActionRef.Bound?,
+    ) {
         val edge =
             TransitionEdge(
                 source = source,
@@ -553,22 +604,47 @@ class ElementaryActions(private val transitions: TransitionMapping) {
         transitions.onOperation?.invoke(MappingOperation.Add(pattern, edge, before, after))
     }
 
-    /** The source-state filter: [State.Any] matches any source state. */
-    private fun sourcePredicate(source: State): TransitionPredicate =
-        if (source === State.Any) { _: TransitionEdge -> true } else sourceState(source)
+    /**
+     * The source-state filter: [State.Any] matches any source state, a domain
+     * matches any state it names, and a concrete state matches only itself.
+     */
+    private fun sourcePredicate(source: State): TransitionPredicate = when {
+        source === State.Any -> { _: TransitionEdge -> true }
+        source is StateDomain -> { edge: TransitionEdge -> edge.source in source.members }
+        else -> sourceState(source)
+    }
 
-    /** The target-state filter: [State.Any] matches any target state. */
-    private fun targetPredicate(target: State): TransitionPredicate =
-        if (target === State.Any) { _: TransitionEdge -> true } else targetState(target)
+    /**
+     * The target-state filter: [State.Any] matches any target state, a domain
+     * matches any state it names, and a concrete state matches only itself.
+     */
+    private fun targetPredicate(target: State): TransitionPredicate = when {
+        target === State.Any -> { _: TransitionEdge -> true }
+        target is StateDomain -> { edge: TransitionEdge -> edge.target in target.members }
+        else -> targetState(target)
+    }
 
     /**
      * The symbol filter: [Symbol.Epsilon] selects the epsilon transitions,
-     * [Symbol.Any] selects every symbol-consuming transition, and any other
-     * symbol selects the transitions consuming it.
+     * [Symbol.Any] selects every symbol-consuming transition, a domain
+     * selects the transitions consuming any of its members — epsilon included
+     * — and any other symbol selects the transitions consuming it.
      */
     private fun symbolPredicate(filter: Symbol): TransitionPredicate = when {
         filter === Symbol.Epsilon -> isEpsilon
+
         filter === Symbol.Any -> isSymbolConsumption
+
+        filter is SymbolDomain -> { edge: TransitionEdge ->
+            filter.members.any { member ->
+                if (member === Symbol.Epsilon) {
+                    edge.transition is Transition.Epsilon
+                } else {
+                    edge.transition is Transition.SymbolTransition && edge.transition.symbol == member
+                }
+            }
+        }
+
         else -> symbol(filter)
     }
 
@@ -579,9 +655,58 @@ class ElementaryActions(private val transitions: TransitionMapping) {
     private fun submachinePredicate(filter: String?): TransitionPredicate =
         if (filter == null) isSubmachineCall else submachineCall(filter)
 
-    /** The family a symbol filter belongs to. */
-    private fun symbolKind(filter: Symbol): TransitionPatternKind =
-        if (filter === Symbol.Epsilon) TransitionPatternKind.EPSILON else TransitionPatternKind.SYMBOL
+    /**
+     * The family a symbol filter belongs to.
+     *
+     * A domain naming the empty word among its members selects the two kinds
+     * at once, and the pattern then belongs to the
+     * [TransitionPatternKind.MIXED] family.
+     */
+    private fun symbolKind(filter: Symbol): TransitionPatternKind = when {
+        filter === Symbol.Epsilon -> TransitionPatternKind.EPSILON
+
+        filter === Symbol.Any -> TransitionPatternKind.SYMBOL
+
+        filter is SymbolDomain ->
+            if (filter.containsEpsilon) {
+                if (filter.alphabetMembers.isEmpty()) {
+                    TransitionPatternKind.EPSILON
+                } else {
+                    TransitionPatternKind.MIXED
+                }
+            } else {
+                TransitionPatternKind.SYMBOL
+            }
+
+        else -> TransitionPatternKind.SYMBOL
+    }
+
+    /**
+     * Expands a state filter into the concrete states an addition may use.
+     *
+     * The wildcard [State.Any] is not a state and is rejected; a domain
+     * expands into the states it names.
+     *
+     * @param filter the filter given to the addition
+     * @param role the role of the filter, used in the error message
+     */
+    private fun concreteStates(filter: State, role: String): List<State> {
+        require(filter !== State.Any) { "The $role of an added transition must be a concrete state." }
+        return if (filter is StateDomain) filter.members.toList() else listOf(filter)
+    }
+
+    /**
+     * Expands a symbol filter into the concrete symbols an addition may use.
+     *
+     * The wildcard [Symbol.Any] is not a symbol and is rejected; a domain
+     * expands into the symbols it names, the empty word included.
+     *
+     * @param filter the filter given to the addition
+     */
+    private fun concreteSymbols(filter: Symbol): List<Symbol> {
+        require(filter !== Symbol.Any) { "The symbol of an added transition must be a concrete symbol." }
+        return if (filter is SymbolDomain) filter.members.toList() else listOf(filter)
+    }
 
     /**
      * The action-slot filter, applied to the prior or the post action of the
