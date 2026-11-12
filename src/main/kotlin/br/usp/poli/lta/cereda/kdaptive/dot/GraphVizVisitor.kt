@@ -29,7 +29,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  *
  * @param sink the callback receiving the path identifier and the DOT snapshot
  */
-class GraphVizVisitor(
+public class GraphVizVisitor(
     /** Sink receiving the path identifier and each DOT snapshot. */
     private val sink: (pathId: Int, dot: String) -> Unit,
 ) : ExecutionVisitor {

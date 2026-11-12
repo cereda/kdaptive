@@ -9,7 +9,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * pattern — see [TransitionPattern.kind] — so a pattern always belongs to
  * exactly one family.
  */
-enum class TransitionPatternKind {
+public enum class TransitionPatternKind {
     /** Operations over symbol-consuming transitions. */
     SYMBOL,
 
@@ -63,7 +63,7 @@ enum class TransitionPatternKind {
  * @property post the post-action filter; [ActionRef.Free] means no constraint
  *   at all
  */
-data class TransitionPattern(
+public data class TransitionPattern(
     /** The source-state filter; [State.Any] means any source state. */
     val source: State = State.Any,
     /** The symbol filter; [Symbol.Any] means any symbol-consuming transition. */
@@ -120,7 +120,7 @@ data class TransitionPattern(
      * @param edge the edge to test
      * @return true if [edge] satisfies every applicable filter
      */
-    fun matches(edge: TransitionEdge): Boolean {
+    public fun matches(edge: TransitionEdge): Boolean {
         if (!stateMatches(edge.source, source)) return false
         if (!stateMatches(edge.target, target)) return false
         if (!actionSlotMatches(prior, edge.prior)) return false

@@ -17,7 +17,7 @@ package br.usp.poli.lta.cereda.kdaptive.execution
  * @property maxStepsPerPath the largest number of transitions a single path may traverse
  * @property maxCallDepth the largest depth the call stack may reach
  */
-data class RecognitionLimits(
+public data class RecognitionLimits(
     /** The largest number of paths that may be alive at once. */
     val maxLivePaths: Int = 10_000,
     /** The largest number of transitions a single path may traverse. */

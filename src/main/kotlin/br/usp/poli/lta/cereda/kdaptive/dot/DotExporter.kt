@@ -24,7 +24,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  * submachine's cluster, so GraphViz draws them within the cluster box. Edges
  * crossing a submachine boundary are emitted at the top level.
  */
-class DotExporter {
+public class DotExporter {
 
     /**
      * Renders [topology] as a DOT document.
@@ -35,12 +35,12 @@ class DotExporter {
      * @param topology the topology to render
      * @return a DOT-formatted string
      */
-    fun toDot(topology: Topology): String {
+    public fun toDot(topology: Topology): String {
         val allTransitions = topology.edges.toList()
         val allSubmachines = topology.submachines.sortedBy { it.name }
         val stateIndex = indexStates(allTransitions, allSubmachines)
         val ownerOf = ownersOf(allSubmachines)
-        val (internalEdges, externalEdges) = allTransitions.partition { edge -> isInternal(edge, ownerOf) }
+        val (internalEdges, externalEdges) = partition(allTransitions, ownerOf)
 
         val sb = StringBuilder()
         sb.append("digraph Automaton {\n")
@@ -50,7 +50,7 @@ class DotExporter {
         sb.append('\n')
 
         for (sm in allSubmachines) {
-            appendCluster(sb, sm, stateIndex, ownerOf, internalEdges)
+            appendCluster(sb, sm, stateIndex, internalEdges[sm.name].orEmpty())
         }
 
         for (edge in externalEdges.sortedBy { it.id }) {
@@ -59,6 +59,35 @@ class DotExporter {
 
         sb.append("}\n")
         return sb.toString()
+    }
+
+    /**
+     * Splits the edges into the ones internal to a submachine and the others.
+     *
+     * The edges are partitioned once, and the internal ones are grouped by
+     * the submachine that owns them. Grouping them afterwards would mean
+     * scanning the whole edge list once per submachine, and the cost of the
+     * export would grow with the square of the topology.
+     *
+     * @param allTransitions the edges of the topology
+     * @param ownerOf the owner of each state
+     * @return the internal edges by owner, and the edges crossing a boundary
+     */
+    private fun partition(
+        allTransitions: List<TransitionEdge>,
+        ownerOf: Map<State, String>,
+    ): Pair<Map<String, List<TransitionEdge>>, List<TransitionEdge>> {
+        val internal = LinkedHashMap<String, MutableList<TransitionEdge>>()
+        val external = mutableListOf<TransitionEdge>()
+        for (edge in allTransitions) {
+            val owner = ownerOf[edge.source]
+            if (owner != null && owner == ownerOf[edge.target]) {
+                internal.getOrPut(owner) { mutableListOf() }.add(edge)
+            } else {
+                external.add(edge)
+            }
+        }
+        return internal to external
     }
 
     /**
@@ -93,19 +122,12 @@ class DotExporter {
         }
     }
 
-    /** Tells whether [edge] connects two states of the same submachine. */
-    private fun isInternal(edge: TransitionEdge, ownerOf: Map<State, String>): Boolean {
-        val owner = ownerOf[edge.source]
-        return owner != null && owner == ownerOf[edge.target]
-    }
-
     /** Appends the cluster of [sm], its states and the edges internal to it. */
     private fun appendCluster(
         sb: StringBuilder,
         sm: Submachine,
         stateIndex: Map<State, Int>,
-        ownerOf: Map<State, String>,
-        internalEdges: List<TransitionEdge>,
+        ownEdges: List<TransitionEdge>,
     ) {
         sb.append("  subgraph cluster_${escapeId(sm.name)} {\n")
         sb.append("    label = \"${escapeLabel(sm.name)}\";\n")
@@ -113,8 +135,7 @@ class DotExporter {
             val shape = if (sm.acceptingStates.contains(state)) "doublecircle" else "circle"
             sb.append("    ${nodeId(state, stateIndex)} [label=\"${escapeLabel(state.toString())}\", shape=$shape];\n")
         }
-        val ownEdges = internalEdges.filter { ownerOf[it.source] == sm.name }.sortedBy { it.id }
-        for (edge in ownEdges) {
+        for (edge in ownEdges.sortedBy { it.id }) {
             sb.append("    ${edgeStatement(edge, stateIndex)}\n")
         }
         sb.append("  }\n")
@@ -160,9 +181,9 @@ class DotExporter {
      * The escape is injective: two different identifiers never produce the
      * same DOT identifier. Letters and digits are kept, an underscore is
      * written as `_005f`, and any other character is written as its
-     * underscore-prefixed four-digit code point. Since an underscore in the
-     * output always introduces such an escape, the original identifier can be
-     * recovered, so `"a-b"` and `"a_b"` remain two different clusters.
+     * underscore-prefixed four-digit UTF-16 code unit. Since an underscore in
+     * the output always introduces such an escape, the original identifier can
+     * be recovered, so `"a-b"` and `"a_b"` remain two different clusters.
      */
     private fun escapeId(id: String): String = buildString {
         for (character in id) {
@@ -178,10 +199,10 @@ class DotExporter {
         /** The escape written for an underscore. */
         const val UNDERSCORE_ESCAPE = "_005f"
 
-        /** The radix the code points are written in. */
+        /** The radix the code units are written in. */
         const val HEX_RADIX = 16
 
-        /** The number of digits a code point is padded to. */
+        /** The number of digits a code unit is padded to. */
         const val CODE_POINT_WIDTH = 4
     }
 

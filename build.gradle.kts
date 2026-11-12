@@ -14,7 +14,7 @@ plugins {
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "5.0.0"
+version = "5.1.0"
 
 java {
     // The library ships its sources next to the jar: the jar is the
@@ -28,12 +28,26 @@ tapmoc {
     checkDependencies()
 }
 
+kotlin {
+    // The library follows the conventions the Kotlin documentation gives to
+    // the authors of a library: every public member names its visibility and
+    // its return type, and every public member carries its documentation.
+    //
+    // The mode is a warning for now, and a rule from 6.0.0 onwards: the
+    // warning measures the work that remains, and the rule keeps it done.
+    //
+    // The language, the API and the Java target are *not* set here: tapmoc
+    // owns them, and a build that states them twice states them twice.
+    explicitApiWarning()
+}
+
 // The binary-compatibility baseline guards the *library*: it is the artefact
 // that ships, and its consumers are the ones a break would hurt. The examples
-// are executables with no consumers, so a baseline there would guard nothing
-// and would only add a maintenance step.
+// and the benchmarks are executables with no consumers, so a baseline there
+// would guard nothing and would only add a maintenance step.
 apiValidation {
     ignoredProjects.add("examples")
+    ignoredProjects.add("benchmarks")
 }
 
 repositories {
@@ -41,28 +55,36 @@ repositories {
 }
 
 spotless {
+    // The steps run in the order they are declared, and the order matters.
+    //
+    // The trailing newlines are normalised *before* ktlint runs: a file that
+    // ends with an extra blank line makes a ktlint rule fail with an
+    // exception rather than with a message, and the step that fixes the file
+    // is the one that has to run first.
     kotlinGradle {
         with(LicenseDescriptor) {
             licenseHeader(COMMENT, DELIMITER)
         }
         target("build.gradle.kts", "settings.gradle.kts")
-        ktlint()
         trimTrailingWhitespace()
         leadingTabsToSpaces()
         endWithNewline()
+        replaceRegex(TrailingNewlines.STEP, TrailingNewlines.BLANK_LINES, TrailingNewlines.SINGLE)
+        ktlint()
     }
     kotlin {
         target("src/**/*.kt")
         licenseHeader(LicenseDescriptor.COMMENT)
+        trimTrailingWhitespace()
+        leadingTabsToSpaces()
+        endWithNewline()
+        replaceRegex(TrailingNewlines.STEP, TrailingNewlines.BLANK_LINES, TrailingNewlines.SINGLE)
         ktlint()
             .editorConfigOverride(
                 mapOf(
                     "max_line_length" to 120,
                 ),
             )
-        trimTrailingWhitespace()
-        leadingTabsToSpaces()
-        endWithNewline()
     }
 }
 
@@ -80,6 +102,17 @@ dependencies {
 
 tasks.named<Test>("test") {
     useJUnitPlatform()
+
+    // The null-free sweep reads the declarations that carry a reified type
+    // parameter from the sources: Kotlin's reflection does not report them,
+    // and they are the only declarations that could hide a nullable type
+    // from the reflective pass.
+    systemProperty(
+        "kdaptive.sourceRoot",
+        layout.projectDirectory
+            .dir("src/main/kotlin")
+            .asFile.absolutePath,
+    )
 
     testLogging {
         events(
@@ -110,10 +143,13 @@ kover {
             excludes {
                 // Logging facade: exercised transitively by every other test run.
                 packages("br.usp.poli.lta.cereda.kdaptive.logging")
-                // Kotlin's jvm-default=all mode emits a synthetic `X$DefaultImpls` class
-                // holding binary-compatibility bridges. Nothing can call it, so it is
-                // unreachable by construction; the real default bodies live in the
-                // interface itself, which stays in the report.
+                // Kotlin's `jvm-default=enable` mode — the default since Kotlin
+                // 2.2 — emits a synthetic `X$DefaultImpls` class holding the
+                // binary-compatibility bridges of the interfaces. Nothing can
+                // call it, so it is unreachable by construction; the real
+                // default bodies live in the interface itself, which stays in
+                // the report. The `jvm-default=all` mode of 6.0.0 removes the
+                // class, and the exclusion with it.
                 classes("*\$DefaultImpls")
             }
         }
@@ -162,4 +198,16 @@ dokka {
 private object LicenseDescriptor {
     const val COMMENT = "// SPDX-License-Identifier: GPL-3.0-or-later"
     const val DELIMITER = "(package|import|open|module|plugins|pluginManagement) "
+}
+
+/** The text the trailing blank lines of a file are normalised to. */
+private object TrailingNewlines {
+    /** The name the step reports itself under. */
+    const val STEP = "trailing-blank-lines"
+
+    /** The blank lines at the end of a file, which ktlint cannot digest. */
+    const val BLANK_LINES = """\n+\z"""
+
+    /** The single newline every file ends with. */
+    const val SINGLE = "\n"
 }

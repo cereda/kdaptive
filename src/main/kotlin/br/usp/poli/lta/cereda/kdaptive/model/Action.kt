@@ -6,7 +6,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * mapping (which may be mutated by elementary actions), the current transition
  * as reference, and the action parameters.
  */
-typealias ActionHandler = (transitions: TransitionMapping, transition: Transition, parameters: List<Any>) -> Unit
+public typealias ActionHandler = (transitions: TransitionMapping, transition: Transition, parameters: List<Any>) -> Unit
 
 /**
  * An action of the adaptive automaton, executed when a transition references
@@ -21,7 +21,7 @@ typealias ActionHandler = (transitions: TransitionMapping, transition: Transitio
  * @property name the name of this action
  * @property handler the handler function executed when this action fires
  */
-data class Action(
+public data class Action(
     /** The name of this action. */
     val name: String,
     /** The handler function executed when this action fires. */
@@ -66,18 +66,18 @@ data class Action(
  * variables of the theory: the pattern constrains the arity, but leaves that
  * particular argument open.
  */
-sealed interface ActionRef {
+public sealed interface ActionRef {
     /** The slot is unconstrained: the edge may or may not carry an action there. */
-    data object Free : ActionRef
+    public data object Free : ActionRef
 
     /** The slot must carry some action — any name, any arguments. */
-    data object Any : ActionRef
+    public data object Any : ActionRef
 
     /** The slot must carry no action at all. */
-    data object None : ActionRef
+    public data object None : ActionRef
 
     /** The slot must carry the named action; its arguments are not constrained. */
-    data class Named(
+    public data class Named(
         /** The name of the action the slot must carry. */
         val name: String,
     ) : ActionRef
@@ -90,5 +90,5 @@ sealed interface ActionRef {
      * @property args the arguments the action is called with; an entry equal
      *   to [Free] marks an unconstrained position
      */
-    data class Bound(val name: String, val args: List<kotlin.Any> = emptyList()) : ActionRef
+    public data class Bound(val name: String, val args: List<kotlin.Any> = emptyList()) : ActionRef
 }

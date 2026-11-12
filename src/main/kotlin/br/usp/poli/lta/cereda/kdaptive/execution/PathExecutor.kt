@@ -29,6 +29,41 @@ private sealed class PathStep {
 }
 
 /**
+ * A layer of the lineage of a path.
+ *
+ * A layer holds the configurations a path left while it owned it. The layer
+ * is *frozen* once the path forks: the child inherits it, and the parent
+ * moves on to a layer of its own. A frozen layer is never written to again,
+ * so a fork costs one empty layer rather than a copy of the whole lineage.
+ *
+ * @property own the configurations left in this layer, and their action epoch
+ * @property inherited the layer this one was forked from, if any
+ */
+private class LineageLayer(
+    /** The configurations left in this layer, and their action epoch. */
+    val own: MutableMap<Configuration, Int>,
+    /** The layer this one was forked from, if any. */
+    val inherited: LineageLayer?,
+)
+
+/**
+ * A frozen chunk of the trail of a path.
+ *
+ * The trail is kept in chunks so that a fork does not have to copy the whole
+ * history: a path owns its current chunk, and the chunks before it are frozen
+ * and shared with the forked paths.
+ *
+ * @property edges the edges of this chunk, oldest first
+ * @property previous the chunk before this one, if any
+ */
+private class TrailChunk(
+    /** The edges of this chunk, oldest first. */
+    val edges: List<TransitionEdge>,
+    /** The chunk before this one, if any. */
+    val previous: TrailChunk?,
+)
+
+/**
  * The mutable state of a recognition path.
  *
  * The state never holds a null: a path that runs always has a state, a
@@ -57,31 +92,31 @@ private sealed class PathStep {
  * @property limits the structural bounds the engine enforces
  */
 @Suppress("LongParameterList")
-class PathState(
+public class PathState(
     /** The current state of the path. */
-    var currentState: State,
+    public var currentState: State,
     /** The name of the submachine currently executing. */
-    var currentSubmachine: String,
+    public var currentSubmachine: String,
     /** The name of the main submachine. */
-    var mainSubmachine: String,
+    public var mainSubmachine: String,
     /** The call stack used for submachine calls and returns. */
-    var stack: Stack = Stack(),
+    public var stack: Stack = Stack(),
     /** The actions registered in the automaton. */
-    var actions: Actions = Actions(),
+    public var actions: Actions = Actions(),
     /** The mapping of transitions being traversed. */
-    var transitions: TransitionMapping = TransitionMapping(),
+    public var transitions: TransitionMapping = TransitionMapping(),
     /** The submachines of the automaton. */
-    var submachines: Submachines = Submachines(),
+    public var submachines: Submachines = Submachines(),
     /** The input symbols being recognised. */
-    var input: List<Symbol> = emptyList(),
+    public var input: List<Symbol> = emptyList(),
     /** The current position in [input]. */
-    var cursor: Int = 0,
+    public var cursor: Int = 0,
     /** Whether prior actions still have to fire for the selected transition. */
-    var enablePriorAction: Boolean = true,
+    public var enablePriorAction: Boolean = true,
     /** The number of actions that fired in this lineage. */
-    var actionEpoch: Int = 0,
+    public var actionEpoch: Int = 0,
     /** The structural bounds the engine enforces. */
-    var limits: RecognitionLimits = RecognitionLimits(),
+    public var limits: RecognitionLimits = RecognitionLimits(),
 )
 
 /**
@@ -105,11 +140,11 @@ class PathState(
  * at a configuration its lineage already left, with no action fired since,
  * is cut. See [PathOutcome.CUT].
  */
-class PathExecutor(
+public class PathExecutor(
     /** The unique identifier for this recognition path. */
-    val id: Int = Identifiers.nextRecognitionPathId(),
+    public val id: Int = Identifiers.nextRecognitionPathId(),
     /** The mutable state of this recognition path. */
-    val state: PathState,
+    public val state: PathState,
     /** The shared worklist of path executors. */
     internal val worklist: MutableList<PathExecutor>,
     /** The shared recognition paths collected so far. */
@@ -117,8 +152,6 @@ class PathExecutor(
     /** The visitors observing this path's execution events. */
     visitors: List<ExecutionVisitor> = emptyList(),
 ) {
-    private val logger: Logger = LoggerFactory.getLogger(javaClass)
-
     /**
      * The visitors observing this path, snapshotted when the path is created.
      *
@@ -127,7 +160,7 @@ class PathExecutor(
      * iteration that is under way, and the path never sees a visitor that
      * arrived halfway through.
      */
-    private val observers: List<ExecutionVisitor> = visitors.toList()
+    private var observers: List<ExecutionVisitor> = visitors.toList()
 
     /**
      * The consumer's own callbacks, captured before the engine chains its
@@ -162,14 +195,15 @@ class PathExecutor(
      * its own configurations, so it sees what its ancestors left and nothing
      * else. Two siblings therefore never see each other's moves.
      *
-     * The index is shared with the children of this path until one of them
-     * changes it: a child that leaves a configuration of its own takes a
-     * private index, and its siblings keep the one they were given.
+     * The lineage is a stack of *layers*. The layer this path owns is the
+     * only one it writes to; the layers it inherited are frozen. A fork
+     * therefore costs one empty layer instead of a copy of the whole index,
+     * and a chain of forks no longer copies an index that grows with it.
      */
-    private var lineage: MutableMap<Configuration, Int> = mutableMapOf()
+    private var ownLineage: MutableMap<Configuration, Int> = HashMap()
 
-    /** Whether [lineage] is shared with another path and must be copied before it changes. */
-    private var lineageShared: Boolean = false
+    /** The layers this path inherited, newest first. Every one of them is frozen. */
+    private var inheritedLineage: LineageLayer? = null
 
     /** The number of transitions this path has traversed. */
     private var steps: Int = 0
@@ -179,42 +213,63 @@ class PathExecutor(
      *
      * The trail is the history of the path, not a decoration of the forked
      * ones: a forked path inherits the trail of its parent and extends it.
-     * The trail is kept as a list the path appends to, and it is flattened
-     * into an immutable list only when the path reaches a verdict.
+     *
+     * The trail is kept in chunks: the path owns its current chunk, and the
+     * chunks before it are frozen and shared with the forked paths. A fork
+     * therefore copies a bounded chunk instead of the whole history, and the
+     * trail is flattened into an immutable list only when the path reaches a
+     * verdict.
      */
-    private val trail: MutableList<TransitionEdge> = mutableListOf()
+    private var trailChunk: MutableList<TransitionEdge> = mutableListOf()
+
+    /** The frozen chunks of the trail, newest first. */
+    private var trailRest: TrailChunk? = null
 
     // Convenience accessors delegating to [state].
 
     /** The call stack used for submachine calls and returns. */
-    val stack: Stack get() = state.stack
+    public val stack: Stack get() = state.stack
 
     /** The actions registered in the automaton. */
-    val actions: Actions get() = state.actions
+    public val actions: Actions get() = state.actions
 
     /** The mapping of transitions being traversed. */
-    val transitions: TransitionMapping get() = state.transitions
+    public val transitions: TransitionMapping get() = state.transitions
 
     /** The submachines of the automaton. */
-    val submachines: Submachines get() = state.submachines
+    public val submachines: Submachines get() = state.submachines
 
     /** The input symbols being recognised. */
-    val input: List<Symbol> get() = state.input
+    public val input: List<Symbol> get() = state.input
 
     /** The current position in [input]. */
-    val cursor: Int get() = state.cursor
+    public val cursor: Int get() = state.cursor
 
     /** The current state of the path. */
-    val currentState: State get() = state.currentState
+    public val currentState: State get() = state.currentState
 
     /** Whether a prior action still has to fire for the selected transition. */
-    val enablePriorAction: Boolean get() = state.enablePriorAction
+    public val enablePriorAction: Boolean get() = state.enablePriorAction
 
     /** The name of the submachine currently executing. */
-    val currentSubmachine: String get() = state.currentSubmachine
+    public val currentSubmachine: String get() = state.currentSubmachine
 
     /** The name of the main submachine. */
-    val mainSubmachine: String get() = state.mainSubmachine
+    public val mainSubmachine: String get() = state.mainSubmachine
+
+    /**
+     * Whether this path is over.
+     *
+     * A path is over when it reached a verdict — accepted, rejected, cut or
+     * failed — or when it forked: the parent of a fork has done its part, and
+     * its children carry the recognition on.
+     *
+     * The flag is what lets the engine drop the finished paths from the
+     * worklist in one sweep at the end of a pass, instead of removing them
+     * one by one while the pass is under way.
+     */
+    internal var finished: Boolean = false
+        private set
 
     /**
      * Runs this recognition path to completion.
@@ -223,8 +278,8 @@ class PathExecutor(
      * non-deterministic choices. When [run] returns, the path is finished and
      * should be removed from the worklist.
      */
-    fun run() {
-        logger.debug("Path $id started run()")
+    public fun run() {
+        logger.debug("Path {} started run()", id)
 
         wireCallbacks()
 
@@ -237,7 +292,11 @@ class PathExecutor(
             val next = pending
             val step = if (next == null) chooseMove() else processStep(next)
             when (step) {
-                is PathStep.Stop -> return
+                is PathStep.Stop -> {
+                    finished = true
+                    return
+                }
+
                 is PathStep.Continue -> pending = step.transition
             }
         }
@@ -340,7 +399,7 @@ class PathExecutor(
 
         observers.forEach { it.onBeforeAction(id, ref, isPrior = true) }
 
-        logger.debug("[Path $id] Executing prior action ${ref.name} on transition ${tr.id}.")
+        logger.debug("[Path {}] Executing prior action {} on transition {}.", id, ref.name, tr.id)
         actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
         state.actionEpoch = state.actionEpoch + 1
         state.enablePriorAction = false
@@ -366,7 +425,7 @@ class PathExecutor(
      * @return the transition to take next, or [PathStep.Stop] if the path ended
      */
     private fun replan(tr: TransitionEdge): PathStep {
-        logger.debug("[Path $id] Transition ${tr.id} was removed by its prior action; replanning.")
+        logger.debug("[Path {}] Transition {} was removed by its prior action; replanning.", id, tr.id)
         state.currentState = tr.source
         return chooseMove()
     }
@@ -408,7 +467,7 @@ class PathExecutor(
         if (ref !is ActionRef.Bound) return
         observers.forEach { it.onBeforeAction(id, ref, isPrior = false) }
 
-        logger.debug("[Path $id] Executing post action ${ref.name} on transition ${tr.id}.")
+        logger.debug("[Path {}] Executing post action {} on transition {}.", id, ref.name, tr.id)
         actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
         state.actionEpoch = state.actionEpoch + 1
         observers.forEach { it.onAfterAction(id, ref, isPrior = false) }
@@ -452,25 +511,27 @@ class PathExecutor(
      * Inside the input, symbol-consuming transitions for the current symbol are
      * eligible; epsilon and submachine-call transitions are always eligible.
      *
-     * Uses the cached index of the mapping for efficiency.
+     * The answer is collected into a buffer the path owns: the engine asks
+     * this question on every step of every path, and a fresh list — and the
+     * closure that would filter it — on every step is pure overhead.
      */
-    private fun applicableTransitions(state: State, cursor: Int): List<TransitionEdge> = transitions
-        .edgesFrom(state)
-        .filter { tr ->
-            when (tr.transition) {
-                is Transition.SymbolTransition -> {
-                    cursor < input.size && tr.transition.symbol == input[cursor]
-                }
-
-                is Transition.Epsilon, is Transition.Call -> {
-                    true
-                }
-
-                is Transition.Return -> {
-                    false
-                }
+    private fun applicableTransitions(state: State, cursor: Int): List<TransitionEdge> {
+        val buffer = applicableBuffer
+        buffer.clear()
+        val symbol = if (cursor < input.size) input[cursor] else null
+        for (edge in transitions.edgesFrom(state)) {
+            val applicable = when (val transition = edge.transition) {
+                is Transition.SymbolTransition -> symbol != null && transition.symbol == symbol
+                is Transition.Epsilon, is Transition.Call -> true
+                is Transition.Return -> false
             }
+            if (applicable) buffer.add(edge)
         }
+        return buffer
+    }
+
+    /** The buffer the applicable transitions of this path are collected into. */
+    private val applicableBuffer: MutableList<TransitionEdge> = mutableListOf()
 
     /** Tells the verdict of a path that is stuck in [state] at [cursor]. */
     private fun terminationResult(state: State, cursor: Int, submachine: String): PathVerdict {
@@ -511,6 +572,11 @@ class PathExecutor(
      * The copy also carries the consumer's callbacks, but not the parent's
      * visitor dispatch: the child reports under its own path identifier.
      *
+     * The actions and the submachines are shared, not copied: the engine
+     * never changes them, and copying them on every fork would cost a scan
+     * of both collections per branch. The call stack, on the other hand, is
+     * copied: the child pushes and pops its own frames.
+     *
      * @return the child path, carrying the edge it was created for
      */
     private fun fork(
@@ -521,7 +587,6 @@ class PathExecutor(
         enablePrior: Boolean,
     ): ForkedPath {
         checkLivePathBound()
-        transitions.shareEdges()
         val childTransitions = transitions.isolatedCopy()
         childTransitions.onEdgeAdded = consumerOnEdgeAdded
         childTransitions.onEdgeRemoved = consumerOnEdgeRemoved
@@ -535,9 +600,9 @@ class PathExecutor(
                     currentSubmachine = curSubmachine,
                     mainSubmachine = mainSubmachine,
                     stack = stack.copy(),
-                    actions = actions.copy(),
+                    actions = actions,
                     transitions = childTransitions,
-                    submachines = submachines.copy(),
+                    submachines = submachines,
                     input = input,
                     cursor = curCursor,
                     enablePriorAction = enablePrior,
@@ -549,10 +614,30 @@ class PathExecutor(
                 visitors = observers,
             )
         child.designated = transition
-        child.lineage = lineage
-        child.lineageShared = true
-        lineageShared = true
-        child.trail.addAll(trail)
+
+        // The lineage is a stack of layers. The layer this path owns is
+        // frozen: the child inherits it, and this path starts a layer of its
+        // own. Neither of them ever writes to a layer they share, so the
+        // siblings stay isolated — and the fork costs an empty layer rather
+        // than a copy of the whole index.
+        val frozenLineage = LineageLayer(ownLineage, inheritedLineage)
+        inheritedLineage = frozenLineage
+        ownLineage = HashMap()
+        child.inheritedLineage = frozenLineage
+        child.ownLineage = HashMap()
+
+        // The trail works the same way: the chunk this path owns is frozen
+        // and handed to the child, and both paths continue with a chunk of
+        // their own. An empty chunk holds nothing to freeze, and the chain
+        // of chunks is left alone: a path that forks before it traverses
+        // anything would otherwise build a chain as long as the number of
+        // its forks.
+        val frozenTrail = if (trailChunk.isEmpty()) trailRest else TrailChunk(trailChunk.toList(), trailRest)
+        trailRest = frozenTrail
+        trailChunk = mutableListOf()
+        child.trailRest = frozenTrail
+        child.trailChunk = mutableListOf()
+
         paths[child.id] =
             RecognitionPath(
                 id = child.id,
@@ -560,7 +645,7 @@ class PathExecutor(
                 state = curState,
             )
         worklist.add(child)
-        logger.debug("[Path $id] Forked path ${child.id} for transition ${transition.id}.")
+        logger.debug("[Path {}] Forked path {} for transition {}.", id, child.id, transition.id)
         return ForkedPath(child.id, transition)
     }
 
@@ -571,7 +656,33 @@ class PathExecutor(
      * the path, not a decoration of the forked ones.
      */
     private fun recordTraversal(edge: TransitionEdge) {
-        trail.add(edge)
+        trailChunk.add(edge)
+        if (trailChunk.size < TRAIL_CHUNK_SIZE) return
+        trailRest = TrailChunk(trailChunk.toList(), trailRest)
+        trailChunk = mutableListOf()
+    }
+
+    /**
+     * Flattens the trail of this path into an immutable list, oldest first.
+     *
+     * The chunks are walked from the oldest to the newest, and the chunk the
+     * path owns comes last.
+     */
+    private fun trailAsList(): List<TransitionEdge> {
+        val chunks = ArrayList<TrailChunk>()
+        var size = trailChunk.size
+        var chunk = trailRest
+        while (chunk != null) {
+            chunks.add(chunk)
+            size += chunk.edges.size
+            chunk = chunk.previous
+        }
+        val history = ArrayList<TransitionEdge>(size)
+        for (index in chunks.indices.reversed()) {
+            history.addAll(chunks[index].edges)
+        }
+        history.addAll(trailChunk)
+        return history
     }
 
     /** The configuration this path is currently in. */
@@ -581,6 +692,7 @@ class PathExecutor(
         cursor = state.cursor,
         stack = stack.elements,
         digest = transitions.structuralDigest(),
+        stackHash = stack.stackHash,
     )
 
     /**
@@ -592,17 +704,30 @@ class PathExecutor(
      * configuration, and the engine must let it have its chance.
      */
     private fun isRepeatedConfiguration(configuration: Configuration): Boolean {
-        val epoch = lineage[configuration] ?: return false
+        val epoch = epochOf(configuration) ?: return false
         return epoch == state.actionEpoch
+    }
+
+    /**
+     * Returns the action epoch recorded for [configuration], if any.
+     *
+     * The layers are searched from the newest to the oldest, so the answer is
+     * the one the lineage recorded last: a configuration left twice keeps the
+     * epoch of its last departure.
+     */
+    private fun epochOf(configuration: Configuration): Int? {
+        var epoch = ownLineage[configuration]
+        var layer = inheritedLineage
+        while (epoch == null && layer != null) {
+            epoch = layer.own[configuration]
+            layer = layer.inherited
+        }
+        return epoch
     }
 
     /** Records the configuration this path is leaving. */
     private fun leaveConfiguration(configuration: Configuration) {
-        if (lineageShared) {
-            lineage = lineage.toMutableMap()
-            lineageShared = false
-        }
-        lineage[configuration] = state.actionEpoch
+        ownLineage[configuration] = state.actionEpoch
     }
 
     /**
@@ -615,20 +740,20 @@ class PathExecutor(
     private fun cut(): PathStep {
         recordOutcome(PathOutcome.CUT)
         observers.forEach { it.onPathEnd(id, PathOutcome.CUT, state.cursor) }
-        logger.debug("[Path $id] Cut: the path re-entered a configuration it had already left.")
+        logger.debug("[Path {}] Cut: the path re-entered a configuration it had already left.", id)
         return PathStep.Stop
     }
 
     /** Records the acceptance of this path. */
     private fun accept() {
         recordOutcome(PathOutcome.ACCEPTED)
-        logger.debug("[Path $id] String accepted.")
+        logger.debug("[Path {}] String accepted.", id)
     }
 
     /** Records the rejection of this path. */
     private fun reject() {
         recordOutcome(PathOutcome.REJECTED)
-        logger.debug("[Path $id] String rejected.")
+        logger.debug("[Path {}] String rejected.", id)
     }
 
     /**
@@ -644,7 +769,7 @@ class PathExecutor(
 
     /** Records the verdict of this path, together with the trail it took to reach it. */
     private fun recordOutcome(outcome: PathOutcome) {
-        val history = trail.toList()
+        val history = trailAsList()
         paths[id] =
             paths[id]?.copy(
                 outcome = outcome,
@@ -685,15 +810,49 @@ class PathExecutor(
         )
     }
 
-    /** Checks that the automaton does not have too many paths alive at once. */
+    /**
+     * Checks that the automaton does not have too many paths alive at once.
+     *
+     * The path that is about to be created is alive too: the bound counts the
+     * paths that *will* be alive, not the ones that already are. The check
+     * therefore refuses the fork that would take the number of live paths
+     * past the bound, and the bound is exactly what it says it is.
+     */
     private fun checkLivePathBound() {
         val bound = state.limits.maxLivePaths
-        val live = worklist.size
+        // The worklist holds every live path: the paths of the pass under
+        // way and the children they forked. The path about to be created is
+        // the one the check counts.
+        val live = worklist.size + 1
         if (live <= bound) return
         throw IllegalStateException(
-            "The recognition had $live live paths, more than the limit of $bound. " +
+            "The recognition would have had $live live paths, more than the limit of $bound. " +
                 "The automaton probably keeps forking without ever reaching a verdict. " +
                 "Raise RecognitionLimits.maxLivePaths if the automaton is known to terminate.",
         )
+    }
+
+    private companion object {
+        /**
+         * The logger of the executor.
+         *
+         * There is one logger for the whole class, not one per path: a
+         * recognition may fork thousands of paths, and a logger is looked up
+         * once per instance for no benefit.
+         */
+        val logger: Logger = LoggerFactory.getLogger(PathExecutor::class.java)
+
+        /**
+         * The number of edges a path keeps in its own chunk of the trail.
+         *
+         * The chunk is the part of the trail a path owns: it is copied when
+         * the path forks, and the copy is bounded, so a fork costs a constant
+         * amount instead of the whole history of the path.
+         *
+         * The constant is private on purpose: a `const val` is hoisted to a
+         * static field of the enclosing class, and a public one would leak
+         * into the public API of the library.
+         */
+        private const val TRAIL_CHUNK_SIZE = 64
     }
 }

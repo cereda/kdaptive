@@ -16,39 +16,45 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * therefore made lazily: a copy shares the edges of the original until one of
  * them is mutated, and only then does it take a private set of its own.
  */
-class TransitionMapping {
+public class TransitionMapping {
     /** The edges of the mapping. */
     private var edges: MutableSet<TransitionEdge> = mutableSetOf()
 
     /**
-     * Whether this mapping may mutate [edges] in place.
+     * Whether this mapping may mutate its edges and its indexes in place.
      *
      * A mapping that shares its edges with a copy gives up the ownership of
      * them: the first mutation takes a private copy, and the copy keeps the
      * edges it was made with.
      */
-    private var ownsEdges: Boolean = true
+    private var ownsState: Boolean = true
 
-    /** Lazy index of edges grouped by source state; null when invalidated by a mutation. */
-    private var bySource: Map<State, List<TransitionEdge>>? = null
+    /**
+     * Index of edges grouped by source state; null when it has not been built.
+     *
+     * The buckets are immutable lists, so a mapping may share them with a
+     * copy: a mutation replaces the bucket it touches instead of editing the
+     * list in place.
+     */
+    private var bySource: MutableMap<State, List<TransitionEdge>>? = null
 
-    /** Lazy index of edges by identifier; null when invalidated by a mutation. */
-    private var byId: Map<Int, TransitionEdge>? = null
+    /** Index of edges by identifier; null when it has not been built. */
+    private var byId: MutableMap<Int, TransitionEdge>? = null
 
-    /** Cached structural fingerprint of the edges; null when invalidated by a mutation. */
+    /** Rolling structural fingerprint; null when it has not been computed. */
     private var digest: Long? = null
 
     /** Callback invoked after a transition edge is added to this mapping. */
-    var onEdgeAdded: (TransitionEdge) -> Unit = {}
+    public var onEdgeAdded: (TransitionEdge) -> Unit = {}
 
     /** Callback invoked after a transition edge is removed from this mapping. */
-    var onEdgeRemoved: (TransitionEdge) -> Unit = {}
+    public var onEdgeRemoved: (TransitionEdge) -> Unit = {}
 
     /** Callback invoked after an elementary operation is performed on this mapping. */
-    var onOperation: (MappingOperation) -> Unit = {}
+    public var onOperation: (MappingOperation) -> Unit = {}
 
     /** Callback invoked when instrumentation-aware code publishes a fact about this mapping. */
-    var onObservation: (Observation) -> Unit = {}
+    public var onObservation: (Observation) -> Unit = {}
 
     /**
      * Publishes a fact to the [onObservation] callback.
@@ -59,46 +65,41 @@ class TransitionMapping {
      *
      * @param observation the fact to publish
      */
-    fun observe(observation: Observation) {
+    public fun observe(observation: Observation) {
         onObservation(observation)
     }
 
     /** Returns (building if needed) the index of edges grouped by source state. */
-    private fun sourceIndex(): Map<State, List<TransitionEdge>> {
+    private fun sourceIndex(): MutableMap<State, List<TransitionEdge>> {
         bySource?.let { return it }
-        return edges.groupBy { it.source }.also { bySource = it }
+        val index = edges.groupBy { it.source }.toMutableMap()
+        bySource = index
+        return index
     }
 
     /** Returns (building if needed) the index of edges by identifier. */
-    private fun idIndex(): Map<Int, TransitionEdge> {
+    private fun idIndex(): MutableMap<Int, TransitionEdge> {
         byId?.let { return it }
-        val index = mutableMapOf<Int, TransitionEdge>()
+        val index = LinkedHashMap<Int, TransitionEdge>(edges.size)
         edges.forEach { index[it.id] = it }
-        return index.also { byId = it }
+        byId = index
+        return index
     }
 
     /**
-     * Returns the edges of the mapping, for mutation.
+     * Takes a private copy of the edges and of the indexes, if they are shared.
      *
-     * The mapping owns its edges unless it shares them with a copy. A shared
-     * set is never mutated in place: the first mutation takes a private copy,
-     * so that the copy keeps the edges it was made with.
+     * A shared set of edges is never mutated in place: the first mutation
+     * takes a private copy, so that the copy keeps the edges it was made with.
+     * The indexes follow the edges: they are derived from them, and a mapping
+     * that owns its edges owns its indexes too.
      */
-    private fun mutableEdges(): MutableSet<TransitionEdge> {
-        if (ownsEdges) return edges
+    private fun ensureOwnership() {
+        if (ownsState) return
         edges = edges.toMutableSet()
-        ownsEdges = true
-        return edges
-    }
-
-    /**
-     * Gives up the exclusive ownership of the edges.
-     *
-     * The mapping keeps the edges it has, but the next mutation copies them
-     * first. This is what makes it safe to hand the edges to a copy.
-     */
-    internal fun shareEdges() {
-        ownsEdges = false
+        bySource = bySource?.toMutableMap()
+        byId = byId?.toMutableMap()
+        ownsState = true
     }
 
     /**
@@ -107,10 +108,20 @@ class TransitionMapping {
      * Adding a transition that is already present is a no-op: the
      * [onEdgeAdded] callback only fires on an actual insertion, so observers
      * never see a phantom mutation.
+     *
+     * The indexes are updated in place rather than dropped: a path whose
+     * adaptive action adds an edge on every step therefore pays a constant
+     * price per step, instead of rebuilding the whole index every time.
      */
-    fun add(t: TransitionEdge) {
-        if (!mutableEdges().add(t)) return
-        invalidate()
+    public fun add(t: TransitionEdge) {
+        if (edges.contains(t)) return
+        ensureOwnership()
+        edges.add(t)
+        byId?.put(t.id, t)
+        bySource?.let { index ->
+            index[t.source] = (index[t.source] ?: emptyList()) + t
+        }
+        digest = digest?.plus(mix(t.hashCode().toLong()))
         onEdgeAdded(t)
     }
 
@@ -122,13 +133,13 @@ class TransitionMapping {
      * mutating the view directly bypasses the bookkeeping the mapping keeps,
      * and it may disturb a copy that shares the edges.
      */
-    val transitions: Set<TransitionEdge> get() = edges
+    public val transitions: Set<TransitionEdge> get() = edges
 
     /** Checks whether a transition with the given ID exists. */
-    fun contains(id: Int): Boolean = idIndex()[id] != null
+    public fun contains(id: Int): Boolean = idIndex()[id] != null
 
     /** The number of transitions in the mapping. */
-    val size: Int get() = edges.size
+    public val size: Int get() = edges.size
 
     /**
      * Returns the transitions leaving [state].
@@ -179,23 +190,24 @@ class TransitionMapping {
         return mixed xor (mixed ushr SHIFT_C)
     }
 
-    /** Drops the cached index and fingerprint after a mutation. */
-    private fun invalidate() {
-        bySource = null
-        byId = null
-        digest = null
-    }
-
     /**
      * Removes the transition with the given identifier from the mapping.
      *
      * One [onEdgeRemoved] event is fired per edge that leaves the mapping, so
      * the topology channel always balances the number of edges removed.
+     *
+     * The indexes are updated in place rather than dropped, so that removing
+     * a batch of edges does not rebuild the index once per edge.
      */
-    fun removeFromIdentifier(id: Int) {
+    public fun removeFromIdentifier(id: Int) {
         val removed = idIndex()[id] ?: return
-        mutableEdges().remove(removed)
-        invalidate()
+        ensureOwnership()
+        edges.remove(removed)
+        byId?.remove(id)
+        bySource?.let { index ->
+            index[removed.source] = index[removed.source]?.filter { it !== removed } ?: emptyList()
+        }
+        digest = digest?.minus(mix(removed.hashCode().toLong()))
         onEdgeRemoved(removed)
     }
 
@@ -205,9 +217,12 @@ class TransitionMapping {
      * This is a reset, not a mutation: no [onEdgeRemoved] event is fired,
      * because the edges were never observed as leaving one by one.
      */
-    fun clear() {
-        mutableEdges().clear()
-        invalidate()
+    public fun clear() {
+        ensureOwnership()
+        edges.clear()
+        byId?.clear()
+        bySource?.clear()
+        digest = digest?.let { 0L }
     }
 
     /**
@@ -221,7 +236,7 @@ class TransitionMapping {
      * edges of its own. The engine does not use this method: it uses
      * [isolatedCopy], which is cheaper and keeps the identifiers.
      */
-    fun copy(): TransitionMapping {
+    public fun copy(): TransitionMapping {
         val m = TransitionMapping()
         edges.forEach { m.add(it.copy()) }
         m.onEdgeAdded = onEdgeAdded
@@ -243,12 +258,22 @@ class TransitionMapping {
      * and its identifier is unique across the whole process, so the copy can
      * refer to an edge by its identifier without ambiguity.
      *
+     * The source gives up the ownership of what it holds: from now on, a
+     * mutation on either side copies it first. The source therefore keeps the
+     * edges it has, and only its *bookkeeping* changes — the edges it holds
+     * and the events it fires are the same before and after the copy.
+     *
      * @return a copy of this mapping, sharing its edges
      */
     internal fun isolatedCopy(): TransitionMapping {
+        // The source gives up the ownership of what it holds: from now on, a
+        // mutation on either side copies it first. The copy is therefore
+        // isolated from the original by construction, and the two-step
+        // "share, then copy" protocol cannot be misused.
+        ownsState = false
         val m = TransitionMapping()
         m.edges = edges
-        m.ownsEdges = false
+        m.ownsState = false
         m.bySource = bySource
         m.byId = byId
         m.digest = digest

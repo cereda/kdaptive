@@ -19,7 +19,7 @@ Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 | Language | Kotlin 2.4 (language/api level 2.4.0) |
 | Bytecode | Java 11 (major version 55) |
 | Build | Gradle wrapper 9.9.1, Kotlin DSL build script |
-| Tests | `kotlin("test")` over JUnit 5 (514 tests: 385 library, 129 examples) |
+| Tests | `kotlin("test")` over JUnit 5 (579 tests: 450 library, 129 examples) |
 | Static analysis | detekt 1.23.8, **zero-tolerance** config |
 | Format / style | Spotless, ktlint rules, 120-col, SPDX license header |
 | Docs | Dokka HTML (`./gradlew dokkaGenerateHtml`, fail-on-warning) |
@@ -28,10 +28,10 @@ Spotless, Dokka, Kover) and a much lighter, iterative execution engine.
 | Supply chain | Gradle dependency verification (`gradle/verification-metadata.xml`) + wrapper checksum |
 | Logging | SLF4J API only (backend chosen by the consumer) |
 
-Coordinates: `br.usp.poli.lta.cereda:kdaptive:5.0.0`.
+Coordinates: `br.usp.poli.lta.cereda:kdaptive:5.1.0`.
 
 > **Remark**: the build currently **does not ship a publishing plugin**. The library jar
-> lands in `./build/libs/kdaptive-5.0.0.jar` (next to `kdaptive-5.0.0-sources.jar`) after
+> lands in `./build/libs/kdaptive-5.1.0.jar` (next to `kdaptive-5.1.0-sources.jar`) after
 > `./gradlew build`, and `:examples`
 > consumes `:kdaptive` (the root module) from the same multi-module build. To use the
 > library in another project, either include it (composite build / `includeBuild`) or
@@ -501,6 +501,7 @@ aa.limits = RecognitionLimits(maxLivePaths = 10_000, maxStepsPerPath = 10_000, m
 | `kdaptive/src/main/kotlin/…/logging/` | the SLF4J facade (`val <T> Any.logger`) |
 | `kdaptive/src/test/kotlin/` | mirrors the main source set, with unit, error-path and coverage tests |
 | `examples/` | the `:examples` module: 16 executable examples, depending on the root module |
+| `benchmarks/` | the `:benchmarks` module: the scaling benchmarks of the engine |
 
 The **16 examples** double as the living documentation: each is small, prints its result,
 and has a test that keeps it honest:
@@ -543,6 +544,7 @@ All commands assume the Gradle wrapper:
 ./gradlew apiCheck              # binary compatibility against the baseline in api/
 ./gradlew dokkaGenerateHtml     # API docs in ./build/dokka/html, warnings fail the build
 ./gradlew koverHtmlReport       # coverage report → build/reports/kover/html/index.html
+./gradlew :benchmarks:run       # the scaling benchmarks of the engine
 ./gradlew :examples:run -Pmain=<FullyQualifiedMainKt>   # run an example
 ```
 
@@ -594,6 +596,116 @@ fails on any public nullable type, so it cannot regress silently. The only nulls
 the library are private implementation details (the lazy by-source index, the private
 "not configured yet" slots) and the standard `equals(other: Any?)` override the language
 itself mandates.
+
+### Changes in 5.1.0
+
+This is a **non-breaking** release. The public API is byte-for-byte the one of 5.0.0 —
+`api/kdaptive.api` is unchanged — and the binary-compatibility validator says so on
+every build. It makes the engine linear in the cases that were still quadratic, makes
+the failure path honest about what it caught, and tidies the build.
+
+#### Performance: a topology that grows is linear too
+
+5.0.0 made the engine linear in the *number of paths* and in the *length of the trail*.
+It was still quadratic in the *size of the topology* whenever an adaptive action changed
+the topology while the path ran: every mutation invalidated the index of the mapping,
+and the next step rebuilt the whole index from scratch. The recognition of a path that
+adds one edge per step therefore paid a scan of the entire topology per step.
+
+The benchmark module measures exactly that shape — a chain whose adaptive action adds
+one edge on every step. On the reference machine, at 8 000 steps:
+
+| Scenario | 5.0.0 | 5.1.0 | Speed-up |
+|---|---|---|---|
+| 8 000 steps, topology growing | 15 235 ms | **13 ms** | **1 170×** |
+| Cost of one extra step, topology growing | grows 2.6× per doubling | **flat (≈ 1.0×)** | — |
+| 8 000 steps, topology unchanged | 11 ms | **11 ms** | — |
+| 8 000 forks | 9 ms | **9 ms** | — |
+
+The benchmarks are in the tree, and they run:
+
+```bash
+./gradlew :benchmarks:run
+```
+
+Each scenario prints the cost *per unit of work* and the ratio between two consecutive
+sizes. The ratio is what tells a linear engine from a quadratic one: it stays near one
+when the engine scales, and doubles when it does not. The benchmark is not decoration —
+restoring the old invalidating index makes the ratio jump back to ≈ 2.6 and the
+8 000-step run take four minutes instead of thirteen milliseconds.
+
+What changed:
+
+- **The index of the mapping is updated in place.** Adding or removing an edge touches
+  the index instead of invalidating it, so a mutation costs what it costs and not what
+  the topology weighs. The fingerprint of the topology is a rolling value, updated the
+  same way.
+- **A fork is O(1).** The lineage was a map copied on every fork — a chain of forks
+  copied an index that grew with it. It is now a stack of *layers*: a fork freezes the
+  layer the path owns and hands it to the child, and the path starts a layer of its own.
+  Neither of them ever writes to a layer they share.
+- **The trail is kept in chunks.** A fork used to copy the whole history of the path. It
+  now copies a bounded chunk — the part the path owns — and the frozen chunks before it
+  are shared with the children. The trail is flattened into a list once, at the verdict.
+- **The worklist is compacted in one sweep.** Removing a path as it finished shifted the
+  tail of the list on every removal, and a pass over k paths cost a quadratic number of
+  moves. The finished paths are now dropped in one pass at the end.
+- **The applicable transitions are collected into a buffer the path owns**, instead of
+  into a fresh list built by a closure on every step.
+- **The call stack caches its hash.** The configuration of a path is hashed on every
+  step, and the call stack was the one part of it that cost more than a constant to hash.
+- **The actions and the submachines are indexed by name**, and the submachines are
+  indexed by state. A lookup no longer scans the collection.
+- **The owner of a state is computed once.** The topology validator asked the
+  collection of submachines for the owner of every endpoint of every edge, and the DOT
+  exporter scanned the whole edge list once per submachine. Both now partition in a
+  single pass.
+
+#### Correctness: the failure path tells the truth
+
+- **Every throwable closes the lifecycle.** The engine caught `Exception` and let an
+  `Error` escape with the path still open: a visitor tracking open paths was left
+  holding one that would never end. The engine now catches every throwable, closes the
+  path — the path-end event fires, the path reports `FAILED` — and then lets the
+  throwable out.
+- **A throwable keeps its nature on the way out.** An `Error` is rethrown as it is,
+  because the engine did not cause it and hiding it behind a wrapper would only bury
+  it. An `InterruptedException` restores the interrupt flag of the thread before it
+  leaves, so that whoever owns the thread may notice the interruption. A
+  `CancellationException` is rethrown untouched, because a cancelled coroutine must
+  stay cancelled. Every other failure is wrapped, so that the caller may tell which
+  path died and why.
+- **The bound on the live paths is exact.** `RecognitionLimits.maxLivePaths` is "the
+  largest number of paths that may be alive at once", and the engine now keeps that
+  promise: the fork that would take the number of live paths past the bound is the one
+  refused. (The bound on the call depth already was exact.)
+- **`castOrThrow` takes an `Any`, not an `Any?`.** The library hands out no nulls, and a
+  value that reaches the function from the outside is either a value or a mistake. The
+  JVM signature is unchanged, so the change is invisible to a binary consumer.
+- **The null-free sweep sees everything.** The reflection-based sweep could not see the
+  declarations that carry a *reified* type parameter — Kotlin's reflection does not
+  report them at all — and it skipped the receiver of a top-level extension function.
+  Both holes are closed, and the sweep proves it: reintroducing a nullable receiver
+  makes the test fail.
+
+#### Good practices: the build and the repository
+
+- **Explicit API mode.** Every public declaration names its visibility and its return
+  type. The mode is a **warning** in 5.1.0 and becomes a **rule** in 6.0.0; the work
+  it asks for is already done, so the flip is a one-line change.
+- **The configuration cache is on**, and the daemon heap is sized for the Kotlin
+  compiler and the Dokka generator instead of left at the default.
+- **`.editorconfig`, `.gitattributes` and a corrected `.gitignore`**: the conventions of
+  the repository are written down, the line endings are normalised, and the Kotlin
+  build directory is ignored.
+- **A `benchmarks` module**, so the performance claims of this file are verifiable by
+  anyone who clones the repository.
+- **The formatting gate is self-healing.** ktlint 1.8.0 crashes with an
+  `InvocationTargetException` on a file that ends with an extra blank line — and
+  `spotlessApply`, the step that would have fixed the file, ran *after* ktlint, so
+  the build could neither pass nor repair it. The whitespace steps now run first, and
+  a last step collapses the trailing blank lines to a single newline. A file with a
+  stray blank line at its end is now a file the formatter quietly fixes.
 
 ### Changes in 5.0.0
 

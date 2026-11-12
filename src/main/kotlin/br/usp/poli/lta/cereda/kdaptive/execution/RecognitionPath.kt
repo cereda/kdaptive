@@ -23,7 +23,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  * could not decide anything about it. Reporting a failure as a rejection
  * would claim the input was refused when the truth is "unknown".
  */
-enum class PathOutcome {
+public enum class PathOutcome {
     /** The path has not reached a verdict yet. */
     PENDING,
 
@@ -51,7 +51,7 @@ enum class PathOutcome {
  * @param state the state the path is currently in
  * @param outcome the verdict of the path ([PathOutcome.PENDING] while it runs)
  */
-data class RecognitionPath(
+public data class RecognitionPath(
     val id: Int = Identifiers.nextRecognitionPathId(),
     val trail: List<TransitionEdge> = emptyList(),
     val cursor: Int = 0,
@@ -68,7 +68,7 @@ data class RecognitionPath(
      * A consumer that appends edge after edge should keep its own list and
      * build the path once, at the end.
      */
-    fun addStep(edge: TransitionEdge): RecognitionPath = copy(trail = trail + edge)
+    public fun addStep(edge: TransitionEdge): RecognitionPath = copy(trail = trail + edge)
 
     /** Returns a human-readable representation of this recognition path. */
     override fun toString(): String = buildString {

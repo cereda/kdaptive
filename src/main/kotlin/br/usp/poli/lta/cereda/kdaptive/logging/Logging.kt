@@ -14,5 +14,5 @@ import org.slf4j.LoggerFactory
  * Replaces the original log4j2/Java logging with a thin SLF4J wrapper so the
  * rest of the code is not coupled to any specific logging backend.
  */
-val <T : Any> T.logger: Logger
+public val <T : Any> T.logger: Logger
     get() = LoggerFactory.getLogger(this::class.java)

@@ -20,7 +20,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * @property edges the edges of the topology
  * @property submachines the submachines of the topology
  */
-data class Topology(
+public data class Topology(
     /** The edges of the topology. */
     val edges: Set<TransitionEdge>,
     /** The submachines of the topology. */
@@ -30,32 +30,32 @@ data class Topology(
     val size: Int get() = edges.size
 
     /** The edges leaving [state]. */
-    fun edgesFrom(state: State): List<TransitionEdge> = edges.filter { it.source == state }
+    public fun edgesFrom(state: State): List<TransitionEdge> = edges.filter { it.source == state }
 
     /** The edges entering [target]. */
-    fun edgesTo(target: State): List<TransitionEdge> = edges.filter { it.target == target }
+    public fun edgesTo(target: State): List<TransitionEdge> = edges.filter { it.target == target }
 
     /** The edges consuming [symbol]. */
-    fun edgesConsuming(symbol: Symbol): List<TransitionEdge> =
+    public fun edgesConsuming(symbol: Symbol): List<TransitionEdge> =
         edges.filter { it.transition is Transition.SymbolTransition && it.transition.symbol == symbol }
 
     /** The edges calling [submachine]. */
-    fun callsTo(submachine: String): List<TransitionEdge> =
+    public fun callsTo(submachine: String): List<TransitionEdge> =
         edges.filter { it.transition is Transition.Call && it.transition.submachine == submachine }
 
     /** The edges calling any of the [submachines]. */
-    fun callsTo(submachines: Set<String>): List<TransitionEdge> =
+    public fun callsTo(submachines: Set<String>): List<TransitionEdge> =
         edges.filter { it.transition is Transition.Call && it.transition.submachine in submachines }
 
     /** The edges consuming no input. */
     val epsilonEdges: List<TransitionEdge> get() = edges.filter { it.transition is Transition.Epsilon }
 
     /** The edges leaving [state] and consuming no input. */
-    fun epsilonEdgesFrom(state: State): List<TransitionEdge> =
+    public fun epsilonEdgesFrom(state: State): List<TransitionEdge> =
         edgesFrom(state).filter { it.transition is Transition.Epsilon }
 
     /** The edges leaving [state] and consuming no input, calls included. */
-    fun epsilonOrCallEdgesFrom(state: State): List<TransitionEdge> =
+    public fun epsilonOrCallEdgesFrom(state: State): List<TransitionEdge> =
         edgesFrom(state).filter { it.transition is Transition.Epsilon || it.transition is Transition.Call }
 
     /**
@@ -68,13 +68,14 @@ data class Topology(
      * @param symbol the symbol at the cursor of the path
      * @return the edges the path may take
      */
-    fun applicableEdgesFrom(state: State, symbol: Symbol): List<TransitionEdge> = edgesFrom(state).filter { edge ->
-        when (edge.transition) {
-            is Transition.SymbolTransition -> edge.transition.symbol == symbol
-            is Transition.Epsilon, is Transition.Call -> true
-            is Transition.Return -> false
+    public fun applicableEdgesFrom(state: State, symbol: Symbol): List<TransitionEdge> =
+        edgesFrom(state).filter { edge ->
+            when (edge.transition) {
+                is Transition.SymbolTransition -> edge.transition.symbol == symbol
+                is Transition.Epsilon, is Transition.Call -> true
+                is Transition.Return -> false
+            }
         }
-    }
 
     /**
      * The edges satisfying [pattern].
@@ -85,13 +86,13 @@ data class Topology(
      * @param pattern the pattern the edges are matched against
      * @return the edges matching [pattern]
      */
-    fun matching(pattern: TransitionPattern): List<TransitionEdge> = edges.filter { pattern.matches(it) }
+    public fun matching(pattern: TransitionPattern): List<TransitionEdge> = edges.filter { pattern.matches(it) }
 
     /** The edges whose prior action is the one named [name]. */
-    fun edgesWithPrior(name: String): List<TransitionEdge> = edges.filter { it.hasPriorAction(name) }
+    public fun edgesWithPrior(name: String): List<TransitionEdge> = edges.filter { it.hasPriorAction(name) }
 
     /** The edges whose post action is the one named [name]. */
-    fun edgesWithPost(name: String): List<TransitionEdge> = edges.filter { it.hasPostAction(name) }
+    public fun edgesWithPost(name: String): List<TransitionEdge> = edges.filter { it.hasPostAction(name) }
 
     /**
      * The edge carrying the given identifier.
@@ -100,7 +101,8 @@ data class Topology(
      * @return the edge
      * @throws IllegalStateException if the topology has no edge with that identifier
      */
-    fun fromId(id: Int): TransitionEdge = edges.firstOrNull { it.id == id } ?: error("No edge with identifier $id.")
+    public fun fromId(id: Int): TransitionEdge =
+        edges.firstOrNull { it.id == id } ?: error("No edge with identifier $id.")
 
     /**
      * The submachine owning [state].
@@ -109,7 +111,7 @@ data class Topology(
      * @return the submachine owning the state
      * @throws IllegalStateException if no submachine owns the state
      */
-    fun fromState(state: State): Submachine = submachines.firstOrNull { state in it.states }
+    public fun fromState(state: State): Submachine = submachines.firstOrNull { state in it.states }
         ?: error("No submachine contains state '$state'.")
 
     /** Returns a human-readable representation of this topology. */
@@ -124,7 +126,7 @@ data class Topology(
      * above build one from parts, and [of] builds one from the automaton
      * itself.
      */
-    companion object {
+    public companion object {
         /**
          * Takes a snapshot of [transitions] and [submachines].
          *
@@ -135,7 +137,7 @@ data class Topology(
          * @param submachines the submachines to snapshot
          * @return the snapshot of the given topology
          */
-        fun of(transitions: TransitionMapping, submachines: Submachines): Topology = Topology(
+        public fun of(transitions: TransitionMapping, submachines: Submachines): Topology = Topology(
             edges = transitions.transitions.toSet(),
             submachines = submachines.toSet(),
         )

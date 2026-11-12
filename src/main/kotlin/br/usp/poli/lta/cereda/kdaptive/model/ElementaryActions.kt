@@ -11,7 +11,8 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * @param args the arguments the action is called with
  * @return the binding to [name]
  */
-fun actionRef(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound(name = name, args = args.toList())
+public fun actionRef(name: String, vararg args: Any): ActionRef.Bound =
+    ActionRef.Bound(name = name, args = args.toList())
 
 /**
  * Specification for querying or removing symbol and epsilon transitions using
@@ -27,7 +28,7 @@ fun actionRef(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound
  * @property prior the prior action filter ([ActionRef.Free] = no constraint)
  * @property post the post action filter ([ActionRef.Free] = no constraint)
  */
-data class SymbolSpec(
+public data class SymbolSpec(
     /** The source state filter. */
     var source: State = State.Any,
     /** The symbol filter. */
@@ -51,7 +52,7 @@ data class SymbolSpec(
  * @property prior the prior action filter ([ActionRef.Free] = no constraint)
  * @property post the post action filter ([ActionRef.Free] = no constraint)
  */
-data class CallSpec(
+public data class CallSpec(
     /** The source state filter. */
     var source: State = State.Any,
     /** The submachine name filter; [SubmachineRef.Any] matches any submachine call. */
@@ -69,20 +70,25 @@ data class CallSpec(
  *
  * Useful for extracting typed parameters from an action's `parameters: List<Any>`.
  *
+ * The receiver is not nullable: the library hands out no nulls, and a value
+ * that reaches this function from the outside is either a value or a mistake.
+ * A null smuggled in through Java interop is rejected by the null check the
+ * compiler inserts on the way in.
+ *
  * @throws ClassCastException if the value is not an instance of [T]
  * @throws NullPointerException if the value is null and [T] is not nullable
  */
-inline fun <reified T> Any?.castOrThrow(): T = this as T
+public inline fun <reified T> Any.castOrThrow(): T = this as T
 
 /**
  * Convenience alias for [castOrThrow] when extracting [State] parameters.
  */
-inline fun <reified S : State> Any.asState(): S = castOrThrow<S>()
+public inline fun <reified S : State> Any.asState(): S = castOrThrow<S>()
 
 /**
  * Convenience alias for [castOrThrow] when extracting [Symbol] parameters.
  */
-inline fun <reified S : Symbol> Any.asSymbol(): S = castOrThrow<S>()
+public inline fun <reified S : Symbol> Any.asSymbol(): S = castOrThrow<S>()
 
 /**
  * Elementary actions: query, insertion and removal of transitions according to
@@ -119,7 +125,7 @@ inline fun <reified S : Symbol> Any.asSymbol(): S = castOrThrow<S>()
  *   checks the submachine it names against them, so that a typo fails where
  *   it is written instead of at recognition time
  */
-class ElementaryActions(private val transitions: TransitionMapping, private val submachines: Submachines) {
+public class ElementaryActions(private val transitions: TransitionMapping, private val submachines: Submachines) {
 
     /**
      * Publishes a fact about the running action to the observation sink of the
@@ -130,7 +136,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      *
      * @param observation the fact to publish
      */
-    fun observe(observation: Observation) {
+    public fun observe(observation: Observation) {
         transitions.observe(observation)
     }
 
@@ -155,7 +161,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @param post the post action filter ([ActionRef.Free] = no constraint)
      * @return list of matching [TransitionEdge] instances
      */
-    fun query(
+    public fun query(
         source: State = State.Any,
         symbol: Symbol = Symbol.Any,
         target: State = State.Any,
@@ -193,7 +199,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @param configure the block that fills the [SymbolSpec]
      * @return list of matching [TransitionEdge] instances
      */
-    fun query(configure: SymbolSpec.() -> Unit): List<TransitionEdge> {
+    public fun query(configure: SymbolSpec.() -> Unit): List<TransitionEdge> {
         val spec = SymbolSpec().also(configure)
         return query(spec.source, spec.symbol, spec.target, spec.prior, spec.post)
     }
@@ -213,7 +219,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @param prior the prior action filter ([ActionRef.Free] = no constraint)
      * @param post the post action filter ([ActionRef.Free] = no constraint)
      */
-    fun remove(
+    public fun remove(
         source: State = State.Any,
         symbol: Symbol = Symbol.Any,
         target: State = State.Any,
@@ -252,7 +258,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      *
      * @param configure the block that fills the [SymbolSpec]
      */
-    fun remove(configure: SymbolSpec.() -> Unit) {
+    public fun remove(configure: SymbolSpec.() -> Unit) {
         val spec = SymbolSpec().also(configure)
         remove(spec.source, spec.symbol, spec.target, spec.prior, spec.post)
     }
@@ -284,7 +290,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      *   ([ActionRef.None] for none)
      * @throws IllegalArgumentException if a wildcard state or symbol is given
      */
-    fun add(
+    public fun add(
         source: State,
         symbol: Symbol,
         target: State,
@@ -354,7 +360,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @throws IllegalArgumentException if the submachine filter is
      *   [SubmachineRef.None], which names no submachine at all
      */
-    fun queryCall(
+    public fun queryCall(
         source: State = State.Any,
         submachine: SubmachineRef = SubmachineRef.Any,
         target: State = State.Any,
@@ -388,7 +394,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @param configure the block that fills the [CallSpec]
      * @return list of matching [TransitionEdge] instances
      */
-    fun queryCall(configure: CallSpec.() -> Unit): List<TransitionEdge> {
+    public fun queryCall(configure: CallSpec.() -> Unit): List<TransitionEdge> {
         val spec = CallSpec().also(configure)
         return queryCall(spec.source, spec.submachine, spec.target, spec.prior, spec.post)
     }
@@ -410,7 +416,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @throws IllegalArgumentException if the submachine filter is
      *   [SubmachineRef.None], which names no submachine at all
      */
-    fun removeCall(
+    public fun removeCall(
         source: State = State.Any,
         submachine: SubmachineRef = SubmachineRef.Any,
         target: State = State.Any,
@@ -435,7 +441,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      *
      * @param configure the block that fills the [CallSpec]
      */
-    fun removeCall(configure: CallSpec.() -> Unit) {
+    public fun removeCall(configure: CallSpec.() -> Unit) {
         val spec = CallSpec().also(configure)
         removeCall(spec.source, spec.submachine, spec.target, spec.prior, spec.post)
     }
@@ -467,7 +473,7 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
      * @throws IllegalArgumentException if a named submachine is not declared
      *   in the automaton
      */
-    fun addCall(
+    public fun addCall(
         source: State,
         submachine: SubmachineRef,
         target: State,
@@ -648,8 +654,8 @@ class ElementaryActions(private val transitions: TransitionMapping, private val 
 }
 
 /** Type-safe check: is this edge a transition of type [T]? */
-inline fun <reified T : Transition> TransitionEdge.isType(): Boolean = transition is T
+public inline fun <reified T : Transition> TransitionEdge.isType(): Boolean = transition is T
 
 /** Type-safe filter: transitions of type [T]. */
-inline fun <reified T : Transition> TransitionMapping.withType(): List<TransitionEdge> =
+public inline fun <reified T : Transition> TransitionMapping.withType(): List<TransitionEdge> =
     transitions.filter { it.transition is T }.toList()

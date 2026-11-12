@@ -13,7 +13,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * @param initialState the initial state of this submachine
  * @param acceptingStates the set of accepting states
  */
-data class Submachine(
+public data class Submachine(
     /** The name of this submachine. */
     val name: String,
     /** The set of all states in this submachine. */
@@ -63,16 +63,16 @@ data class Submachine(
  * of an automaton, and it is rejected wherever a single submachine is
  * required.
  */
-sealed interface SubmachineRef {
+public sealed interface SubmachineRef {
     /** The wildcard: matches any submachine call. */
-    data object Any : SubmachineRef
+    public data object Any : SubmachineRef
 
     /**
      * The named submachine: matches the calls to it.
      *
      * @property name the name of the submachine
      */
-    data class Named(
+    public data class Named(
         /** The name of the submachine. */
         val name: String,
     ) : SubmachineRef
@@ -84,7 +84,7 @@ sealed interface SubmachineRef {
      *
      * @property names the names of the submachines of this domain
      */
-    data class Domain(
+    public data class Domain(
         /** The names of the submachines of this domain. */
         val names: Set<String>,
     ) : SubmachineRef {
@@ -99,10 +99,10 @@ sealed interface SubmachineRef {
     }
 
     /** The marker of a pattern whose submachine filter does not apply. */
-    data object None : SubmachineRef
+    public data object None : SubmachineRef
 
     /** The markers a filter may use to name a submachine. */
-    companion object {
+    public companion object {
         /**
          * Builds a **domain**: the set of submachines a filter names at once.
          *
@@ -120,6 +120,6 @@ sealed interface SubmachineRef {
          * @return the domain over [names]
          * @throws IllegalArgumentException if [names] is empty
          */
-        fun anyOf(vararg names: String): Domain = Domain(names.toSet())
+        public fun anyOf(vararg names: String): Domain = Domain(names.toSet())
     }
 }

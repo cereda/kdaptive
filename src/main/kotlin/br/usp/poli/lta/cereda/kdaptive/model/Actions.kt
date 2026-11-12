@@ -11,8 +11,21 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * Manages a collection of [Action] instances that can be looked up by name
  * and executed during recognition.
  */
-class Actions : Iterable<Action> {
+public class Actions : Iterable<Action> {
     private val entries = mutableSetOf<Action>()
+
+    /**
+     * The actions of the collection, by name.
+     *
+     * The engine looks an action up by name every time it fires, and a scan
+     * of the collection would make the cost of an action grow with the number
+     * of actions registered. The index answers the lookup in constant time.
+     *
+     * A collection built by [replaceAll] may hold several actions under the
+     * same name; the index keeps the first of them, which is the one a scan
+     * would have found.
+     */
+    private val byName: MutableMap<String, Action> = LinkedHashMap()
 
     /**
      * Adds an action to the collection.
@@ -24,9 +37,10 @@ class Actions : Iterable<Action> {
      *
      * @param action the action to add
      */
-    fun add(action: Action) {
+    public fun add(action: Action) {
         entries.removeIf { it.name == action.name }
         entries.add(action)
+        byName[action.name] = action
     }
 
     /** Returns the actions of the automaton. */
@@ -38,22 +52,23 @@ class Actions : Iterable<Action> {
      * @param action the action to look for
      * @return true when an equal action is in the collection
      */
-    operator fun contains(action: Action): Boolean = action in entries
+    public operator fun contains(action: Action): Boolean = action in entries
 
     /**
      * Replaces all actions in the collection with the given actions.
      *
      * @param newActions the new actions
      */
-    fun replaceAll(newActions: Set<Action>) {
+    public fun replaceAll(newActions: Set<Action>) {
         entries.clear()
         entries.addAll(newActions)
+        rebuildIndex()
     }
 
     /**
      * The number of actions in the collection.
      */
-    val size: Int get() = entries.size
+    public val size: Int get() = entries.size
 
     /**
      * Retrieves an action by name.
@@ -62,10 +77,7 @@ class Actions : Iterable<Action> {
      * @return the matching action
      * @throws IllegalStateException if no action with the given name exists
      */
-    fun fromName(name: String): Action {
-        val result = entries.firstOrNull { it.name == name }
-        return result ?: error("No action with name '$name'.")
-    }
+    public fun fromName(name: String): Action = byName[name] ?: error("No action with name '$name'.")
 
     /**
      * Removes an action by name.
@@ -73,10 +85,11 @@ class Actions : Iterable<Action> {
      * @param name the action name
      * @throws IllegalStateException if no action with the given name exists
      */
-    fun removeByName(name: String) {
+    public fun removeByName(name: String) {
         val result = entries.firstOrNull { it.name == name }
         require(result != null) { "No action with name '$name'." }
         entries.remove(result)
+        rebuildIndex()
     }
 
     /**
@@ -87,10 +100,24 @@ class Actions : Iterable<Action> {
      *
      * @return a new [Actions] with the same actions
      */
-    fun copy(): Actions {
+    public fun copy(): Actions {
         val c = Actions()
         c.entries.addAll(entries)
+        c.rebuildIndex()
         return c
+    }
+
+    /**
+     * Rebuilds the index of actions by name.
+     *
+     * The first action registered under a name is the one the index keeps:
+     * that is the one a scan of the collection would have found.
+     */
+    private fun rebuildIndex() {
+        byName.clear()
+        for (action in entries) {
+            if (!byName.containsKey(action.name)) byName[action.name] = action
+        }
     }
 
     /** Returns a human-readable representation of this collection of actions. */

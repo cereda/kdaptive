@@ -17,7 +17,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * and the same actions. The [id] is bookkeeping, not identity: it is not part
  * of equality, so adding an edge that is already present is a no-op.
  */
-data class TransitionEdge(
+public data class TransitionEdge(
     /** The source state of this edge. */
     val source: State,
     /** The target state of this edge. */
@@ -66,8 +66,8 @@ data class TransitionEdge(
     private fun ActionRef.Bound.render(): String = if (args.isEmpty()) name else "$name(${args.joinToString(", ")})"
 
     /** True if this edge has a prior action with the given name. */
-    fun hasPriorAction(name: String): Boolean = (prior as? ActionRef.Bound)?.name == name
+    public fun hasPriorAction(name: String): Boolean = (prior as? ActionRef.Bound)?.name == name
 
     /** True if this edge has a post action with the given name. */
-    fun hasPostAction(name: String): Boolean = (post as? ActionRef.Bound)?.name == name
+    public fun hasPostAction(name: String): Boolean = (post as? ActionRef.Bound)?.name == name
 }

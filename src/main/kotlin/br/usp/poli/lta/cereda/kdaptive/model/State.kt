@@ -18,11 +18,11 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * states with the same content are the same state: an edge declared twice
  * with the same endpoints is one edge, not two.
  */
-abstract class State protected constructor() {
+public abstract class State protected constructor() {
     /** The markers a filter may use to name a state. */
-    companion object {
+    public companion object {
         /** The wildcard state: matches any state. */
-        val Any: State = AnyState
+        public val Any: State = AnyState
 
         /**
          * Builds a **domain**: the set of states a filter names at once.
@@ -46,7 +46,7 @@ abstract class State protected constructor() {
          * @throws IllegalArgumentException if [states] is empty, or names the
          *   wildcard state or another domain
          */
-        fun anyOf(vararg states: State): StateDomain = StateDomain.of(states.toList())
+        public fun anyOf(vararg states: State): StateDomain = StateDomain.of(states.toList())
     }
 }
 
@@ -59,12 +59,12 @@ abstract class State protected constructor() {
  *
  * Two domains are equal when they name the same states.
  */
-class StateDomain private constructor(
+public class StateDomain private constructor(
     /** The states of this domain. */
-    val members: Set<State>,
+    public val members: Set<State>,
 ) : State() {
     /** The number of states in this domain. */
-    val size: Int get() = members.size
+    public val size: Int get() = members.size
 
     /** Returns a human-readable representation of this domain. */
     override fun toString(): String = members.joinToString(prefix = "{", postfix = "}")
@@ -76,7 +76,7 @@ class StateDomain private constructor(
     override fun hashCode(): Int = members.hashCode()
 
     /** The factory of the domains, used by [State.anyOf]. */
-    companion object {
+    public companion object {
         /** Builds a domain over [states], rejecting the markers a domain may not contain. */
         internal fun of(states: List<State>): StateDomain {
             require(states.isNotEmpty()) { "A state domain must name at least one state." }
@@ -97,7 +97,7 @@ class StateDomain private constructor(
  * This state never belongs to the state set of an automaton: it is rejected
  * wherever a concrete state is required.
  */
-object AnyState : State() {
+public object AnyState : State() {
     /** Returns a human-readable representation of this wildcard. */
     override fun toString(): String = "*"
 }

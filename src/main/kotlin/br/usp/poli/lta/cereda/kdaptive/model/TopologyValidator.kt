@@ -26,7 +26,7 @@ import br.usp.poli.lta.cereda.kdaptive.logging.logger
  * - no reachable cycle consumes no input, unless an adaptive action may break
  *   it.
  */
-object TopologyValidator {
+public object TopologyValidator {
 
     /**
      * Checks the topology of an automaton.
@@ -38,7 +38,7 @@ object TopologyValidator {
      *   topology
      * @throws IllegalArgumentException if the topology breaks one of the rules
      */
-    fun validate(topology: Topology, mainSubmachine: String, actionNames: Collection<String>) {
+    public fun validate(topology: Topology, mainSubmachine: String, actionNames: Collection<String>) {
         validateMain(topology.submachines, mainSubmachine)
         validateStates(topology.submachines)
         validateTransitions(topology.edges, topology.submachines)
@@ -82,11 +82,12 @@ object TopologyValidator {
      */
     private fun validateTransitions(edges: Collection<TransitionEdge>, submachines: Collection<Submachine>) {
         val names = submachines.map { it.name }.toSet()
+        val owners = ownersByState(submachines)
         edges.forEach { edge ->
             requireConcrete(edge.source)
             requireConcrete(edge.target)
-            val sourceOwners = ownersOf(edge.source, submachines)
-            val targetOwners = ownersOf(edge.target, submachines)
+            val sourceOwners = owners[edge.source].orEmpty()
+            val targetOwners = owners[edge.target].orEmpty()
             require(sourceOwners.isNotEmpty()) { unownedStateMessage(edge.source) }
             require(targetOwners.isNotEmpty()) { unownedStateMessage(edge.target) }
             val call = edge.transition as? Transition.Call ?: return@forEach
@@ -237,9 +238,29 @@ object TopologyValidator {
         }
     }
 
-    /** Returns the names of the submachines owning [state]. */
-    private fun ownersOf(state: State, submachines: Collection<Submachine>): Set<String> =
-        submachines.filter { state in it.states }.map { it.name }.toSet()
+    /**
+     * Returns the names of the submachines owning each state.
+     *
+     * The index is built once and answers the question of the owner of a
+     * state in constant time. Asking the question of the collection instead
+     * would scan every submachine, for every endpoint of every edge, and the
+     * cost of the validation would grow with the square of the topology.
+     *
+     * The names of a state keep the order the submachines were declared in:
+     * the error messages of the validator list them.
+     *
+     * @param submachines the submachines of the topology
+     * @return the names of the submachines owning each state
+     */
+    private fun ownersByState(submachines: Collection<Submachine>): Map<State, Set<String>> {
+        val owners = LinkedHashMap<State, MutableSet<String>>()
+        for (submachine in submachines) {
+            for (state in submachine.states) {
+                owners.getOrPut(state) { LinkedHashSet() }.add(submachine.name)
+            }
+        }
+        return owners
+    }
 
     /** Builds the error message for a state owned by no submachine. */
     private fun unownedStateMessage(state: State): String =

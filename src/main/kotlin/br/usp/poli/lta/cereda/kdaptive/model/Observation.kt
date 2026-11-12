@@ -21,4 +21,4 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * data class DomainSize(val states: Int) : Observation
  * ```
  */
-interface Observation
+public interface Observation

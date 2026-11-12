@@ -21,7 +21,7 @@ package br.usp.poli.lta.cereda.kdaptive.execution
  * @property accepted whether the automaton recognised the input
  * @property paths the paths that reached a verdict
  */
-data class RecognitionResult(
+public data class RecognitionResult(
     /** Whether the automaton recognised the input. */
     val accepted: Boolean,
     /** The paths that reached a verdict. */

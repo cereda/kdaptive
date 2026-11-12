@@ -5,11 +5,14 @@ import br.usp.poli.lta.cereda.kdaptive.execution.PathExecutor
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlin.io.path.Path
+import kotlin.io.path.isDirectory
 import kotlin.io.path.name
+import kotlin.io.path.readLines
 import kotlin.io.path.relativeTo
 import kotlin.io.path.walk
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
+import kotlin.reflect.KParameter
 import kotlin.reflect.KProperty
 import kotlin.reflect.KType
 import kotlin.reflect.KVisibility
@@ -25,6 +28,15 @@ import kotlin.reflect.full.memberProperties
  *
  * This sweep reads the compiled library and fails on any public member whose
  * type — or whose type arguments — is nullable. It cannot regress silently.
+ *
+ * The sweep has two passes, because no single mechanism sees everything:
+ *
+ * - the **reflective** pass walks the compiled library and inspects every
+ *   public member, its receivers included;
+ * - the **source** pass reads the declarations that carry a *reified* type
+ *   parameter. Kotlin's reflection does not report them at all — a function
+ *   with a reified type parameter is invisible to the reflective walk — so
+ *   the few declarations of that shape are read from the sources instead.
  */
 class NullFreeApiTest {
 
@@ -59,6 +71,43 @@ class NullFreeApiTest {
         )
     }
 
+    @Test
+    fun `no reified declaration accepts a nullable type`() {
+        val offenders = reifiedDeclarations().filter { declaration -> "?" in declaration }
+
+        assertTrue(
+            offenders.isEmpty(),
+            "The public API of the library must be null-free, but these reified declarations are nullable:\n" +
+                offenders.joinToString("\n") { "  $it" },
+        )
+    }
+
+    /**
+     * The public declarations that carry a reified type parameter.
+     *
+     * The declarations are read from the sources: the reflective pass cannot
+     * see them, and a reified type parameter is the only way a public
+     * declaration of this library could hide a nullable type from it.
+     *
+     * @return the declarations, one per line
+     */
+    private fun reifiedDeclarations(): List<String> {
+        val root = Path(sourceRoot())
+        if (!root.isDirectory()) return emptyList()
+        return root
+            .walk()
+            .filter { it.name.endsWith(".kt") }
+            .flatMap { file -> file.readLines().asSequence() }
+            .map { it.trim() }
+            .filter { it.startsWith("inline fun ") || it.startsWith("fun ") }
+            .filter { !it.startsWith("private ") && !it.startsWith("internal ") }
+            .filter { "reified" in it }
+            .toList()
+    }
+
+    /** The root of the sources of the library. */
+    private fun sourceRoot(): String = System.getProperty(SOURCE_ROOT_PROPERTY) ?: DEFAULT_SOURCE_ROOT
+
     /** Inspects the return type and the parameters of [function]. */
     private fun inspectFunction(klass: KClass<*>, function: KFunction<*>, offenders: MutableList<String>) {
         // The standard override of equals takes an Any?, and it is the one
@@ -68,9 +117,12 @@ class NullFreeApiTest {
         if (isNullable(function.returnType)) {
             offenders += "${klass.simpleName}.${function.name} returns ${function.returnType}"
         }
-        function.parameters.drop(1).forEach { parameter ->
-            if (isNullable(parameter.type)) {
+        function.parameters.forEach { parameter ->
+            if (!isNullable(parameter.type)) return@forEach
+            if (parameter.kind == KParameter.Kind.VALUE) {
                 offenders += "${klass.simpleName}.${function.name}(${parameter.name}) takes ${parameter.type}"
+            } else {
+                offenders += "${klass.simpleName}.${function.name} has a ${parameter.kind} of type ${parameter.type}"
             }
         }
     }
@@ -118,5 +170,11 @@ class NullFreeApiTest {
     private companion object {
         /** The package every class of the library lives in. */
         const val LIBRARY_PACKAGE = "br.usp.poli.lta.cereda.kdaptive"
+
+        /** The property naming the root of the sources of the library. */
+        const val SOURCE_ROOT_PROPERTY = "kdaptive.sourceRoot"
+
+        /** The root of the sources of the library, when the build did not name it. */
+        const val DEFAULT_SOURCE_ROOT = "src/main/kotlin"
     }
 }

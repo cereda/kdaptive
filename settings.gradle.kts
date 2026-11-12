@@ -9,3 +9,4 @@ pluginManagement {
 rootProject.name = "kdaptive"
 
 include("examples")
+include("benchmarks")

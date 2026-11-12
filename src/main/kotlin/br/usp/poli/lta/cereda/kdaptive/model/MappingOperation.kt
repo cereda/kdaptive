@@ -23,19 +23,19 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * operation channel and edges removed on the topology channel, but do not sum
  * them.
  */
-sealed interface MappingOperation {
+public sealed interface MappingOperation {
 
     /** The pattern the operation matched against the mapping. */
-    val pattern: TransitionPattern
+    public val pattern: TransitionPattern
 
     /** The edges the operation concerned. */
-    val edges: List<TransitionEdge>
+    public val edges: List<TransitionEdge>
 
     /** The number of edges in the mapping before the operation. */
-    val mappingSizeBefore: Int
+    public val mappingSizeBefore: Int
 
     /** The number of edges in the mapping after the operation. */
-    val mappingSizeAfter: Int
+    public val mappingSizeAfter: Int
 
     /**
      * A read-only query over the mapping.
@@ -43,7 +43,7 @@ sealed interface MappingOperation {
      * A query never changes the topology, so it produces no topology event:
      * this is the only way to observe a read.
      */
-    data class Query(
+    public data class Query(
         /** The pattern that was matched against the mapping. */
         override val pattern: TransitionPattern,
         /** The edges the pattern selected. */
@@ -63,7 +63,7 @@ sealed interface MappingOperation {
      * matched nothing is still reported: it cost a full scan of the mapping
      * even though it changed nothing.
      */
-    data class Remove(
+    public data class Remove(
         /** The pattern that was matched against the mapping. */
         override val pattern: TransitionPattern,
         /** The edges the pattern selected, and which were removed. */
@@ -80,7 +80,7 @@ sealed interface MappingOperation {
      * The addition is reported after the edge has entered the mapping, so
      * [mappingSizeAfter] is observed rather than predicted.
      */
-    data class Add(
+    public data class Add(
         /** The pattern describing the transition that was added. */
         override val pattern: TransitionPattern,
         /** The edge that was added. */

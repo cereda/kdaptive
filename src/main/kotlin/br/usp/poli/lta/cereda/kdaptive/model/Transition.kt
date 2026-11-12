@@ -13,13 +13,13 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * A transition carries its payload only: the endpoints of an edge belong to
  * the edge, which is the only place they are needed.
  */
-sealed class Transition {
+public sealed class Transition {
     /**
      * A transition that consumes a symbol from the input.
      *
      * @param symbol the symbol consumed by this transition
      */
-    data class SymbolTransition(val symbol: Symbol) : Transition() {
+    public data class SymbolTransition(val symbol: Symbol) : Transition() {
         init {
             require(symbol !is SymbolDomain) {
                 "A symbol transition consumes a concrete symbol, not a domain."
@@ -28,18 +28,18 @@ sealed class Transition {
     }
 
     /** Consumes no input (spontaneous transition). */
-    object Epsilon : Transition()
+    public object Epsilon : Transition()
 
     /**
      * Calls a submachine, pushing the return state.
      *
      * @property submachine the name of the submachine being called
      */
-    data class Call(
+    public data class Call(
         /** The name of the submachine being called. */
         val submachine: String,
     ) : Transition()
 
     /** Returns from a submachine, popping the stack. */
-    object Return : Transition()
+    public object Return : Transition()
 }

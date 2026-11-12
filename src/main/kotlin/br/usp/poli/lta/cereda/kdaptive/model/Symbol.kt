@@ -24,14 +24,14 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * content are the same symbol: an edge declared twice with the same symbol is
  * one edge, not two.
  */
-abstract class Symbol protected constructor() {
+public abstract class Symbol protected constructor() {
     /** The markers a filter may use to name a symbol. */
-    companion object {
+    public companion object {
         /** The wildcard symbol: matches any symbol-consuming transition. */
-        val Any: Symbol = AnySymbol
+        public val Any: Symbol = AnySymbol
 
         /** The empty symbol: matches epsilon transitions only. */
-        val Epsilon: Symbol = EpsilonSymbol
+        public val Epsilon: Symbol = EpsilonSymbol
 
         /**
          * Builds a **domain**: the set of symbols a filter names at once.
@@ -58,7 +58,7 @@ abstract class Symbol protected constructor() {
          * @throws IllegalArgumentException if [symbols] is empty, or names the
          *   wildcard symbol or another domain
          */
-        fun anyOf(vararg symbols: Symbol): SymbolDomain = SymbolDomain.of(symbols.toList())
+        public fun anyOf(vararg symbols: Symbol): SymbolDomain = SymbolDomain.of(symbols.toList())
     }
 }
 
@@ -72,18 +72,18 @@ abstract class Symbol protected constructor() {
  *
  * Two domains are equal when they name the same symbols.
  */
-class SymbolDomain private constructor(
+public class SymbolDomain private constructor(
     /** The symbols of this domain. */
-    val members: Set<Symbol>,
+    public val members: Set<Symbol>,
 ) : Symbol() {
     /** The number of symbols in this domain. */
-    val size: Int get() = members.size
+    public val size: Int get() = members.size
 
     /** Whether this domain names the empty word among its members. */
-    val containsEpsilon: Boolean get() = members.any { it === Symbol.Epsilon }
+    public val containsEpsilon: Boolean get() = members.any { it === Symbol.Epsilon }
 
     /** The members of this domain that are ordinary alphabet symbols. */
-    val alphabetMembers: Set<Symbol> get() = members.filterTo(mutableSetOf()) { it !== Symbol.Epsilon }
+    public val alphabetMembers: Set<Symbol> get() = members.filterTo(mutableSetOf()) { it !== Symbol.Epsilon }
 
     /** Returns a human-readable representation of this domain. */
     override fun toString(): String = members.joinToString(prefix = "{", postfix = "}")
@@ -95,7 +95,7 @@ class SymbolDomain private constructor(
     override fun hashCode(): Int = members.hashCode()
 
     /** The factory of the domains, used by [Symbol.anyOf]. */
-    companion object {
+    public companion object {
         /** Builds a domain over [symbols], rejecting the markers a domain may not contain. */
         internal fun of(symbols: List<Symbol>): SymbolDomain {
             require(symbols.isNotEmpty()) { "A symbol domain must name at least one symbol." }
@@ -117,7 +117,7 @@ class SymbolDomain private constructor(
  * This symbol never belongs to the input alphabet of an automaton: it is
  * rejected wherever a concrete symbol is required.
  */
-object AnySymbol : Symbol() {
+public object AnySymbol : Symbol() {
     /** Returns a human-readable representation of this wildcard. */
     override fun toString(): String = "*"
 }
@@ -128,7 +128,7 @@ object AnySymbol : Symbol() {
  * Epsilon is not part of the input alphabet of an automaton: it is rejected
  * wherever a concrete symbol is required.
  */
-object EpsilonSymbol : Symbol() {
+public object EpsilonSymbol : Symbol() {
     /** Returns a human-readable representation of this symbol. */
     override fun toString(): String = "ε"
 }

@@ -13,7 +13,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  * @property pathId the identifier of the child path
  * @property edge the transition edge the child was created for
  */
-data class ForkedPath(
+public data class ForkedPath(
     /** The identifier of the child path. */
     val pathId: Int,
     /** The transition edge the child was created for. */

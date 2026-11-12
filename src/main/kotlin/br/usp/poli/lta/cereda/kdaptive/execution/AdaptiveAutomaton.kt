@@ -15,6 +15,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import kotlin.coroutines.cancellation.CancellationException
 
 /**
  * The adaptive automaton proper.
@@ -23,7 +24,7 @@ import org.slf4j.LoggerFactory
  * [recognize] runs the recognition process on a clone so the original automaton
  * is not mutated by adaptive actions during execution.
  */
-abstract class AdaptiveAutomaton {
+public abstract class AdaptiveAutomaton {
     private val logger: Logger = LoggerFactory.getLogger(javaClass)
 
     /**
@@ -33,15 +34,15 @@ abstract class AdaptiveAutomaton {
      * never from the outside: the topology of a running automaton is the
      * engine's business.
      */
-    var transitions: TransitionMapping = TransitionMapping()
+    public var transitions: TransitionMapping = TransitionMapping()
         private set
 
     /** The submachines of the adaptive automaton. */
-    var submachines: Submachines = Submachines()
+    public var submachines: Submachines = Submachines()
         private set
 
     /** The actions of the adaptive automaton. */
-    var actions: Actions = Actions()
+    public var actions: Actions = Actions()
         private set
 
     /**
@@ -51,7 +52,7 @@ abstract class AdaptiveAutomaton {
      * stack; this field holds the stack the clone starts from. It is a seed,
      * not the stack of a running path.
      */
-    var initialStack: Stack = Stack()
+    public var initialStack: Stack = Stack()
 
     /**
      * The slot holding the name of the main submachine.
@@ -70,10 +71,14 @@ abstract class AdaptiveAutomaton {
      *
      * @throws IllegalStateException if no main submachine was declared
      */
-    var mainSubmachine: String
-        get() = mainSubmachineSlot ?: error("Main submachine cannot be null.")
+    public var mainSubmachine: String
+        get() = mainSubmachineSlot
+            ?: error(
+                "Main submachine was not declared. " +
+                    "Declare one with mainSubmachine = \"M\" before recognising.",
+            )
         set(value) {
-            logger.debug("mainSubmachine changed: $mainSubmachineSlot -> $value")
+            logger.debug("mainSubmachine changed: {} -> {}", mainSubmachineSlot, value)
             mainSubmachineSlot = value
         }
 
@@ -83,7 +88,7 @@ abstract class AdaptiveAutomaton {
      * The bounds are a backstop for the topologies the engine cannot prove to
      * be bounded; they never fire on an automaton that terminates.
      */
-    var limits: RecognitionLimits = RecognitionLimits()
+    public var limits: RecognitionLimits = RecognitionLimits()
 
     // -----------------------------------------------------------------------
     // Ergonomic transition DSL (mirrors AutomatonBuilder for direct use in setup())
@@ -127,7 +132,7 @@ abstract class AdaptiveAutomaton {
      * @throws IllegalArgumentException if the symbol is a wildcard ([Symbol.Any])
      *   or [Symbol.Epsilon]; use [epsilon] for an epsilon transition
      */
-    fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
@@ -153,7 +158,7 @@ abstract class AdaptiveAutomaton {
      *
      * The prior action fires before the move, the post action after it.
      */
-    fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         transitions.add(
@@ -174,7 +179,13 @@ abstract class AdaptiveAutomaton {
      * The prior action fires before the call (the return state is not pushed
      * yet), the post action after the jump into the called submachine.
      */
-    fun call(from: Any, submachineName: String, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun call(
+        from: Any,
+        submachineName: String,
+        to: Any,
+        prior: Any = ActionRef.None,
+        post: Any = ActionRef.None,
+    ) {
         val s = resolveState(from)
         val t = resolveState(to)
         transitions.add(
@@ -205,24 +216,24 @@ abstract class AdaptiveAutomaton {
      * }
      * ```
      */
-    fun from(source: Any, configure: FromGroup.() -> Unit) {
+    public fun from(source: Any, configure: FromGroup.() -> Unit) {
         FromGroup(this, source).configure()
     }
 
     /** Builder for transitions from a single source state within [AdaptiveAutomaton.setup()]. */
-    class FromGroup(private val aa: AdaptiveAutomaton, private val source: Any) {
+    public class FromGroup(private val aa: AdaptiveAutomaton, private val source: Any) {
         /** Adds a symbol-consuming transition. */
-        fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.consume(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
-        fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.epsilon(source, target, prior, post)
         }
 
         /** Adds a submachine call transition from the group's source state. */
-        fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             aa.call(source, submachine, target, prior, post)
         }
     }
@@ -241,10 +252,10 @@ abstract class AdaptiveAutomaton {
      * in flight, so stopping on one would answer "rejected" for an input the
      * automaton does accept.
      */
-    var stopOnFirstAcceptance: Boolean = false
+    public var stopOnFirstAcceptance: Boolean = false
 
     /** Visitors observing recognition lifecycle and path execution events. */
-    var visitors: MutableList<ExecutionVisitor> = mutableListOf()
+    public var visitors: MutableList<ExecutionVisitor> = mutableListOf()
 
     /**
      * Defines the initial configuration of the adaptive automaton.
@@ -253,7 +264,7 @@ abstract class AdaptiveAutomaton {
      * be safe to call more than once: declaring the same transition, the same
      * submachine or the same action twice does not duplicate it.
      */
-    abstract fun setup()
+    public abstract fun setup()
 
     /** Creates a new empty instance of the concrete subclass (for cloning). */
     protected abstract fun newInstance(): AdaptiveAutomaton
@@ -271,7 +282,7 @@ abstract class AdaptiveAutomaton {
      * @return the result of the recognition: the verdict, and the paths it was made of
      * @throws IllegalStateException if the recognition failed
      */
-    fun recognize(input: List<Symbol>): RecognitionResult {
+    public fun recognize(input: List<Symbol>): RecognitionResult {
         val ref = clone()
         return ref.recognizeOnce(input)
     }
@@ -279,7 +290,6 @@ abstract class AdaptiveAutomaton {
     private fun clone(): AdaptiveAutomaton {
         val instance = newInstance()
         require(instance !== this) { "newInstance() must return a fresh automaton, not this one." }
-        transitions.shareEdges()
         instance.transitions = transitions.isolatedCopy()
         instance.submachines = submachines.copy()
         instance.actions = actions.copy()
@@ -314,7 +324,8 @@ abstract class AdaptiveAutomaton {
 
         // The lifecycle events fire on the clone, after setup() materialised its
         // topology, so a visitor sees the automaton it is about to execute.
-        visitors.toList().forEach { it.onRecognizeStart(this) }
+        val observers = visitors.toList()
+        observers.forEach { it.onRecognizeStart(this) }
 
         worklist.clear()
         paths.clear()
@@ -322,7 +333,6 @@ abstract class AdaptiveAutomaton {
         // The path starts at the initial state of the main submachine; there
         // is no synthetic edge to traverse before the first real move.
         val initialState = submachines.fromName(mainSub).initialState
-        transitions.shareEdges()
         val root =
             PathExecutor(
                 state =
@@ -331,9 +341,9 @@ abstract class AdaptiveAutomaton {
                     currentSubmachine = mainSub,
                     mainSubmachine = mainSub,
                     stack = initialStack.copy(),
-                    actions = actions.copy(),
+                    actions = actions,
                     transitions = transitions.isolatedCopy(),
-                    submachines = submachines.copy(),
+                    submachines = submachines,
                     input = input,
                     cursor = 0,
                     enablePriorAction = true,
@@ -341,28 +351,38 @@ abstract class AdaptiveAutomaton {
                 ),
                 worklist = worklist,
                 paths = paths,
-                visitors = visitors,
+                visitors = observers,
             )
 
         paths[root.id] = RecognitionPath(id = root.id, state = initialState)
         worklist.add(root)
 
         while (worklist.isNotEmpty() && !anAcceptanceHappened()) {
-            var i = worklist.size - 1
-            while (i >= 0) {
+            // The pass is taken as a snapshot, and the paths that finish are
+            // dropped from the worklist in one sweep at the end of it.
+            //
+            // Removing a path as it finishes would shift the tail of the list
+            // on every removal, and a pass over k paths would cost a
+            // quadratic number of moves. The sweep costs one pass over the
+            // list, whatever the number of paths.
+            //
+            // The worklist holds every live path while the pass runs — the
+            // paths of the pass and the children they fork — so that the
+            // bound on the number of live paths counts what it says it
+            // counts.
+            val pass = worklist.toList()
+            for (index in pass.indices.reversed()) {
+                val path = pass[index]
                 try {
-                    worklist[i].run()
-                } catch (e: Exception) {
-                    // Every exception is caught, checked ones included: a path
-                    // that dies must still close its own lifecycle events
-                    // before the failure reaches the caller.
-                    failPath(worklist[i], e)
+                    path.run()
+                } catch (cause: Throwable) {
+                    // Every throwable is caught, errors included: a path that
+                    // dies must still close its own lifecycle events before
+                    // the failure reaches the caller.
+                    failPath(path, cause)
                 }
-                // When run() returns, the path is finished (accepted, rejected,
-                // cut, or forked). Remove it from the worklist.
-                worklist.removeAt(i)
-                i--
             }
+            worklist.removeAll { it.finished }
         }
 
         val result =
@@ -370,7 +390,7 @@ abstract class AdaptiveAutomaton {
                 accepted = paths.values.any { it.outcome == PathOutcome.ACCEPTED },
                 paths = paths.values.filter { it.done },
             )
-        visitors.toList().forEach { it.onRecognizeEnd(result) }
+        observers.forEach { it.onRecognizeEnd(result) }
         return result
     }
 
@@ -385,15 +405,53 @@ abstract class AdaptiveAutomaton {
      * died before it could decide anything, and saying "rejected" would
      * claim a verdict nobody reached.
      *
+     * The failure keeps its nature on the way out. An [Error] is rethrown as
+     * it is, because the engine did not cause it and hiding it behind a
+     * wrapper would only bury it. An [InterruptedException] restores the
+     * interrupt flag of the thread before it leaves, so that whoever owns the
+     * thread may notice the interruption. A [CancellationException] is
+     * rethrown untouched, because a cancelled coroutine must stay cancelled.
+     * Every other failure is wrapped, so that the caller may tell which path
+     * died and why.
+     *
      * @param failed the path that failed
-     * @param cause the exception that killed it
+     * @param cause the throwable that killed it
      */
-    private fun failPath(failed: PathExecutor, cause: Exception): Nothing {
+    private fun failPath(failed: PathExecutor, cause: Throwable): Nothing {
         failed.markFailed()
-        visitors.toList().forEach { it.onPathEnd(failed.id, PathOutcome.FAILED, failed.cursor) }
-        visitors.toList().forEach { it.onRecognizeFailed(cause) }
-        // Surface path failures to the caller instead of killing the JVM.
-        throw IllegalStateException(
+        val observers = visitors.toList()
+        observers.forEach { it.onPathEnd(failed.id, PathOutcome.FAILED, failed.cursor) }
+        observers.forEach { it.onRecognizeFailed(cause) }
+        throw failureOf(failed, cause)
+    }
+
+    /**
+     * The failure the caller receives when [cause] killed [failed].
+     *
+     * The failure keeps its nature on the way out. An [Error] is passed
+     * through as it is, because the engine did not cause it and hiding it
+     * behind a wrapper would only bury it. An [InterruptedException] restores
+     * the interrupt flag of the thread before it leaves, so that whoever owns
+     * the thread may notice the interruption. A [CancellationException] is
+     * passed through untouched, because a cancelled coroutine must stay
+     * cancelled. Every other failure is wrapped, so that the caller may tell
+     * which path died and why.
+     *
+     * @param failed the path that failed
+     * @param cause the throwable that killed it
+     * @return the throwable the caller receives
+     */
+    private fun failureOf(failed: PathExecutor, cause: Throwable): Throwable = when (cause) {
+        is InterruptedException -> {
+            Thread.currentThread().interrupt()
+            cause
+        }
+
+        is CancellationException -> cause
+
+        is Error -> cause
+
+        else -> IllegalStateException(
             "Recognition path ${failed.id} failed: ${cause.message}",
             cause,
         )

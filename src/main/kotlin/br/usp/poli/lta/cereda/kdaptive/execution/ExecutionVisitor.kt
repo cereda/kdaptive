@@ -18,7 +18,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  * slow visitor slows recognition. Register visitors via
  * [AdaptiveAutomaton.visitors].
  */
-interface ExecutionVisitor {
+public interface ExecutionVisitor {
 
     // -----------------------------------------------------------------------
     // Recognition lifecycle
@@ -30,7 +30,7 @@ interface ExecutionVisitor {
      * The clone has already been through `setup()`, so its transitions and
      * submachines are populated and a visitor may inspect the initial topology.
      */
-    fun onRecognizeStart(automaton: AdaptiveAutomaton) = Unit
+    public fun onRecognizeStart(automaton: AdaptiveAutomaton): Unit = Unit
 
     /**
      * Called once after recognition finishes, with the result of the recognition.
@@ -42,7 +42,7 @@ interface ExecutionVisitor {
      * [onRecognizeFailed] instead. The two events are exclusive, and a
      * recognition that started always ends with exactly one of them.
      */
-    fun onRecognizeEnd(result: RecognitionResult) = Unit
+    public fun onRecognizeEnd(result: RecognitionResult): Unit = Unit
 
     /**
      * Called when recognition fails, instead of [onRecognizeEnd].
@@ -53,14 +53,14 @@ interface ExecutionVisitor {
      *
      * @param cause the exception that killed the recognition
      */
-    fun onRecognizeFailed(cause: Throwable) = Unit
+    public fun onRecognizeFailed(cause: Throwable): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Path lifecycle
     // -----------------------------------------------------------------------
 
     /** Called when a recognition path begins executing (including forked paths). */
-    fun onPathStart(pathId: Int, input: List<Symbol>) = Unit
+    public fun onPathStart(pathId: Int, input: List<Symbol>): Unit = Unit
 
     /**
      * Called when a recognition path terminates.
@@ -69,13 +69,13 @@ interface ExecutionVisitor {
      * was cut because it re-entered a configuration it had already left, or it
      * failed because something went wrong while it ran. A cut is not a
      * rejection, a failure is not a rejection either, and the visitor can
-     * tell all four apart.
+     * tell every outcome apart.
      *
      * @param pathId the identifier of the terminated path
      * @param outcome the verdict of the path
      * @param cursor the input cursor at termination
      */
-    fun onPathEnd(pathId: Int, outcome: PathOutcome, cursor: Int) = Unit
+    public fun onPathEnd(pathId: Int, outcome: PathOutcome, cursor: Int): Unit = Unit
 
     /**
      * Called when a recognition path forks into one or more child paths.
@@ -90,17 +90,17 @@ interface ExecutionVisitor {
      *   alternatives were considered, each carrying the transition edge it
      *   was created for
      */
-    fun onPathFork(pathId: Int, children: List<ForkedPath>) = Unit
+    public fun onPathFork(pathId: Int, children: List<ForkedPath>): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Traversal
     // -----------------------------------------------------------------------
 
     /** Called immediately before a transition edge is traversed. */
-    fun onBeforeTraverse(pathId: Int, edge: TransitionEdge) = Unit
+    public fun onBeforeTraverse(pathId: Int, edge: TransitionEdge): Unit = Unit
 
     /** Called immediately after a transition edge has been traversed. */
-    fun onAfterTraverse(pathId: Int, edge: TransitionEdge) = Unit
+    public fun onAfterTraverse(pathId: Int, edge: TransitionEdge): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Action firing
@@ -112,7 +112,7 @@ interface ExecutionVisitor {
      * @param actionRef the concrete action about to fire, with its arguments
      * @param isPrior true for a prior action, false for a post action
      */
-    fun onBeforeAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) = Unit
+    public fun onBeforeAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean): Unit = Unit
 
     /**
      * Called immediately after an action handler executes.
@@ -120,7 +120,7 @@ interface ExecutionVisitor {
      * @param actionRef the concrete action that fired, with its arguments
      * @param isPrior true for a prior action, false for a post action
      */
-    fun onAfterAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean) = Unit
+    public fun onAfterAction(pathId: Int, actionRef: ActionRef.Bound, isPrior: Boolean): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Topology mutation
@@ -138,7 +138,7 @@ interface ExecutionVisitor {
      * @param edge the edge that was added
      * @param topology the topology of the path after the addition
      */
-    fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) = Unit
+    public fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology): Unit = Unit
 
     /**
      * Called immediately after an edge is removed from this path's transition
@@ -152,7 +152,7 @@ interface ExecutionVisitor {
      * @param edge the edge that was removed
      * @param topology the topology of the path after the removal
      */
-    fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) = Unit
+    public fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Operations over the transition mapping
@@ -171,7 +171,7 @@ interface ExecutionVisitor {
      *
      * @param operation the operation that was performed
      */
-    fun onMappingOperation(pathId: Int, operation: MappingOperation) = Unit
+    public fun onMappingOperation(pathId: Int, operation: MappingOperation): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Published facts
@@ -188,15 +188,15 @@ interface ExecutionVisitor {
      *
      * @param observation the fact that was published
      */
-    fun onObservation(pathId: Int, observation: Observation) = Unit
+    public fun onObservation(pathId: Int, observation: Observation): Unit = Unit
 
     // -----------------------------------------------------------------------
     // Submachine discipline
     // -----------------------------------------------------------------------
 
     /** Called when a [Transition.Call] is applied, entering a submachine. */
-    fun onCall(pathId: Int, submachine: String) = Unit
+    public fun onCall(pathId: Int, submachine: String): Unit = Unit
 
     /** Called when a [Transition.Return] is applied, leaving a submachine. */
-    fun onReturn(pathId: Int) = Unit
+    public fun onReturn(pathId: Int): Unit = Unit
 }

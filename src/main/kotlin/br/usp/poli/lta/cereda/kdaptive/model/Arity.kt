@@ -9,16 +9,16 @@ package br.usp.poli.lta.cereda.kdaptive.model
  *
  * @see br.usp.poli.lta.cereda.kdaptive.dsl.AutomatonBuilder.action
  */
-sealed interface Arity {
+public sealed interface Arity {
     /** The action may be called with any number of arguments. */
-    data object Any : Arity
+    public data object Any : Arity
 
     /**
      * The action must be called with exactly [count] arguments.
      *
      * @property count the number of arguments the action is called with
      */
-    data class Exactly(
+    public data class Exactly(
         /** The number of arguments the action is called with. */
         val count: Int,
     ) : Arity {

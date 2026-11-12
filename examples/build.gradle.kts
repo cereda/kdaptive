@@ -8,7 +8,7 @@ plugins {
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "5.0.0"
+version = rootProject.version
 
 tapmoc {
     java(11)
@@ -39,26 +39,31 @@ detekt {
 
 // Same formatting gates as the root module: ktlint, 120 columns, SPDX header.
 spotless {
+    // The whitespace steps come before ktlint: a file that ends with an extra
+    // blank line makes a ktlint rule fail with an exception, and the step
+    // that fixes the file is the one that has to run first.
     kotlinGradle {
         licenseHeader(LicenseDescriptor.COMMENT, LicenseDescriptor.DELIMITER)
         target("build.gradle.kts")
-        ktlint()
         trimTrailingWhitespace()
         leadingTabsToSpaces()
         endWithNewline()
+        replaceRegex(TrailingNewlines.STEP, TrailingNewlines.BLANK_LINES, TrailingNewlines.SINGLE)
+        ktlint()
     }
     kotlin {
         target("src/**/*.kt")
         licenseHeader(LicenseDescriptor.COMMENT)
+        trimTrailingWhitespace()
+        leadingTabsToSpaces()
+        endWithNewline()
+        replaceRegex(TrailingNewlines.STEP, TrailingNewlines.BLANK_LINES, TrailingNewlines.SINGLE)
         ktlint()
             .editorConfigOverride(
                 mapOf(
                     "max_line_length" to 120,
                 ),
             )
-        trimTrailingWhitespace()
-        leadingTabsToSpaces()
-        endWithNewline()
     }
 }
 
@@ -67,10 +72,24 @@ private object LicenseDescriptor {
     const val DELIMITER = "(package|import|plugins) "
 }
 
+/** The text the trailing blank lines of a file are normalised to. */
+private object TrailingNewlines {
+    /** The name the step reports itself under. */
+    const val STEP = "trailing-blank-lines"
+
+    /** The blank lines at the end of a file, which ktlint cannot digest. */
+    const val BLANK_LINES = """\n+\z"""
+
+    /** The single newline every file ends with. */
+    const val SINGLE = "\n"
+}
+
 tasks.named("check") {
     dependsOn("detekt")
 }
 
 application {
-    mainClass.set(findProperty("main")?.toString() ?: "br.usp.poli.lta.cereda.kdaptive.examples.RegularLanguageExampleKt")
+    mainClass.set(
+        findProperty("main")?.toString() ?: "br.usp.poli.lta.cereda.kdaptive.examples.RegularLanguageExampleKt",
+    )
 }

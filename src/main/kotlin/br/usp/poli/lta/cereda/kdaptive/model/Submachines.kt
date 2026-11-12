@@ -11,16 +11,42 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * Manages a collection of [Submachine] instances that can be looked up by
  * name or by state.
  */
-class Submachines : Iterable<Submachine> {
+public class Submachines : Iterable<Submachine> {
     private val entries = mutableSetOf<Submachine>()
+
+    /**
+     * The submachines of the collection, by name.
+     *
+     * The engine looks a submachine up by name every time it enters or
+     * leaves one, and a scan of the collection would make the cost of a call
+     * grow with the number of submachines registered.
+     *
+     * Several submachines may share a name: the index keeps the first one
+     * registered, which is the one a scan of the collection would have found.
+     */
+    private val byName: MutableMap<String, Submachine> = LinkedHashMap()
+
+    /**
+     * The owner of each state.
+     *
+     * Several submachines may declare the same state: the index keeps the
+     * first one registered, which is the one a scan of the collection would
+     * have found.
+     */
+    private val owners: MutableMap<State, Submachine> = LinkedHashMap()
 
     /**
      * Adds a submachine to the set.
      *
      * @param submachine the submachine to add
      */
-    fun add(submachine: Submachine) {
-        entries.add(submachine)
+    public fun add(submachine: Submachine) {
+        val added = entries.add(submachine)
+        if (!added) return
+        if (!byName.containsKey(submachine.name)) byName[submachine.name] = submachine
+        for (state in submachine.states) {
+            if (!owners.containsKey(state)) owners[state] = submachine
+        }
     }
 
     /** Returns the submachines of the automaton. */
@@ -32,22 +58,23 @@ class Submachines : Iterable<Submachine> {
      * @param submachine the submachine to look for
      * @return true when an equal submachine is in the collection
      */
-    operator fun contains(submachine: Submachine): Boolean = submachine in entries
+    public operator fun contains(submachine: Submachine): Boolean = submachine in entries
 
     /**
      * Replaces all submachines in the collection with the given submachines.
      *
      * @param newSubmachines the new submachines
      */
-    fun replaceAll(newSubmachines: Set<Submachine>) {
+    public fun replaceAll(newSubmachines: Set<Submachine>) {
         entries.clear()
         entries.addAll(newSubmachines)
+        rebuildIndexes()
     }
 
     /**
      * The number of submachines in the collection.
      */
-    val size: Int get() = entries.size
+    public val size: Int get() = entries.size
 
     /**
      * Retrieves a submachine containing the given state.
@@ -56,10 +83,7 @@ class Submachines : Iterable<Submachine> {
      * @return the submachine containing the state
      * @throws IllegalStateException if no submachine contains the state
      */
-    fun fromState(state: State): Submachine {
-        val result = entries.firstOrNull { it.states.contains(state) }
-        return result ?: error("No submachine contains state '$state'.")
-    }
+    public fun fromState(state: State): Submachine = owners[state] ?: error("No submachine contains state '$state'.")
 
     /**
      * Retrieves a submachine by name.
@@ -68,10 +92,7 @@ class Submachines : Iterable<Submachine> {
      * @return the matching submachine
      * @throws IllegalStateException if no submachine with the given name exists
      */
-    fun fromName(name: String): Submachine {
-        val result = entries.firstOrNull { it.name == name }
-        return result ?: error("No submachine with name '$name'.")
-    }
+    public fun fromName(name: String): Submachine = byName[name] ?: error("No submachine with name '$name'.")
 
     /**
      * Removes a submachine by name.
@@ -79,10 +100,11 @@ class Submachines : Iterable<Submachine> {
      * @param name the submachine name
      * @throws IllegalStateException if no submachine with the given name exists
      */
-    fun removeByName(name: String) {
-        val result = entries.firstOrNull { it.name == name }
+    public fun removeByName(name: String) {
+        val result = byName[name]
         require(result != null) { "No submachine with name '$name'." }
         entries.remove(result)
+        rebuildIndexes()
     }
 
     /**
@@ -94,10 +116,29 @@ class Submachines : Iterable<Submachine> {
      *
      * @return a new [Submachines] with the same submachines
      */
-    fun copy(): Submachines {
+    public fun copy(): Submachines {
         val s = Submachines()
         s.entries.addAll(entries)
+        s.rebuildIndexes()
         return s
+    }
+
+    /**
+     * Rebuilds the index of submachines by name and the index of their states.
+     *
+     * The first submachine registered under a name — and the first one
+     * declaring a state — is the one the indexes keep: that is the one a scan
+     * of the collection would have found.
+     */
+    private fun rebuildIndexes() {
+        byName.clear()
+        owners.clear()
+        for (submachine in entries) {
+            if (!byName.containsKey(submachine.name)) byName[submachine.name] = submachine
+            for (state in submachine.states) {
+                if (!owners.containsKey(state)) owners[state] = submachine
+            }
+        }
     }
 
     /** Returns a human-readable representation of this collection of submachines. */

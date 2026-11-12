@@ -7,7 +7,7 @@ package br.usp.poli.lta.cereda.kdaptive.model
  *
  * @property value the character this symbol represents
  */
-data class CharSymbol(val value: Char) : Symbol() {
+public data class CharSymbol(val value: Char) : Symbol() {
     /** Returns the character value as this symbol's textual representation. */
     override fun toString(): String = value.toString()
 }

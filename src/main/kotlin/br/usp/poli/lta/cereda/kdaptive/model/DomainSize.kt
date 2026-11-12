@@ -17,13 +17,13 @@ package br.usp.poli.lta.cereda.kdaptive.model
  * filter means for a given consumer — a cost, a bound, a refusal to price —
  * is the consumer's decision.
  */
-sealed interface DomainSize {
+public sealed interface DomainSize {
     /**
      * A finite number of values.
      *
      * @property count how many values the filter may select
      */
-    data class Bounded(
+    public data class Bounded(
         /** How many values the filter may select. */
         val count: Int,
     ) : DomainSize {
@@ -33,5 +33,5 @@ sealed interface DomainSize {
     }
 
     /** An unbounded number of values: the filter matches whatever the automaton holds. */
-    data object Unbounded : DomainSize
+    public data object Unbounded : DomainSize
 }

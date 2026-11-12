@@ -25,7 +25,7 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  * are [Transition] (the edge that triggered the action) and the argument list
  * bound in the [ActionRef] that fired.
  */
-typealias DslActionHandler = DslActionContext.(transition: Transition, parameters: List<Any>) -> Unit
+public typealias DslActionHandler = DslActionContext.(transition: Transition, parameters: List<Any>) -> Unit
 
 /**
  * Runtime context handed to DSL-registered adaptive actions.
@@ -38,9 +38,9 @@ typealias DslActionHandler = DslActionContext.(transition: Transition, parameter
  * @param states the states of the automaton, keyed by name
  * @param newStateSupplier the factory allocating fresh states
  */
-class DslActionContext internal constructor(
+public class DslActionContext internal constructor(
     /** The elementary actions over the mapping currently being executed. */
-    val ea: ElementaryActions,
+    public val ea: ElementaryActions,
     private val states: Map<String, State>,
     private val newStateSupplier: (String) -> State,
 ) {
@@ -52,7 +52,7 @@ class DslActionContext internal constructor(
      *
      * @throws IllegalArgumentException if the automaton has no state named [name]
      */
-    fun state(name: String): State = requireNotNull(states[name]) {
+    public fun state(name: String): State = requireNotNull(states[name]) {
         "No state named '$name' in this automaton. Known states: ${states.keys.joinToString(", ")}."
     }
 
@@ -60,13 +60,13 @@ class DslActionContext internal constructor(
      * Returns a fresh [State] with [prefix] plus a unique numeric suffix,
      * restarting at zero for each recognition run.
      */
-    fun freshState(prefix: String = "g"): State = newStateSupplier(prefix)
+    public fun freshState(prefix: String = "g"): State = newStateSupplier(prefix)
 
     /**
      * Builds an [ActionRef.Bound] with the given runtime [args], which are
      * passed through unchanged (they are values known only during execution).
      */
-    fun ref(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound(name = name, args = args.toList())
+    public fun ref(name: String, vararg args: Any): ActionRef.Bound = ActionRef.Bound(name = name, args = args.toList())
 
     /**
      * Publishes a fact about this action to the observation sink of the
@@ -79,7 +79,7 @@ class DslActionContext internal constructor(
      *
      * @param observation the fact to publish
      */
-    fun observe(observation: Observation) {
+    public fun observe(observation: Observation) {
         ea.observe(observation)
     }
 }
@@ -93,7 +93,7 @@ class DslActionContext internal constructor(
  * @property actions the DSL-registered adaptive actions, keyed by name
  * @property main the name of the main submachine
  */
-data class AutomatonSpec(
+public data class AutomatonSpec(
     val states: Map<String, State> = emptyMap(),
     val submachines: Map<String, Submachine> = emptyMap(),
     val transitions: List<TransitionEdge> = emptyList(),
@@ -115,7 +115,7 @@ data class AutomatonSpec(
  * @throws IllegalArgumentException if the specification declares no main
  * submachine, or names one that does not exist
  */
-fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
+public fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
     val mainName = spec.main
     require(mainName in spec.submachines) {
         "Main submachine '$mainName' is not declared in the specification. " +
@@ -173,7 +173,7 @@ fun specToAutomaton(spec: AutomatonSpec): AdaptiveAutomaton {
  * or convenient raw values ([String] for state names, [Char] for symbols that map
  * to [CharSymbol]). Action references accept [ActionRef] or a plain [String] name.
  */
-class AutomatonBuilder {
+public class AutomatonBuilder {
     private val states = mutableMapOf<String, State>()
     private val transitions = mutableListOf<TransitionEdge>()
     private val submachineBuilders = mutableMapOf<String, SubmachineBuilder>()
@@ -192,14 +192,14 @@ class AutomatonBuilder {
      *
      * @throws IllegalStateException if no main submachine was declared
      */
-    var main: String
+    public var main: String
         get() = mainSlot ?: error("Main submachine cannot be null. Call main(\"M\") to declare it.")
         set(value) {
             mainSlot = value
         }
 
     /** Creates or looks up a plain [State] by name. */
-    fun state(name: String): State = states.getOrPut(name) {
+    public fun state(name: String): State = states.getOrPut(name) {
         object : State() {
             override fun toString(): String = name
         }
@@ -245,12 +245,12 @@ class AutomatonBuilder {
     }
 
     /** Defines a submachine built by the [SubmachineBuilder] block. */
-    fun submachine(name: String, configure: SubmachineBuilder.() -> Unit) {
+    public fun submachine(name: String, configure: SubmachineBuilder.() -> Unit) {
         submachineBuilders[name] = SubmachineBuilder(states).also(configure)
     }
 
     /** Sets the main submachine name. */
-    fun main(name: String) {
+    public fun main(name: String) {
         this.main = name
     }
     // -----------------------------------------------------------------------
@@ -274,7 +274,7 @@ class AutomatonBuilder {
      * @throws IllegalArgumentException if an action with the same name is
      * already registered
      */
-    fun action(name: String, arity: Arity = Arity.Any, handler: DslActionHandler) {
+    public fun action(name: String, arity: Arity = Arity.Any, handler: DslActionHandler) {
         require(!actions.containsKey(name)) { "Action '$name' is already registered." }
         actions[name] = handler
         if (arity is Arity.Exactly) {
@@ -294,7 +294,7 @@ class AutomatonBuilder {
      * Use plain `actionRef` or [ActionRef] directly to pass string payloads
      * or when the arguments are already typed objects.
      */
-    fun ref(name: String, vararg args: Any): ActionRef.Bound {
+    public fun ref(name: String, vararg args: Any): ActionRef.Bound {
         val resolved = args.map { argument ->
             when (argument) {
                 is State -> argument
@@ -320,7 +320,7 @@ class AutomatonBuilder {
     // -----------------------------------------------------------------------
 
     /** Adds a symbol-consuming transition, [prior]/[post] being optional action references. */
-    fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
@@ -348,7 +348,7 @@ class AutomatonBuilder {
      *
      * The prior action fires before the move, the post action after it.
      */
-    fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun epsilon(from: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val p = resolveActionRef(prior)
@@ -377,7 +377,13 @@ class AutomatonBuilder {
      * The prior action fires before the call (the return state is not pushed
      * yet), the post action after the jump into the called submachine.
      */
-    fun call(from: Any, submachineName: String, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun call(
+        from: Any,
+        submachineName: String,
+        to: Any,
+        prior: Any = ActionRef.None,
+        post: Any = ActionRef.None,
+    ) {
         val s = resolveState(from)
         val t = resolveState(to)
         val p = resolveActionRef(prior)
@@ -400,24 +406,24 @@ class AutomatonBuilder {
     // -----------------------------------------------------------------------
 
     /** Adds several transitions from the same [source] state using the [configure] block. */
-    fun from(source: Any, configure: TransitionGroup.() -> Unit) {
+    public fun from(source: Any, configure: TransitionGroup.() -> Unit) {
         TransitionGroup(this, source).configure()
     }
 
     /** Builder for adding multiple transitions from a single source state. */
-    class TransitionGroup(private val ab: AutomatonBuilder, private val source: Any) {
+    public class TransitionGroup(private val ab: AutomatonBuilder, private val source: Any) {
         /** Adds a symbol-consuming transition from the group's source state. */
-        fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.consume(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
-        fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun epsilon(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.epsilon(source, target, prior, post)
         }
 
         /** Adds a submachine-call transition from the group's source state. */
-        fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun call(submachine: String, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.call(source, submachine, target, prior, post)
         }
     }
@@ -427,15 +433,15 @@ class AutomatonBuilder {
     // -----------------------------------------------------------------------
 
     /** Holds source state awaiting a symbol. */
-    class TransitionStepSource(private val ab: AutomatonBuilder, private val source: Any) {
+    public class TransitionStepSource(private val ab: AutomatonBuilder, private val source: Any) {
         /** Infix: `stepSource on 'a'` creates a step awaiting a target. */
-        infix fun on(symbol: Any): TransitionStep = TransitionStep(ab, source, symbol)
+        public infix fun on(symbol: Any): TransitionStep = TransitionStep(ab, source, symbol)
     }
 
     /** Holds source+symbol awaiting a target state. */
-    class TransitionStep(private val ab: AutomatonBuilder, private val source: Any, private val symbol: Any) {
+    public class TransitionStep(private val ab: AutomatonBuilder, private val source: Any, private val symbol: Any) {
         /** Completes the transition: source --symbol--> target, with optional prior/post actions. */
-        fun to(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+        public fun to(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
             ab.consume(source, symbol, target, prior, post)
         }
 
@@ -446,16 +452,16 @@ class AutomatonBuilder {
          * member overload exists to make the bare chain work. Prior/post actions still go
          * through the three-parameter dotted [to].
          */
-        infix fun to(target: Any) = to(target, ActionRef.None, ActionRef.None)
+        public infix fun to(target: Any): Unit = to(target, ActionRef.None, ActionRef.None)
     }
 
     /** Infix: `builder on "q0"` creates a step source awaiting a symbol. */
-    infix fun AutomatonBuilder.on(source: Any): TransitionStepSource = TransitionStepSource(this, source)
+    public infix fun AutomatonBuilder.on(source: Any): TransitionStepSource = TransitionStepSource(this, source)
 
     // -----------------------------------------------------------------------
 
     /** Builds the immutable [AutomatonSpec] for this builder. */
-    fun toSpec(): AutomatonSpec {
+    public fun toSpec(): AutomatonSpec {
         val submachines = submachineBuilders.mapValues { (name, builder) -> builder.build(name) }
         validateArities()
         validateArgumentStates(submachines.values)
@@ -531,13 +537,13 @@ class AutomatonBuilder {
  *
  * @param sharedStates the state map shared with the parent builder
  */
-class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
+public class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
     private val initials = mutableListOf<State>()
     private val accepting = mutableListOf<State>()
     private val states = mutableListOf<State>()
 
     /** Sets the initial state of the submachine. Accepts a [State] or a state name. */
-    fun initial(value: Any) {
+    public fun initial(value: Any) {
         val s = resolve(value)
         initials.add(s)
         states.add(s)
@@ -548,7 +554,7 @@ class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
      *
      * @throws IllegalArgumentException if no value is given
      */
-    fun accepting(vararg values: Any) {
+    public fun accepting(vararg values: Any) {
         require(values.isNotEmpty()) { "A submachine must define at least one accepting state." }
         values.forEach { value ->
             val s = resolve(value)
@@ -558,7 +564,7 @@ class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
     }
 
     /** Adds a plain (non-initial, non-accepting) state. Accepts a [State] or a state name. */
-    fun state(value: Any) {
+    public fun state(value: Any) {
         states.add(resolve(value))
     }
 
@@ -586,7 +592,7 @@ class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
      *
      * @throws IllegalArgumentException if no initial state, or more than one, was configured.
      */
-    fun build(name: String): Submachine {
+    public fun build(name: String): Submachine {
         require(initials.size == 1) {
             if (initials.isEmpty()) {
                 "Submachine '$name' must define an initial state."
@@ -622,11 +628,11 @@ class SubmachineBuilder(private val sharedStates: MutableMap<String, State>) {
  * }
  * ```
  */
-inline fun automaton(configure: AutomatonBuilder.() -> Unit): AutomatonSpec {
+public inline fun automaton(configure: AutomatonBuilder.() -> Unit): AutomatonSpec {
     val b = AutomatonBuilder()
     b.configure()
     return b.toSpec()
 }
 
 /** Creates a [CharSymbol] for the given character. */
-fun sym(c: Char): CharSymbol = CharSymbol(c)
+public fun sym(c: Char): CharSymbol = CharSymbol(c)
