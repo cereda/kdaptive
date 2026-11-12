@@ -56,7 +56,7 @@ class ErrorLifecycleTest {
                 ),
             )
             actions.add(Action(name = "Boom") { _, _, _ -> throw cause })
-            consume(E0, CharSymbol('a'), E1, prior = "Boom")
+            symbol(E0, CharSymbol('a'), E1, prior = "Boom")
         }
     }
 
@@ -109,7 +109,7 @@ class ErrorLifecycleTest {
         assertThrows<Fatal> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertEquals(1, events.pathEnds.size)
-        assertEquals(PathOutcome.FAILED, events.pathEnds.single().second)
+        assertEquals(PathOutcome.Failed, events.pathEnds.single().second)
     }
 
     @Test
@@ -139,7 +139,7 @@ class ErrorLifecycleTest {
     fun `an ordinary failure is wrapped, and keeps its cause`() {
         val aa = FailingAa(IllegalArgumentException("something went wrong"))
 
-        val thrown = assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        val thrown = assertThrows<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertTrue(thrown.message!!.contains("Recognition path"))
         assertTrue(thrown.cause is IllegalArgumentException)
@@ -179,7 +179,7 @@ class ErrorLifecycleTest {
         assertThrows<CancellationException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertEquals(1, events.pathEnds.size)
-        assertEquals(PathOutcome.FAILED, events.pathEnds.single().second)
+        assertEquals(PathOutcome.Failed, events.pathEnds.single().second)
         assertEquals(1, events.failures.size)
         assertFalse(events.ended)
     }

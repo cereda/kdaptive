@@ -52,7 +52,7 @@ class RecognitionBoundsTest {
                     acceptingStates = emptySet(),
                 ),
             )
-            targets.forEach { target -> consume(F0, CharSymbol('a'), target) }
+            targets.forEach { target -> symbol(F0, CharSymbol('a'), target) }
         }
     }
 
@@ -61,7 +61,7 @@ class RecognitionBoundsTest {
         val aa = ForkingAa(branches = 10)
         aa.limits = RecognitionLimits(maxLivePaths = 4)
 
-        val error = assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        val error = assertThrows<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertTrue(error.message!!.contains("live paths"))
         assertTrue(error.message!!.contains("maxLivePaths"))
@@ -78,7 +78,7 @@ class RecognitionBoundsTest {
         val result = aa.recognize(listOf(CharSymbol('a')))
 
         assertEquals(10, result.paths.size)
-        assertTrue(result.paths.all { it.outcome == PathOutcome.REJECTED })
+        assertTrue(result.paths.all { it.outcome == PathOutcome.Rejected })
     }
 
     @Test
@@ -88,7 +88,7 @@ class RecognitionBoundsTest {
         val aa = ForkingAa(branches = 2)
         aa.limits = RecognitionLimits(maxLivePaths = 1)
 
-        val error = assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        val error = assertThrows<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertTrue(error.message!!.contains("live paths"))
     }
@@ -164,7 +164,7 @@ class RecognitionBoundsTest {
         val aa = RecursiveAa()
         aa.limits = RecognitionLimits(maxCallDepth = 4)
 
-        val error = assertThrows<IllegalStateException> { aa.recognize(emptyList()) }
+        val error = assertThrows<RecognitionFailedException> { aa.recognize(emptyList()) }
 
         assertTrue(error.message!!.contains("call stack of depth"))
         assertTrue(error.message!!.contains("maxCallDepth"))
@@ -178,7 +178,7 @@ class RecognitionBoundsTest {
         val aa = RecursiveAa()
         aa.limits = RecognitionLimits(maxCallDepth = 3)
 
-        val error = assertThrows<IllegalStateException> { aa.recognize(emptyList()) }
+        val error = assertThrows<RecognitionFailedException> { aa.recognize(emptyList()) }
 
         assertTrue(error.message!!.contains("reached a call stack of depth 4"))
     }

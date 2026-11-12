@@ -197,13 +197,13 @@ public class DotExporter {
 
     private companion object {
         /** The escape written for an underscore. */
-        const val UNDERSCORE_ESCAPE = "_005f"
+        private const val UNDERSCORE_ESCAPE = "_005f"
 
         /** The radix the code units are written in. */
-        const val HEX_RADIX = 16
+        private const val HEX_RADIX = 16
 
         /** The number of digits a code unit is padded to. */
-        const val CODE_POINT_WIDTH = 4
+        private const val CODE_POINT_WIDTH = 4
     }
 
     /** Escapes the characters that would otherwise break a quoted DOT label. */

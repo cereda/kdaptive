@@ -107,9 +107,9 @@ Equivalent ways to hang an action on an edge (`prior` = before the move,
 `post` = after the move):
 
 ```kotlin
-consume(q0, 'a', q1, prior = "A")            // name only, zero arguments
-consume(q0, 'a', q1, prior = actionRef("A", p1, p2))   // name + arguments
-consume(q0, 'a', q1, prior = "A", post = "B")          // both slots
+symbol(q0, 'a', q1, prior = "A")            // name only, zero arguments
+symbol(q0, 'a', q1, prior = actionRef("A", p1, p2))   // name + arguments
+symbol(q0, 'a', q1, prior = "A", post = "B")          // both slots
 from(q0) { symbol('a', q1, prior = "A") }    // group-block form
 epsilon(q0, q1, post = "A")                  // epsilon edges carry actions too
 call(q0, "S", q1, prior = "A")               // and so do submachine calls
@@ -154,9 +154,10 @@ Two subtle behavioural consequences worth memorizing:
   the handler detect-and-bail out on its own idempotency.
 
 > **Pitfall**: exceptions inside an action handler are NOT swallowed. They propagate
-> and wrap into `IllegalStateException("Recognition path N failed: ...")` with the
-> original exception attached. A throwing action kills the whole `recognize()` call.
-> Handle your own errors inside the handler.
+> and wrap into a `RecognitionFailedException(pathId, reason)` with the original
+> exception attached. The wrapper extends `IllegalStateException`, so a consumer that
+> catches the broad exception keeps working. A throwing action kills the whole
+> `recognize()` call. Handle your own errors inside the handler.
 
 ## 3. Mutation isolation: per-path, per-call
 
@@ -494,10 +495,10 @@ ea.addCall(p0, SubmachineRef.anyOf("M", "N"), q0)                  // two edges
 ### 4.6 Removal is by identity, id-verified
 
 Removals obtain the matching edges' **ids** first, then call
-`removeFromIdentifier(id)` per edge; two-phase removal is what makes
+`removeById(id)` per edge; two-phase removal is what makes
 `remove { ... }` safe while a loop iterates over queried results.
 
-> **Warning**: `removeFromIdentifier` silently does nothing if the id is no longer
+> **Warning**: `removeById` silently does nothing if the id is no longer
 > present. Ids come from the engine's internal `Identifiers` generator; do NOT invent
 > them. (The generator is internal to the library: the ids it hands out are public
 > API, the generator is not.)
@@ -670,7 +671,7 @@ The events, and when they fire:
 > otherwise every forked path leaks in the bookkeeping.
 
 > **Call-out**: a **failure is not a rejection**. A path that died before reaching a
-> verdict reports `PathOutcome.FAILED`, and the recognition reports
+> verdict reports `PathOutcome.Failed`, and the recognition reports
 > `onRecognizeFailed(cause)` instead of `onRecognizeEnd`: the engine could not decide
 > anything about the input, and saying "rejected" would claim a verdict nobody
 > reached. The two events are exclusive — a recognition that started always ends with
@@ -747,9 +748,9 @@ exists to catch.
 
 The `pattern` describes what was **asked for**, not what was found. Its filters are read
 per family, and the family is part of the pattern because the two disagree:
-`TransitionPatternKind.SYMBOL`, `TransitionPatternKind.EPSILON`,
-`TransitionPatternKind.MIXED` (a symbol domain that names the empty word among its
-members) and `TransitionPatternKind.SUBMACHINE` give the same filter different meanings.
+`TransitionPatternKind.Symbol`, `TransitionPatternKind.Epsilon`,
+`TransitionPatternKind.Mixed` (a symbol domain that names the empty word among its
+members) and `TransitionPatternKind.Submachine` give the same filter different meanings.
 Every filter is an explicit value — a wildcard is `State.Any`, `Symbol.Any` or
 `ActionRef.Free`, never a null; the `submachine` filter of the call family is a
 `SubmachineRef`, whose `Any` means "any call".
@@ -827,16 +828,17 @@ Changing the cost model means changing `CostVisitor` and nothing else.
 1. **Action references name registered actions** (§2): a reference to an unknown name
    throws at runtime, loudly (prior and post slots alike). The filters (`Free`, `Any`,
    `None`, `Named`) belong to queries and removals, never to an edge.
-2. **`fromName("Unknown")` inside handlers throws** `IllegalStateException`; action
+2. **`get("Unknown")` inside handlers throws** `NoSuchElementException`; action
    names in references must correspond to registered `Action`s.
-3. **Handler exceptions terminate `recognize()`**, wrapped in
-   `IllegalStateException("Recognition path N failed: ...")`.
+3. **Handler exceptions terminate `recognize()`**, wrapped in a
+   `RecognitionFailedException(pathId, reason)` — an `IllegalStateException` that
+   names the path that died.
 4. **Forks and copies**: all mutations are per-path (§3); do not expect cross-path
    effects; do NOT mutate captured shared state in nondeterministic settings (§6.3).
 5. **Epsilon cycles are no longer a hang** (§6.1): a reachable epsilon-only cycle is
    **rejected at validation time** when the automaton registers no adaptive actions, and
    **warned about** when it does. At runtime a path that re-enters a configuration it
-   already left is **cut** (`PathOutcome.CUT`), and the other branches carry on. Applies
+   already left is **cut** (`PathOutcome.Cut`), and the other branches carry on. Applies
    to adaptively added epsilon edges too (§4.5).
 6. **The families never overlap** (§4.1, §4.2): the symbol family never selects a
    submachine call, and a concrete symbol never selects an epsilon edge — ask for

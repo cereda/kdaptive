@@ -32,8 +32,8 @@ class GraphVizVisitorTest {
         action("Add") { _, _ ->
             ea.add(q1, sym('z'), q0)
         }
-        consume(q0, sym('a'), q1, prior = "Add")
-        consume(q1, sym('a'), q0)
+        symbol(q0, sym('a'), q1, prior = "Add")
+        symbol(q1, sym('a'), q0)
         main("M")
     }
 
@@ -52,8 +52,8 @@ class GraphVizVisitorTest {
                 symbol = sym('z')
             }
         }
-        consume(q0, sym('a'), q1, prior = "Remove")
-        consume(q1, sym('z'), q0)
+        symbol(q0, sym('a'), q1, prior = "Remove")
+        symbol(q1, sym('z'), q0)
         main("M")
     }
 
@@ -118,7 +118,7 @@ class GraphVizVisitorTest {
                 state(q1)
                 accepting(q0)
             }
-            consume(q0, sym('a'), q1)
+            symbol(q0, sym('a'), q1)
             main("M")
         }
         val a = specToAutomaton(spec)

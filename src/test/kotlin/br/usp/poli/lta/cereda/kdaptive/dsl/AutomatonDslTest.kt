@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.dsl
 
-import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.ActionRef
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertSame
@@ -35,8 +33,8 @@ class AutomatonDslTest {
                     state("q1")
                     accepting("q2")
                 }
-                consume(from = "q0", symbol = 'a', to = "q1")
-                consume(from = "q1", symbol = 'b', to = "q2")
+                symbol(from = "q0", symbol = 'a', to = "q1")
+                symbol(from = "q1", symbol = 'b', to = "q2")
                 main("M")
             }
         assertEquals(2, spec.transitions.size)
@@ -58,7 +56,7 @@ class AutomatonDslTest {
                     initial(q0)
                     accepting(q1)
                 }
-                consume(from = q0, symbol = symA, to = q1)
+                symbol(from = q0, symbol = symA, to = q1)
                 main("M")
             }
         assertEquals(1, spec.transitions.size)
@@ -76,7 +74,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = "q0", symbol = 'a', to = "q1", prior = "X", post = "Y")
+                symbol(from = "q0", symbol = 'a', to = "q1", prior = "X", post = "Y")
                 main("M")
             }
         assertEquals(1, spec.transitions.size)
@@ -209,7 +207,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                (on("q0").on('a')).to("q1", prior = "X", post = "Y")
+                on("q0").on('a').to("q1", prior = "X", post = "Y")
                 main("M")
             }
         val t = spec.transitions.single()
@@ -254,7 +252,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = "q0", symbol = 'a', to = "q1")
+                symbol(from = "q0", symbol = 'a', to = "q1")
                 main("M")
             }
         val aa = specToAutomaton(spec)
@@ -269,7 +267,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = "q0", symbol = 'a', to = "q1")
+                symbol(from = "q0", symbol = 'a', to = "q1")
                 main("M")
             }
         val aa = specToAutomaton(spec)
@@ -287,7 +285,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = 42, symbol = 'a', to = "q1")
+                symbol(from = 42, symbol = 'a', to = "q1")
                 main("M")
             }
         }
@@ -301,7 +299,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = "q0", symbol = 42, to = "q1")
+                symbol(from = "q0", symbol = 42, to = "q1")
                 main("M")
             }
         }
@@ -315,7 +313,7 @@ class AutomatonDslTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume(from = "q0", symbol = 'a', to = "q1", post = 42)
+                symbol(from = "q0", symbol = 'a', to = "q1", post = 42)
                 main("M")
             }
         }
@@ -335,7 +333,7 @@ class AutomatonDslTest {
                 val s0 = state("q0")
                 val s0again = state("q0")
                 assertSame(s0, s0again)
-                consume(from = s0, symbol = 'a', to = "q1")
+                symbol(from = s0, symbol = 'a', to = "q1")
                 main("M")
             }
         assertEquals(1, spec.transitions.size)

@@ -116,7 +116,7 @@ class TransitionMappingCowTest {
         original.add(doomed)
 
         val copy = original.isolatedCopy()
-        copy.removeFromIdentifier(doomed.id)
+        copy.removeById(doomed.id)
 
         assertEquals(1, original.size)
         assertEquals(0, copy.size)
@@ -163,7 +163,7 @@ class TransitionMappingCowTest {
         // edges — and the engine relies on the fingerprint to recognise a
         // repeated configuration.
         mapping.add(edge(Q0, Q2))
-        mapping.removeFromIdentifier(edges.first().id)
+        mapping.removeById(edges.first().id)
 
         assertEquals(mapping.copy().structuralDigest(), mapping.structuralDigest())
     }
@@ -198,7 +198,7 @@ class TransitionMappingCowTest {
         mapping.add(added)
         assertEquals(listOf(leaving, added), mapping.edgesFrom(Q0))
 
-        mapping.removeFromIdentifier(leaving.id)
+        mapping.removeById(leaving.id)
         assertEquals(listOf(added), mapping.edgesFrom(Q0))
     }
 
@@ -215,7 +215,7 @@ class TransitionMappingCowTest {
         assertTrue(mapping.contains(first.id))
         assertTrue(mapping.contains(second.id))
 
-        mapping.removeFromIdentifier(first.id)
+        mapping.removeById(first.id)
         assertFalse(mapping.contains(first.id))
         assertTrue(mapping.contains(second.id))
     }
@@ -227,7 +227,7 @@ class TransitionMappingCowTest {
         edges.forEach { mapping.add(it) }
         mapping.contains(edges.first().id)
 
-        edges.forEach { mapping.removeFromIdentifier(it.id) }
+        edges.forEach { mapping.removeById(it.id) }
 
         assertEquals(0, mapping.size)
         assertFalse(mapping.contains(edges.first().id))

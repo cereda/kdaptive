@@ -2,8 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.Action
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -42,12 +40,12 @@ class CallReturnExample : AdaptiveAutomaton() {
         )
         submachines.add(starCSm)
 
-        consume(q0, 'a', q1)
+        symbol(q0, 'a', q1)
         call(q1, "StarC", q2)
-        consume(q2, 'b', q3)
+        symbol(q2, 'b', q3)
 
-        consume(m0, 'c', m1)
-        consume(m1, 'c', m1)
+        symbol(m0, 'c', m1)
+        symbol(m1, 'c', m1)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

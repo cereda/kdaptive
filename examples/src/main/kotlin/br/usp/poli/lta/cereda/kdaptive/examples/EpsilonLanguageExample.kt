@@ -2,8 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.Action
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -28,9 +26,9 @@ class EpsilonLanguageExample : AdaptiveAutomaton() {
         )
         submachines.add(sm)
 
-        consume(q0, 'a', q0)
+        symbol(q0, 'a', q0)
         epsilon(q0, q1)
-        consume(q1, 'b', q1)
+        symbol(q1, 'b', q1)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

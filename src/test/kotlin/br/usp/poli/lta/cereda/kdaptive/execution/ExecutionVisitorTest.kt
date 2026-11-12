@@ -38,10 +38,10 @@ class ExecutionVisitorTest {
             state(q1)
             accepting(q0)
         }
-        consume(q0, sym('a'), q1)
-        consume(q0, sym('b'), q0)
-        consume(q1, sym('a'), q0)
-        consume(q1, sym('b'), q1)
+        symbol(q0, sym('a'), q1)
+        symbol(q0, sym('b'), q0)
+        symbol(q1, sym('a'), q0)
+        symbol(q1, sym('b'), q1)
         main("M")
     }
 
@@ -61,11 +61,11 @@ class ExecutionVisitorTest {
             }
             ea.add(q1, sym('y'), q0)
         }
-        consume(q0, sym('a'), q1, prior = "Mutate")
-        consume(q0, sym('b'), q0)
-        consume(q1, sym('a'), q0)
-        consume(q1, sym('b'), q1)
-        consume(q1, sym('z'), q0)
+        symbol(q0, sym('a'), q1, prior = "Mutate")
+        symbol(q0, sym('b'), q0)
+        symbol(q1, sym('a'), q0)
+        symbol(q1, sym('b'), q1)
+        symbol(q1, sym('z'), q0)
         main("M")
     }
 
@@ -85,9 +85,9 @@ class ExecutionVisitorTest {
             state(s1)
             accepting(s1)
         }
-        consume(m0, sym('x'), m1)
+        symbol(m0, sym('x'), m1)
         call(m0, "S", m1)
-        consume(s0, sym('x'), s1)
+        symbol(s0, sym('x'), s1)
         main("M")
     }
 
@@ -103,8 +103,8 @@ class ExecutionVisitorTest {
             accepting(q1)
             accepting(q2)
         }
-        consume(q0, sym('a'), q1)
-        consume(q0, sym('a'), q2)
+        symbol(q0, sym('a'), q1)
+        symbol(q0, sym('a'), q2)
         main("M")
     }
 
@@ -196,10 +196,10 @@ class ExecutionVisitorTest {
             action("A") { _, _ ->
                 ea.add(q1, sym('c'), q0)
             }
-            consume(q0, sym('a'), q1, prior = "A")
-            consume(q0, sym('b'), q0)
-            consume(q1, sym('a'), q0)
-            consume(q1, sym('b'), q1)
+            symbol(q0, sym('a'), q1, prior = "A")
+            symbol(q0, sym('b'), q0)
+            symbol(q1, sym('a'), q0)
+            symbol(q1, sym('b'), q1)
             main("M")
         }
 

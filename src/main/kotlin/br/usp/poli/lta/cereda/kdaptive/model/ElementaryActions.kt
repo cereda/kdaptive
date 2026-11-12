@@ -570,7 +570,7 @@ public class ElementaryActions(private val transitions: TransitionMapping, priva
     private fun performRemove(pattern: TransitionPattern) {
         val before = transitions.size
         val matched = transitions.transitions.filter(pattern::matches)
-        matched.forEach { transitions.removeFromIdentifier(it.id) }
+        matched.forEach { transitions.removeById(it.id) }
         val after = transitions.size
         transitions.onOperation(MappingOperation.Remove(pattern, matched, before, after))
     }

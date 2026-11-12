@@ -319,8 +319,14 @@ public class AutomatonBuilder {
     // Symbol-consuming transitions
     // -----------------------------------------------------------------------
 
-    /** Adds a symbol-consuming transition, [prior]/[post] being optional action references. */
-    public fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    /**
+     * Adds a symbol-consuming transition, [prior]/[post] being optional action references.
+     *
+     * The three builders of a transition are named after the kind of move they
+     * describe: [symbol] consumes a symbol, [epsilon] consumes nothing, and
+     * [call] enters another submachine.
+     */
+    public fun symbol(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
@@ -414,7 +420,7 @@ public class AutomatonBuilder {
     public class TransitionGroup(private val ab: AutomatonBuilder, private val source: Any) {
         /** Adds a symbol-consuming transition from the group's source state. */
         public fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
-            ab.consume(source, sym, target, prior, post)
+            ab.symbol(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
@@ -442,7 +448,7 @@ public class AutomatonBuilder {
     public class TransitionStep(private val ab: AutomatonBuilder, private val source: Any, private val symbol: Any) {
         /** Completes the transition: source --symbol--> target, with optional prior/post actions. */
         public fun to(target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
-            ab.consume(source, symbol, target, prior, post)
+            ab.symbol(source, symbol, target, prior, post)
         }
 
         /**
@@ -623,7 +629,7 @@ public class SubmachineBuilder(private val sharedStates: MutableMap<String, Stat
  *         initial("q0")
  *         accepting("q1")
  *     }
- *     consume("q0", 'a', "q1")
+ *     symbol("q0", 'a', "q1")
  *     main("M")
  * }
  * ```

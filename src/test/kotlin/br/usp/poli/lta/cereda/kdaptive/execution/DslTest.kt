@@ -26,10 +26,10 @@ class DslTest {
             state(q1)
             accepting(q0)
         }
-        consume(q0, sym('a'), q1)
-        consume(q0, sym('b'), q0)
-        consume(q1, sym('a'), q0)
-        consume(q1, sym('b'), q1)
+        symbol(q0, sym('a'), q1)
+        symbol(q0, sym('b'), q0)
+        symbol(q1, sym('a'), q0)
+        symbol(q1, sym('b'), q1)
         main("M")
     }
 
@@ -82,10 +82,10 @@ class DslTest {
             accepting(s1)
         }
         // direct path: m0 -x-> m1
-        consume(m0, sym('x'), m1)
+        symbol(m0, sym('x'), m1)
         // submachine path: m0 calls S (which consumes x), returns to m1
         call(m0, "S", m1)
-        consume(s0, sym('x'), s1)
+        symbol(s0, sym('x'), s1)
         main("M")
     }
 

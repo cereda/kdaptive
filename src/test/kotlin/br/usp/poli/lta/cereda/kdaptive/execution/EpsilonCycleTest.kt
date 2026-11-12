@@ -132,7 +132,7 @@ class EpsilonCycleTest {
                         state(q1)
                         accepting(q1)
                     }
-                    consume(q0, sym('a'), q1)
+                    symbol(q0, sym('a'), q1)
                     epsilon(q1, q0)
                     epsilon(q0, q1)
                     main("M")
@@ -185,8 +185,8 @@ class EpsilonCycleTest {
                     state(q1)
                     accepting(q1)
                 }
-                consume(q0, sym('a'), q1)
-                consume(q1, sym('a'), q0)
+                symbol(q0, sym('a'), q1)
+                symbol(q1, sym('a'), q0)
                 main("M")
             }
 
@@ -219,7 +219,7 @@ class EpsilonCycleTest {
             actions.add(Action(name = "Never") { _, _, _ -> })
             epsilon(C0, C1)
             epsilon(C1, C0)
-            consume(C2, CharSymbol('a'), C2, post = "Never")
+            symbol(C2, CharSymbol('a'), C2, post = "Never")
         }
     }
 
@@ -229,7 +229,7 @@ class EpsilonCycleTest {
 
         assertFalse(result.accepted)
         assertEquals(1, result.cutPaths.size)
-        assertEquals(PathOutcome.CUT, result.cutPaths.single().outcome)
+        assertEquals(PathOutcome.Cut, result.cutPaths.single().outcome)
         assertTrue(result.rejectedPaths.isEmpty())
     }
 
@@ -250,7 +250,7 @@ class EpsilonCycleTest {
             actions.add(Action(name = "Never") { _, _, _ -> })
             epsilon(C0, C0)
             epsilon(C0, C1)
-            consume(C2, CharSymbol('a'), C2, post = "Never")
+            symbol(C2, CharSymbol('a'), C2, post = "Never")
         }
     }
 
@@ -261,7 +261,7 @@ class EpsilonCycleTest {
         assertTrue(result.accepted)
         assertEquals(1, result.acceptedPaths.size)
         assertEquals(1, result.cutPaths.size)
-        assertEquals(PathOutcome.CUT, result.cutPaths.single().outcome)
+        assertEquals(PathOutcome.Cut, result.cutPaths.single().outcome)
     }
 
     /** An automaton whose prior action removes the edge closing the cycle. */
@@ -286,7 +286,7 @@ class EpsilonCycleTest {
             )
             epsilon(C0, C1, prior = "Break")
             epsilon(C1, C0)
-            consume(C2, CharSymbol('a'), C2, post = "Break")
+            symbol(C2, CharSymbol('a'), C2, post = "Break")
         }
     }
 
@@ -296,7 +296,7 @@ class EpsilonCycleTest {
 
         assertTrue(result.accepted)
         assertTrue(result.cutPaths.isEmpty())
-        assertEquals(PathOutcome.ACCEPTED, result.acceptedPaths.single().outcome)
+        assertEquals(PathOutcome.Accepted, result.acceptedPaths.single().outcome)
     }
 
     /** An automaton whose action fires on every pass and eventually breaks the cycle. */
@@ -326,7 +326,7 @@ class EpsilonCycleTest {
             )
             epsilon(C0, C1, prior = "Count")
             epsilon(C1, C0)
-            consume(C2, CharSymbol('a'), C2, post = "Count")
+            symbol(C2, CharSymbol('a'), C2, post = "Count")
         }
     }
 
@@ -338,7 +338,7 @@ class EpsilonCycleTest {
 
         assertTrue(result.accepted)
         assertTrue(result.cutPaths.isEmpty())
-        assertEquals(PathOutcome.ACCEPTED, result.acceptedPaths.single().outcome)
+        assertEquals(PathOutcome.Accepted, result.acceptedPaths.single().outcome)
     }
 
     /** An automaton whose action fires on every pass and never changes anything. */
@@ -358,7 +358,7 @@ class EpsilonCycleTest {
             actions.add(Action(name = "Count") { _, _, _ -> })
             epsilon(C0, C1, prior = "Count")
             epsilon(C1, C0)
-            consume(C2, CharSymbol('a'), C2, post = "Count")
+            symbol(C2, CharSymbol('a'), C2, post = "Count")
         }
     }
 
@@ -369,7 +369,7 @@ class EpsilonCycleTest {
         val aa = SpinningAa()
         aa.limits = RecognitionLimits(maxStepsPerPath = 100)
 
-        val error = assertThrows<IllegalStateException> { aa.recognize(emptyList()) }
+        val error = assertThrows<RecognitionFailedException> { aa.recognize(emptyList()) }
         assertTrue(error.message!!.contains("maxStepsPerPath"))
     }
 

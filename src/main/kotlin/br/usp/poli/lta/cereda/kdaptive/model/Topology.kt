@@ -99,20 +99,20 @@ public data class Topology(
      *
      * @param id the identifier of the edge
      * @return the edge
-     * @throws IllegalStateException if the topology has no edge with that identifier
+     * @throws NoSuchElementException if the topology has no edge with that identifier
      */
     public fun fromId(id: Int): TransitionEdge =
-        edges.firstOrNull { it.id == id } ?: error("No edge with identifier $id.")
+        edges.firstOrNull { it.id == id } ?: throw NoSuchElementException("No edge with identifier $id.")
 
     /**
      * The submachine owning [state].
      *
      * @param state the state
      * @return the submachine owning the state
-     * @throws IllegalStateException if no submachine owns the state
+     * @throws NoSuchElementException if no submachine owns the state
      */
-    public fun fromState(state: State): Submachine = submachines.firstOrNull { state in it.states }
-        ?: error("No submachine contains state '$state'.")
+    public fun ownerOf(state: State): Submachine = submachines.firstOrNull { state in it.states }
+        ?: throw NoSuchElementException("No submachine contains state '$state'.")
 
     /** Returns a human-readable representation of this topology. */
     override fun toString(): String = buildString {

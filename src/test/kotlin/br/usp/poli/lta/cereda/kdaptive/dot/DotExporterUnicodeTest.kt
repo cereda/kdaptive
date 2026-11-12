@@ -84,7 +84,7 @@ class DotExporterUnicodeTest {
                 state(q1)
                 accepting(q1)
             }
-            consume(q0, sym('a'), q1)
+            symbol(q0, sym('a'), q1)
             main("M")
         }
         val automaton = specToAutomaton(spec)
@@ -154,7 +154,7 @@ class DotExporterUnicodeTest {
                 state(q1)
                 accepting(q1)
             }
-            consume(q0, sym('a'), q1)
+            symbol(q0, sym('a'), q1)
             main("M")
         }
         val automaton = specToAutomaton(spec)
@@ -175,7 +175,7 @@ class DotExporterUnicodeTest {
                 state(q1)
                 accepting(q1)
             }
-            consume(q0, sym('a'), q1)
+            symbol(q0, sym('a'), q1)
             main("M$alpha")
         }
         val automaton = specToAutomaton(spec)

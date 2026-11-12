@@ -6,9 +6,7 @@ import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.ElementaryActions
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 
 /**
  * Example: recognises `ab` over `{a, b}`, and uses an adaptive action that
@@ -46,8 +44,8 @@ class GraphVizExample : AdaptiveAutomaton() {
             },
         )
 
-        consume(q0, 'a', q1, post = "AddLoop")
-        consume(q1, 'b', q2)
+        symbol(q0, 'a', q1, post = "AddLoop")
+        symbol(q1, 'b', q2)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

@@ -2,8 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.Action
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -63,18 +61,18 @@ class NestedCallReturnExample : AdaptiveAutomaton() {
         submachines.add(innerSm)
 
         // Main: a, call Mid, b
-        consume(q0, 'a', q1)
+        symbol(q0, 'a', q1)
         call(q1, "Mid", q2)
-        consume(q2, 'b', q3)
+        symbol(q2, 'b', q3)
 
         // Mid: c, call Inner, d*
-        consume(m0, 'c', m1)
+        symbol(m0, 'c', m1)
         call(m1, "Inner", m2)
-        consume(m2, 'd', m3)
-        consume(m3, 'd', m3)
+        symbol(m2, 'd', m3)
+        symbol(m3, 'd', m3)
 
         // Inner: e
-        consume(n0, 'e', n1)
+        symbol(n0, 'e', n1)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

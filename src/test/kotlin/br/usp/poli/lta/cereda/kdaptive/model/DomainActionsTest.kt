@@ -3,7 +3,6 @@ package br.usp.poli.lta.cereda.kdaptive.model
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -108,9 +107,9 @@ class DomainActionsTest {
         val kinds = operations.map { (it as MappingOperation.Query).pattern.kind }
         assertEquals(
             listOf(
-                TransitionPatternKind.SYMBOL,
-                TransitionPatternKind.MIXED,
-                TransitionPatternKind.EPSILON,
+                TransitionPatternKind.Symbol,
+                TransitionPatternKind.Mixed,
+                TransitionPatternKind.Epsilon,
             ),
             kinds,
         )

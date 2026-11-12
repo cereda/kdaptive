@@ -21,47 +21,47 @@ class PathOutcomeTest {
     fun `a fresh path has not decided yet`() {
         val path = RecognitionPath(state = q0)
 
-        assertEquals(PathOutcome.PENDING, path.outcome)
+        assertEquals(PathOutcome.Pending, path.outcome)
         assertFalse(path.done)
     }
 
     @Test
     fun `an accepting path is done`() {
-        val path = RecognitionPath(state = q0, outcome = PathOutcome.ACCEPTED)
+        val path = RecognitionPath(state = q0, outcome = PathOutcome.Accepted)
 
         assertTrue(path.done)
-        assertEquals(PathOutcome.ACCEPTED, path.outcome)
+        assertEquals(PathOutcome.Accepted, path.outcome)
     }
 
     @Test
     fun `a rejecting path is done`() {
-        val path = RecognitionPath(state = q0, outcome = PathOutcome.REJECTED)
+        val path = RecognitionPath(state = q0, outcome = PathOutcome.Rejected)
 
         assertTrue(path.done)
-        assertEquals(PathOutcome.REJECTED, path.outcome)
+        assertEquals(PathOutcome.Rejected, path.outcome)
     }
 
     @Test
     fun `a cut path is done, and a cut is not a rejection`() {
-        val path = RecognitionPath(state = q0, outcome = PathOutcome.CUT)
+        val path = RecognitionPath(state = q0, outcome = PathOutcome.Cut)
 
         assertTrue(path.done)
-        assertEquals(PathOutcome.CUT, path.outcome)
-        assertFalse(path.outcome == PathOutcome.REJECTED)
+        assertEquals(PathOutcome.Cut, path.outcome)
+        assertFalse(path.outcome == PathOutcome.Rejected)
     }
 
     @Test
     fun `the verdict survives a copy`() {
-        val path = RecognitionPath(state = q0).copy(outcome = PathOutcome.ACCEPTED)
+        val path = RecognitionPath(state = q0).copy(outcome = PathOutcome.Accepted)
 
         assertTrue(path.done)
-        assertEquals(PathOutcome.ACCEPTED, path.outcome)
+        assertEquals(PathOutcome.Accepted, path.outcome)
     }
 
     @Test
     fun `the path reports its verdict`() {
-        assertTrue(RecognitionPath(state = q0, outcome = PathOutcome.ACCEPTED).toString().contains("ACCEPTED"))
-        assertFalse(RecognitionPath(state = q0).toString().contains("PENDING"))
+        assertTrue(RecognitionPath(state = q0, outcome = PathOutcome.Accepted).toString().contains("Accepted"))
+        assertFalse(RecognitionPath(state = q0).toString().contains("Pending"))
     }
 
     @Test

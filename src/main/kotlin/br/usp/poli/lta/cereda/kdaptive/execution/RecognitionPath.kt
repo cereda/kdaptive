@@ -8,10 +8,10 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 /**
  * The verdict of a recognition path.
  *
- * A path has five possible outcomes: it has not decided yet ([PENDING]), it
- * accepted the input ([ACCEPTED]), it rejected it ([REJECTED]), it was cut
- * ([CUT]) because it had entered a configuration it had already left, or it
- * failed ([FAILED]) because something went wrong while it ran. The verdict is
+ * A path has five possible outcomes: it has not decided yet ([Pending]), it
+ * accepted the input ([Accepted]), it rejected it ([Rejected]), it was cut
+ * ([Cut]) because it had entered a configuration it had already left, or it
+ * failed ([Failed]) because something went wrong while it ran. The verdict is
  * a value in its own right, never a null: a path that has not decided says so.
  *
  * A cut path is not a rejection. The engine cuts a branch it proved cannot
@@ -25,19 +25,19 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  */
 public enum class PathOutcome {
     /** The path has not reached a verdict yet. */
-    PENDING,
+    Pending,
 
     /** The path accepted the input. */
-    ACCEPTED,
+    Accepted,
 
     /** The path rejected the input. */
-    REJECTED,
+    Rejected,
 
     /** The path was cut: it entered a configuration it had already left. */
-    CUT,
+    Cut,
 
     /** The path failed: it died before reaching a verdict. */
-    FAILED,
+    Failed,
 }
 
 /**
@@ -49,17 +49,17 @@ public enum class PathOutcome {
  * @param trail the edges traversed by this path, in order
  * @param cursor the current cursor position in the input
  * @param state the state the path is currently in
- * @param outcome the verdict of the path ([PathOutcome.PENDING] while it runs)
+ * @param outcome the verdict of the path ([PathOutcome.Pending] while it runs)
  */
 public data class RecognitionPath(
     val id: Int = Identifiers.nextRecognitionPathId(),
     val trail: List<TransitionEdge> = emptyList(),
     val cursor: Int = 0,
     val state: State,
-    val outcome: PathOutcome = PathOutcome.PENDING,
+    val outcome: PathOutcome = PathOutcome.Pending,
 ) {
     /** Whether this recognition path has finished (the outcome is known). */
-    val done: Boolean get() = outcome != PathOutcome.PENDING
+    val done: Boolean get() = outcome != PathOutcome.Pending
 
     /**
      * Returns a copy of this path with [edge] appended to its trail.
@@ -73,7 +73,7 @@ public data class RecognitionPath(
     /** Returns a human-readable representation of this recognition path. */
     override fun toString(): String = buildString {
         append("RecognitionPath(id=$id")
-        if (outcome != PathOutcome.PENDING) {
+        if (outcome != PathOutcome.Pending) {
             append(", outcome=$outcome")
         }
         append(")")

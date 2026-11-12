@@ -3,10 +3,7 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
-import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
 
 /**
  * Example: recognises the language {w | w contains "ab"} over {a, b}.
@@ -43,12 +40,12 @@ class SubstringExample : AdaptiveAutomaton() {
         )
         submachines.add(sm)
 
-        consume(q0, CharSymbol('a'), q1)
-        consume(q0, CharSymbol('b'), q0)
-        consume(q1, CharSymbol('a'), q1)
-        consume(q1, CharSymbol('b'), q2)
-        consume(q2, CharSymbol('a'), q2)
-        consume(q2, CharSymbol('b'), q2)
+        symbol(q0, CharSymbol('a'), q1)
+        symbol(q0, CharSymbol('b'), q0)
+        symbol(q1, CharSymbol('a'), q1)
+        symbol(q1, CharSymbol('b'), q2)
+        symbol(q2, CharSymbol('a'), q2)
+        symbol(q2, CharSymbol('b'), q2)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

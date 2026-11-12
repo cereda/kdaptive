@@ -2,13 +2,8 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.Action
 import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
-import br.usp.poli.lta.cereda.kdaptive.model.Transition
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.actionRef
 
 /**
  * Example: recognises balanced parentheses over `{ (, ) }` using submachine
@@ -40,12 +35,12 @@ class BalancedParenthesesExample : AdaptiveAutomaton() {
         submachines.add(sm)
 
         // q0 --'('--> q1, then call S to match inner, then q2 --')'--> q3
-        consume(q0, CharSymbol('('), q1)
+        symbol(q0, CharSymbol('('), q1)
         call(q1, "S", q2)
-        consume(q2, CharSymbol(')'), q3)
+        symbol(q2, CharSymbol(')'), q3)
 
         // From q3, can continue with another balanced group or accept
-        consume(q3, CharSymbol('('), q1)
+        symbol(q3, CharSymbol('('), q1)
         epsilon(q3, q0)
     }
 

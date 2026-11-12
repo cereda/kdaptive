@@ -55,7 +55,7 @@ class EngineContractTest {
                     acceptingStates = setOf(C1),
                 ),
             )
-            consume(C0, CharSymbol('a'), C1)
+            symbol(C0, CharSymbol('a'), C1)
         }
     }
 
@@ -73,8 +73,8 @@ class EngineContractTest {
                     acceptingStates = setOf(C1),
                 ),
             )
-            consume(C0, CharSymbol('a'), C1)
-            consume(C0, CharSymbol('a'), C2)
+            symbol(C0, CharSymbol('a'), C1)
+            symbol(C0, CharSymbol('a'), C2)
         }
     }
 
@@ -97,8 +97,8 @@ class EngineContractTest {
                     ElementaryActions(transitions, Submachines()).add(C2, CharSymbol('z'), C0)
                 },
             )
-            consume(C0, CharSymbol('a'), C1, prior = "Grow")
-            consume(C0, CharSymbol('a'), C2, prior = "Grow")
+            symbol(C0, CharSymbol('a'), C1, prior = "Grow")
+            symbol(C0, CharSymbol('a'), C2, prior = "Grow")
         }
     }
 
@@ -117,7 +117,7 @@ class EngineContractTest {
                 ),
             )
             actions.add(Action(name = "Boom") { _, _, _ -> error("boom") })
-            consume(C0, CharSymbol('a'), C1, prior = "Boom")
+            symbol(C0, CharSymbol('a'), C1, prior = "Boom")
         }
     }
 
@@ -262,8 +262,8 @@ class EngineContractTest {
 
         // One child ends in an accepting state, the other does not.
         val verdicts = aa.recognize(listOf(CharSymbol('a'))).paths.map { it.outcome }
-        assertEquals(1, verdicts.count { it == PathOutcome.ACCEPTED })
-        assertEquals(1, verdicts.count { it == PathOutcome.REJECTED })
+        assertEquals(1, verdicts.count { it == PathOutcome.Accepted })
+        assertEquals(1, verdicts.count { it == PathOutcome.Rejected })
     }
 
     @Test
@@ -307,10 +307,10 @@ class EngineContractTest {
             },
         )
 
-        assertThrows<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        assertThrows<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         // The path died before it could decide anything: reporting it as a
         // rejection would claim a verdict nobody reached.
-        assertEquals(listOf("start", "pathEnd:FAILED", "failed"), events)
+        assertEquals(listOf("start", "pathEnd:Failed", "failed"), events)
     }
 }

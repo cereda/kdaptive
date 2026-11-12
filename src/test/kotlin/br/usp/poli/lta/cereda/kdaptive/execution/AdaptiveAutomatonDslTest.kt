@@ -170,18 +170,18 @@ class AdaptiveAutomatonDslTest {
     @Test
     fun `consume rejects invalid state type`() {
         val aa = DslCallAutomaton()
-        assertThrows<IllegalArgumentException> { aa.consume(123, CharSymbol('a'), state) }
+        assertThrows<IllegalArgumentException> { aa.symbol(123, CharSymbol('a'), state) }
     }
 
     @Test
     fun `consume rejects invalid symbol type`() {
         val aa = DslCallAutomaton()
-        assertThrows<IllegalArgumentException> { aa.consume(state, 123, state) }
+        assertThrows<IllegalArgumentException> { aa.symbol(state, 123, state) }
     }
 
     @Test
     fun `consume rejects invalid action ref type`() {
         val aa = DslCallAutomaton()
-        assertThrows<IllegalArgumentException> { aa.consume(state, CharSymbol('a'), state, prior = 999) }
+        assertThrows<IllegalArgumentException> { aa.symbol(state, CharSymbol('a'), state, prior = 999) }
     }
 }

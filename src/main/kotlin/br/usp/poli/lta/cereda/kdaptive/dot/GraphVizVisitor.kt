@@ -31,17 +31,17 @@ import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
  */
 public class GraphVizVisitor(
     /** Sink receiving the path identifier and each DOT snapshot. */
-    private val sink: (pathId: Int, dot: String) -> Unit,
+    private val sink: DotSink,
 ) : ExecutionVisitor {
 
     /** The stateless exporter reused across snapshots. */
     private val exporter = DotExporter()
 
     override fun onEdgeAdded(pathId: Int, edge: TransitionEdge, topology: Topology) {
-        sink(pathId, exporter.toDot(topology))
+        sink.accept(pathId, exporter.toDot(topology))
     }
 
     override fun onEdgeRemoved(pathId: Int, edge: TransitionEdge, topology: Topology) {
-        sink(pathId, exporter.toDot(topology))
+        sink.accept(pathId, exporter.toDot(topology))
     }
 }

@@ -48,8 +48,8 @@ class TrailTest {
                     acceptingStates = setOf(T1),
                 ),
             )
-            consume(T0, CharSymbol('a'), T1)
-            consume(T1, CharSymbol('b'), T1)
+            symbol(T0, CharSymbol('a'), T1)
+            symbol(T1, CharSymbol('b'), T1)
         }
     }
 
@@ -81,7 +81,7 @@ class TrailTest {
         val result = LinearAa().recognize(listOf(CharSymbol('a'), CharSymbol('a')))
 
         val path = result.rejectedPaths.single()
-        assertEquals(PathOutcome.REJECTED, path.outcome)
+        assertEquals(PathOutcome.Rejected, path.outcome)
         assertEquals(1, path.trail.size)
         assertEquals(T1, path.state)
     }
@@ -100,8 +100,8 @@ class TrailTest {
                     acceptingStates = setOf(T1, T2),
                 ),
             )
-            consume(T0, CharSymbol('a'), T1)
-            consume(T0, CharSymbol('a'), T2)
+            symbol(T0, CharSymbol('a'), T1)
+            symbol(T0, CharSymbol('a'), T2)
         }
     }
 
@@ -148,7 +148,7 @@ class TrailTest {
                 ),
             )
             call(T0, "S", T1)
-            consume(T2, CharSymbol('b'), T3)
+            symbol(T2, CharSymbol('b'), T3)
         }
     }
 

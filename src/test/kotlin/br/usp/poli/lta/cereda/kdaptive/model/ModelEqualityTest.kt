@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.model
 
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -127,7 +126,7 @@ class ModelEqualityTest {
         set.add(Action(name = "A") { _, _, _ -> error("replaced") })
 
         assertEquals(1, set.size)
-        assertEquals("A", set.fromName("A").name)
+        assertEquals("A", set.get("A").name)
     }
 
     @Test
@@ -146,7 +145,7 @@ class ModelEqualityTest {
         set.add(Submachine(name = "M", states = setOf(E0), initialState = E0, acceptingStates = setOf(E0)))
 
         assertEquals(1, set.size)
-        assertTrue(set.fromName("M").states.contains(E0))
+        assertTrue(set.get("M").states.contains(E0))
     }
 
     @Test

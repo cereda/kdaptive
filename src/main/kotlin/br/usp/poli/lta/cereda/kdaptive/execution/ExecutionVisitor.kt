@@ -48,7 +48,7 @@ public interface ExecutionVisitor {
      * Called when recognition fails, instead of [onRecognizeEnd].
      *
      * A failure is not a rejection: the engine could not decide anything about
-     * the input. The path that died reports [PathOutcome.FAILED], and this
+     * the input. The path that died reports [PathOutcome.Failed], and this
      * event carries the cause that killed it.
      *
      * @param cause the exception that killed the recognition

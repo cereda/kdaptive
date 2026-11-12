@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.model
 
-import br.usp.poli.lta.cereda.kdaptive.execution.PathExecutor
+import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import kotlin.io.path.Path
@@ -143,9 +143,9 @@ class NullFreeApiTest {
 
     /** The public classes of the library, as the compiler produced them. */
     private fun libraryClasses(): List<KClass<*>> {
-        val location = PathExecutor::class.java.protectionDomain.codeSource.location.toURI()
+        val location = AdaptiveAutomaton::class.java.protectionDomain.codeSource.location.toURI()
         val root = Path(location.toString())
-        val loader = PathExecutor::class.java.classLoader
+        val loader = AdaptiveAutomaton::class.java.classLoader
         return root
             .walk()
             .filter { it.name.endsWith(".class") }
@@ -164,7 +164,8 @@ class NullFreeApiTest {
                         raw.kotlin
                     }
                 }.getOrNull()
-            }.toList()
+            }
+            .toList()
     }
 
     private companion object {

@@ -113,7 +113,7 @@ class SelfRemovalTest {
         val result = aa.recognize(listOf(CharSymbol('a')))
         assertTrue(result.accepted)
         assertEquals(1, result.paths.size)
-        assertEquals(PathOutcome.ACCEPTED, result.paths.single().outcome)
+        assertEquals(PathOutcome.Accepted, result.paths.single().outcome)
     }
 
     @Test

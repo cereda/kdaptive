@@ -3,7 +3,6 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import br.usp.poli.lta.cereda.kdaptive.model.actionRef
 
@@ -34,12 +33,12 @@ class LexerExample : AdaptiveAutomaton() {
         submachines.add(sm)
 
         for (c in "0123456789") {
-            consume(q0, c, q1, post = actionRef("A", "number", c))
-            consume(q1, c, q1, post = actionRef("B", c))
+            symbol(q0, c, q1, post = actionRef("A", "number", c))
+            symbol(q1, c, q1, post = actionRef("B", c))
         }
         for (c in "abcdefghijklmnopqrstuvwxyz") {
-            consume(q0, c, q2, post = actionRef("A", "word", c))
-            consume(q2, c, q2, post = actionRef("B", c))
+            symbol(q0, c, q2, post = actionRef("A", "word", c))
+            symbol(q2, c, q2, post = actionRef("B", c))
         }
     }
 

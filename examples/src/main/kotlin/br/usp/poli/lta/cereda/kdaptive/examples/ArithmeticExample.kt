@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -30,16 +29,16 @@ class ArithmeticExample : AdaptiveAutomaton() {
         )
         submachines.add(sm)
 
-        consume(q0, '0', q1)
-        consume(q0, '1', q1)
+        symbol(q0, '0', q1)
+        symbol(q0, '1', q1)
 
-        consume(q1, '+', q2)
-        consume(q1, '*', q3)
+        symbol(q1, '+', q2)
+        symbol(q1, '*', q3)
 
-        consume(q2, '0', q4)
-        consume(q2, '1', q4)
-        consume(q3, '0', q4)
-        consume(q3, '1', q4)
+        symbol(q2, '0', q4)
+        symbol(q2, '1', q4)
+        symbol(q3, '0', q4)
+        symbol(q3, '1', q4)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

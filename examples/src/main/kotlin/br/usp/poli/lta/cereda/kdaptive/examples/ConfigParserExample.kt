@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -30,13 +29,13 @@ class ConfigParserExample : AdaptiveAutomaton() {
         )
         submachines.add(sm)
 
-        consume(q0, 'a', q1)
-        consume(q1, '=', q2)
-        consume(q2, '0', q3)
-        consume(q2, '1', q3)
-        consume(q3, '0', q3)
-        consume(q3, '1', q3)
-        consume(q3, ';', q4)
+        symbol(q0, 'a', q1)
+        symbol(q1, '=', q2)
+        symbol(q2, '0', q3)
+        symbol(q2, '1', q3)
+        symbol(q3, '0', q3)
+        symbol(q3, '1', q3)
+        symbol(q3, ';', q4)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

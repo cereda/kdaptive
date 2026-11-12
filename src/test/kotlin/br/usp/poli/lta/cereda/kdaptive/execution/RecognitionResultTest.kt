@@ -5,7 +5,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -60,8 +59,8 @@ class RecognitionResultTest {
                     acceptingStates = setOf(R1),
                 ),
             )
-            consume(R0, CharSymbol('a'), R1)
-            consume(R0, CharSymbol('a'), R2)
+            symbol(R0, CharSymbol('a'), R1)
+            symbol(R0, CharSymbol('a'), R2)
         }
     }
 
@@ -81,7 +80,7 @@ class RecognitionResultTest {
         val result = ForkingAa().recognize(listOf(CharSymbol('a')))
 
         assertTrue(result.paths.all { it.done })
-        assertTrue(result.paths.all { it.outcome != PathOutcome.PENDING })
+        assertTrue(result.paths.all { it.outcome != PathOutcome.Pending })
     }
 
     @Test

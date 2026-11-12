@@ -126,9 +126,9 @@ class ModelTest {
     fun `recognition path done flag`() {
         val rp = RecognitionPath(state = Q0)
         assertFalse(rp.done)
-        val rp2 = rp.copy(outcome = PathOutcome.ACCEPTED)
+        val rp2 = rp.copy(outcome = PathOutcome.Accepted)
         assertTrue(rp2.done)
-        assertEquals(PathOutcome.ACCEPTED, rp2.outcome)
+        assertEquals(PathOutcome.Accepted, rp2.outcome)
     }
 
     @Test

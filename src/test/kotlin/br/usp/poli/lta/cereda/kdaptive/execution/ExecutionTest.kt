@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package br.usp.poli.lta.cereda.kdaptive.execution
 
-import br.usp.poli.lta.cereda.kdaptive.model.CharSymbol
 import br.usp.poli.lta.cereda.kdaptive.model.Identifiers
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -56,6 +55,6 @@ class ExecutionTest {
         val result = aa.recognize(aa.symbols('a', 'a'))
         val paths = result.paths
         assertTrue(paths.isNotEmpty())
-        assertTrue(paths.any { it.outcome == PathOutcome.ACCEPTED })
+        assertTrue(paths.any { it.outcome == PathOutcome.Accepted })
     }
 }

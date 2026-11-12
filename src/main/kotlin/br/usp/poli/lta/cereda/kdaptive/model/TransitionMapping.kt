@@ -129,7 +129,7 @@ public class TransitionMapping {
      * Returns all transitions in the mapping.
      *
      * The collection is a live view: it reflects the mapping as it is. Mutate
-     * the mapping through [add], [removeFromIdentifier] and [clear] instead:
+     * the mapping through [add], [removeById] and [clear] instead:
      * mutating the view directly bypasses the bookkeeping the mapping keeps,
      * and it may disturb a copy that shares the edges.
      */
@@ -199,7 +199,7 @@ public class TransitionMapping {
      * The indexes are updated in place rather than dropped, so that removing
      * a batch of edges does not rebuild the index once per edge.
      */
-    public fun removeFromIdentifier(id: Int) {
+    public fun removeById(id: Int) {
         val removed = idIndex()[id] ?: return
         ensureOwnership()
         edges.remove(removed)
@@ -299,21 +299,21 @@ public class TransitionMapping {
 
     private companion object {
         /** The odd 64-bit constant of SplitMix64. */
-        const val GOLDEN_RATIO = -0x61c8864680b583ebL
+        private const val GOLDEN_RATIO = -0x61c8864680b583ebL
 
         /** The first multiplier of the SplitMix64 finalizer. */
-        const val MIX_FACTOR_A = -0x40a7b892e31b1a47L
+        private const val MIX_FACTOR_A = -0x40a7b892e31b1a47L
 
         /** The second multiplier of the SplitMix64 finalizer. */
-        const val MIX_FACTOR_B = -0x6b2fb644ecceee15L
+        private const val MIX_FACTOR_B = -0x6b2fb644ecceee15L
 
         /** The shift of the first round of the SplitMix64 finalizer. */
-        const val SHIFT_A = 30
+        private const val SHIFT_A = 30
 
         /** The shift of the second round of the SplitMix64 finalizer. */
-        const val SHIFT_B = 27
+        private const val SHIFT_B = 27
 
         /** The shift of the last round of the SplitMix64 finalizer. */
-        const val SHIFT_C = 31
+        private const val SHIFT_C = 31
     }
 }

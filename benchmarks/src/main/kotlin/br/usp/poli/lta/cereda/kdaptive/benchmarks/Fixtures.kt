@@ -45,7 +45,7 @@ internal class ChainAutomaton(private val length: Int) : AdaptiveAutomaton() {
             ),
         )
         for (index in 0 until length) {
-            consume(states[index], CharSymbol('a'), states[index + 1])
+            symbol(states[index], CharSymbol('a'), states[index + 1])
         }
     }
 
@@ -85,7 +85,7 @@ internal class ForkAutomaton(private val branches: Int) : AdaptiveAutomaton() {
             ),
         )
         for (target in targets) {
-            consume(start, CharSymbol('a'), target)
+            symbol(start, CharSymbol('a'), target)
         }
     }
 
@@ -144,7 +144,7 @@ internal class MutatingAutomaton(private val length: Int) : AdaptiveAutomaton() 
             },
         )
         for (index in 0 until length) {
-            consume(states[index], CharSymbol('a'), states[index + 1], post = "grow")
+            symbol(states[index], CharSymbol('a'), states[index + 1], post = "grow")
         }
     }
 

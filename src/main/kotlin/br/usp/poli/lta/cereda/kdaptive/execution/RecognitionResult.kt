@@ -14,7 +14,7 @@ package br.usp.poli.lta.cereda.kdaptive.execution
  *
  * A recognition that **failed** never produces a result: it throws, because
  * the engine could not decide anything about the input. A failed path
- * reports [PathOutcome.FAILED] through
+ * reports [PathOutcome.Failed] through
  * [ExecutionVisitor.onPathEnd], and the cause reaches the caller as the
  * exception.
  *
@@ -28,11 +28,11 @@ public data class RecognitionResult(
     val paths: List<RecognitionPath>,
 ) {
     /** The paths that accepted the input. */
-    val acceptedPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.ACCEPTED }
+    val acceptedPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.Accepted }
 
     /** The paths that rejected the input. */
-    val rejectedPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.REJECTED }
+    val rejectedPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.Rejected }
 
     /** The paths that were cut, because they re-entered a configuration they had already left. */
-    val cutPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.CUT }
+    val cutPaths: List<RecognitionPath> get() = paths.filter { it.outcome == PathOutcome.Cut }
 }

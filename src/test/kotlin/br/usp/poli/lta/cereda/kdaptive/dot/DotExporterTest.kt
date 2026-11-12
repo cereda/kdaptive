@@ -34,8 +34,8 @@ class DotExporterTest {
             state(q1)
             accepting(q0)
         }
-        consume(q0, sym('a'), q1)
-        consume(q0, sym('b'), q0)
+        symbol(q0, sym('a'), q1)
+        symbol(q0, sym('b'), q0)
         main("M")
     }
 
@@ -125,9 +125,9 @@ class DotExporterTest {
                 state(s1)
                 accepting(s1)
             }
-            consume(m0, sym('x'), m1)
+            symbol(m0, sym('x'), m1)
             call(m0, "S", m1)
-            consume(s0, sym('x'), s1)
+            symbol(s0, sym('x'), s1)
             main("M")
         }
         val a = specToAutomaton(spec)
@@ -141,7 +141,7 @@ class DotExporterTest {
     fun `return edge is labeled with return`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val initial = a.submachines.fromName("M").initialState
+        val initial = a.submachines.get("M").initialState
         a.transitions.add(
             TransitionEdge(source = initial, target = initial, transition = Transition.Return),
         )
@@ -162,7 +162,7 @@ class DotExporterTest {
             }
             action("A") { _, _ -> }
             action("B") { _, _ -> }
-            consume(q0, sym('a'), q1, prior = "A", post = "B")
+            symbol(q0, sym('a'), q1, prior = "A", post = "B")
             main("M")
         }
         val a = specToAutomaton(spec)
@@ -177,7 +177,7 @@ class DotExporterTest {
     fun `action arguments are rendered in the edge label`() {
         val a = specToAutomaton(simpleSpec())
         a.setup()
-        val initial = a.submachines.fromName("M").initialState
+        val initial = a.submachines.get("M").initialState
         a.transitions.add(
             TransitionEdge(
                 source = initial,
@@ -219,8 +219,8 @@ class DotExporterTest {
                 state(s1)
                 accepting(s1)
             }
-            consume(m0, sym('x'), s1)
-            consume(s0, sym('y'), s1)
+            symbol(m0, sym('x'), s1)
+            symbol(s0, sym('y'), s1)
             main("M")
         }
         val a = specToAutomaton(spec)

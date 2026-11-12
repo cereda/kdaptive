@@ -11,13 +11,13 @@ package br.usp.poli.lta.cereda.kdaptive.model
  */
 public enum class TransitionPatternKind {
     /** Operations over symbol-consuming transitions. */
-    SYMBOL,
+    Symbol,
 
     /** Operations over epsilon transitions, which consume no input. */
-    EPSILON,
+    Epsilon,
 
     /** Operations over submachine-call transitions. */
-    SUBMACHINE,
+    Submachine,
 
     /**
      * Operations whose symbol filter names both symbol-consuming and epsilon
@@ -26,7 +26,7 @@ public enum class TransitionPatternKind {
      * A symbol domain may name the empty word among its members, and then it
      * selects the two kinds at once.
      */
-    MIXED,
+    Mixed,
 }
 
 /**
@@ -83,23 +83,23 @@ public data class TransitionPattern(
      *
      * The family is derived from the filters themselves, so a pattern can
      * never contradict itself: a pattern naming a submachine belongs to the
-     * [TransitionPatternKind.SUBMACHINE] family, and a pattern naming none
+     * [TransitionPatternKind.Submachine] family, and a pattern naming none
      * belongs to the symbol family, whose own kind follows the symbol filter.
      */
     val kind: TransitionPatternKind
         get() = when {
-            submachine !== SubmachineRef.None -> TransitionPatternKind.SUBMACHINE
+            submachine !== SubmachineRef.None -> TransitionPatternKind.Submachine
 
-            symbol === Symbol.Epsilon -> TransitionPatternKind.EPSILON
+            symbol === Symbol.Epsilon -> TransitionPatternKind.Epsilon
 
             symbol is SymbolDomain && symbol.containsEpsilon ->
                 if (symbol.alphabetMembers.isEmpty()) {
-                    TransitionPatternKind.EPSILON
+                    TransitionPatternKind.Epsilon
                 } else {
-                    TransitionPatternKind.MIXED
+                    TransitionPatternKind.Mixed
                 }
 
-            else -> TransitionPatternKind.SYMBOL
+            else -> TransitionPatternKind.Symbol
         }
 
     /**
@@ -110,7 +110,7 @@ public data class TransitionPattern(
      * ask the same question of the same pattern and get the same answer.
      *
      * The family of the pattern fixes which filters apply. A pattern of the
-     * submachine family ([TransitionPatternKind.SUBMACHINE]) constrains the
+     * submachine family ([TransitionPatternKind.Submachine]) constrains the
      * called submachine and ignores the symbol filter; a pattern of the
      * symbol family constrains the symbol and ignores the submachine filter.
      * The families never overlap: the symbol family never selects a
@@ -126,11 +126,11 @@ public data class TransitionPattern(
         if (!actionSlotMatches(prior, edge.prior)) return false
         if (!actionSlotMatches(post, edge.post)) return false
         return when (kind) {
-            TransitionPatternKind.SUBMACHINE -> submachineMatches(edge, submachine)
+            TransitionPatternKind.Submachine -> submachineMatches(edge, submachine)
 
-            TransitionPatternKind.SYMBOL,
-            TransitionPatternKind.EPSILON,
-            TransitionPatternKind.MIXED,
+            TransitionPatternKind.Symbol,
+            TransitionPatternKind.Epsilon,
+            TransitionPatternKind.Mixed,
             -> symbolMatches(edge, symbol)
         }
     }

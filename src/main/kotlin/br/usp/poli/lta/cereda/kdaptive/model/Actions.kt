@@ -73,21 +73,26 @@ public class Actions : Iterable<Action> {
     /**
      * Retrieves an action by name.
      *
+     * The collection is a lookup table first and an iterable second, and the
+     * `get` operator says so: `actions["name"]` is the action registered
+     * under that name.
+     *
      * @param name the action name
      * @return the matching action
-     * @throws IllegalStateException if no action with the given name exists
+     * @throws NoSuchElementException if no action with the given name exists
      */
-    public fun fromName(name: String): Action = byName[name] ?: error("No action with name '$name'.")
+    public operator fun get(name: String): Action =
+        byName[name] ?: throw NoSuchElementException("No action with name '$name'.")
 
     /**
      * Removes an action by name.
      *
      * @param name the action name
-     * @throws IllegalStateException if no action with the given name exists
+     * @throws NoSuchElementException if no action with the given name exists
      */
     public fun removeByName(name: String) {
         val result = entries.firstOrNull { it.name == name }
-        require(result != null) { "No action with name '$name'." }
+        if (result == null) throw NoSuchElementException("No action with name '$name'.")
         entries.remove(result)
         rebuildIndex()
     }

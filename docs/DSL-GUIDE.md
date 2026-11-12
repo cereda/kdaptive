@@ -88,13 +88,13 @@ What `setup()` may use:
 |---|---|
 | `mainSubmachine = "..."` | sets the main submachine (**must** be set, `recognize` fails fast otherwise) |
 | `submachines.add(Submachine(...))` | registers a submachine |
-| `consume(from, symbol, to, prior = ActionRef.None, post = ActionRef.None)` | adds a symbol edge (symbol as `Char` or `Symbol`) |
+| `symbol(from, symbol, to, prior = ActionRef.None, post = ActionRef.None)` | adds a symbol edge (symbol as `Char` or `Symbol`) |
 | `epsilon(from, to, prior = ActionRef.None, post = ActionRef.None)` | adds an epsilon edge |
 | `call(from, "Name", to, prior = ActionRef.None, post = ActionRef.None)` | adds a submachine-call edge |
 | `from(source) { ... }` | groups several edges sharing a source state |
 | `actions.add(Action(name) { ... })` | registers an adaptive action |
 
-> **Pitfall**: **string states do NOT work here**. `consume("q0", 'a', "q1")` throws
+> **Pitfall**: **string states do NOT work here**. `symbol("q0", 'a', "q1")` throws
 > `IllegalArgumentException` ("String state names are not supported in
 > `AdaptiveAutomaton.setup()`"). Names are a builder (Style B) feature.
 
@@ -115,8 +115,8 @@ val spec = automaton {
         accepting("q1", "q2")     // vararg: one or more accepting states
         state("qTemp")            // optional plain (non-initial, non-accepting) state
     }
-    consume("q0", 'a', "q1")
-    consume("q1", 'b', "q2")
+    symbol("q0", 'a', "q1")
+    symbol("q1", 'b', "q2")
 }
 val ka = specToAutomaton(spec)    // AdaptiveAutomaton, ready to recognize
 ```
@@ -351,9 +351,9 @@ Two things to know before you prefer this style:
 ### `consume`, symbol edges
 
 ```kotlin
-consume(q0, 'a', q1)                                         // char → CharSymbol
-consume(q0, CharSymbol('a'), q1, prior = "A")                // with a prior adaptive action
-consume(q0, myToken, q1, post = actionRef("Lexer", token))   // with an argument
+symbol(q0, 'a', q1)                                         // char → CharSymbol
+symbol(q0, CharSymbol('a'), q1, prior = "A")                // with a prior adaptive action
+symbol(q0, myToken, q1, post = actionRef("Lexer", token))   // with an argument
 ```
 
 - `from` / `to`: `State` objects (Style A) or names (Style B).
@@ -379,7 +379,7 @@ what happens to what you pass:
 - **Beware cross-class symbols.** `CharSymbol('a')` never matches a custom `Letter('a')`:
   different classes means different `equals`. Pick one symbol algebra per automaton.
 - **No compile-time checking.** The `Any`-typed signature means arg swaps
-  (`consume(q0, q1, 'a')`) or wrong element types compile fine and only fail when
+  (`symbol(q0, q1, 'a')`) or wrong element types compile fine and only fail when
   `setup()` first runs inside `recognize()`. Keep a smoke test that calls `recognize(...)`
   once so this surface is exercised in CI rather than in production.
 
@@ -404,7 +404,7 @@ exactly like a symbol edge: the prior fires before the move, the post after it.
 > registers no adaptive actions (nothing could change the topology, so the cycle is
 > provably non-terminating), and **warns** about it when actions are present (an action
 > may legitimately break it). At runtime, a path that re-enters a configuration it
-> already left is **cut** — its outcome becomes `PathOutcome.CUT` — and the other
+> already left is **cut** — its outcome becomes `PathOutcome.Cut` — and the other
 > branches carry on. Two mutually referential edges, `epsilon(q, r)` plus
 > `epsilon(r, q)`, behave the same way. Make every epsilon cycle include at least one
 > consuming edge, or keep the epsilon-only subgraph acyclic.
@@ -456,12 +456,12 @@ submachine("StarC") {
     initial("m0")
     accepting("m0", "m1")     // vararg
 }
-consume("m0", 'c', "m1")      // referenced by the same shared names
+symbol("m0", 'c', "m1")      // referenced by the same shared names
 ```
 
 - Submachines exist to be **called**. In Style B, names are shared with the parent state
   table; in Style A you pass the state objects explicitly. Reusing the same state objects
-  in two submachines is legal but muddies `submachines.fromState(state)`; look-up
+  in two submachines is legal but muddies `submachines.ownerOf(state)`; look-up
   returns merely the **first registered** submachine containing that state.
 - `accepting(...)` takes several states at once (`accepting("m0", "m1")`), but at least
   one: an empty call is rejected. `initial(...)` must be given exactly once, a second
@@ -486,7 +486,7 @@ consume("m0", 'c', "m1")      // referenced by the same shared names
 1. **Forgetting `mainSubmachine = "..."`** (Style A) → `recognize()` throws
    `IllegalArgumentException` with "The automaton does not declare a main submachine".
    Reading `mainSubmachine` before `setup()` declared it throws
-   `IllegalStateException` ("Main submachine cannot be null."). Set it first (both
+   `IllegalStateException` ("Main submachine was not declared."). Set it first (both
    styles).
 2. **Forgetting `main("...")`** (Style B) → `toSpec()` throws "The automaton does not
    declare a main submachine". Reading the builder's `main` property before `main(...)`
@@ -539,8 +539,8 @@ val spec = automaton {
         state("q1")
         accepting("q0")
     }
-    consume("q0", 'a', "q1")
-    consume("q1", 'b', "q0")
+    symbol("q0", 'a', "q1")
+    symbol("q1", 'b', "q0")
 }
 val ka = specToAutomaton(spec)
 

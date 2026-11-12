@@ -92,31 +92,31 @@ private class TrailChunk(
  * @property limits the structural bounds the engine enforces
  */
 @Suppress("LongParameterList")
-public class PathState(
+internal class PathState(
     /** The current state of the path. */
-    public var currentState: State,
+    var currentState: State,
     /** The name of the submachine currently executing. */
-    public var currentSubmachine: String,
+    var currentSubmachine: String,
     /** The name of the main submachine. */
-    public var mainSubmachine: String,
+    var mainSubmachine: String,
     /** The call stack used for submachine calls and returns. */
-    public var stack: Stack = Stack(),
+    var stack: Stack = Stack(),
     /** The actions registered in the automaton. */
-    public var actions: Actions = Actions(),
+    var actions: Actions = Actions(),
     /** The mapping of transitions being traversed. */
-    public var transitions: TransitionMapping = TransitionMapping(),
+    var transitions: TransitionMapping = TransitionMapping(),
     /** The submachines of the automaton. */
-    public var submachines: Submachines = Submachines(),
+    var submachines: Submachines = Submachines(),
     /** The input symbols being recognised. */
-    public var input: List<Symbol> = emptyList(),
+    var input: List<Symbol> = emptyList(),
     /** The current position in [input]. */
-    public var cursor: Int = 0,
+    var cursor: Int = 0,
     /** Whether prior actions still have to fire for the selected transition. */
-    public var enablePriorAction: Boolean = true,
+    var enablePriorAction: Boolean = true,
     /** The number of actions that fired in this lineage. */
-    public var actionEpoch: Int = 0,
+    var actionEpoch: Int = 0,
     /** The structural bounds the engine enforces. */
-    public var limits: RecognitionLimits = RecognitionLimits(),
+    var limits: RecognitionLimits = RecognitionLimits(),
 )
 
 /**
@@ -138,13 +138,13 @@ public class PathState(
  *
  * On top of that, the executor refuses to spin forever: a path that arrives
  * at a configuration its lineage already left, with no action fired since,
- * is cut. See [PathOutcome.CUT].
+ * is cut. See [PathOutcome.Cut].
  */
-public class PathExecutor(
+internal class PathExecutor(
     /** The unique identifier for this recognition path. */
-    public val id: Int = Identifiers.nextRecognitionPathId(),
+    val id: Int = Identifiers.nextRecognitionPathId(),
     /** The mutable state of this recognition path. */
-    public val state: PathState,
+    val state: PathState,
     /** The shared worklist of path executors. */
     internal val worklist: MutableList<PathExecutor>,
     /** The shared recognition paths collected so far. */
@@ -228,34 +228,34 @@ public class PathExecutor(
     // Convenience accessors delegating to [state].
 
     /** The call stack used for submachine calls and returns. */
-    public val stack: Stack get() = state.stack
+    val stack: Stack get() = state.stack
 
     /** The actions registered in the automaton. */
-    public val actions: Actions get() = state.actions
+    val actions: Actions get() = state.actions
 
     /** The mapping of transitions being traversed. */
-    public val transitions: TransitionMapping get() = state.transitions
+    val transitions: TransitionMapping get() = state.transitions
 
     /** The submachines of the automaton. */
-    public val submachines: Submachines get() = state.submachines
+    val submachines: Submachines get() = state.submachines
 
     /** The input symbols being recognised. */
-    public val input: List<Symbol> get() = state.input
+    val input: List<Symbol> get() = state.input
 
     /** The current position in [input]. */
-    public val cursor: Int get() = state.cursor
+    val cursor: Int get() = state.cursor
 
     /** The current state of the path. */
-    public val currentState: State get() = state.currentState
+    val currentState: State get() = state.currentState
 
     /** Whether a prior action still has to fire for the selected transition. */
-    public val enablePriorAction: Boolean get() = state.enablePriorAction
+    val enablePriorAction: Boolean get() = state.enablePriorAction
 
     /** The name of the submachine currently executing. */
-    public val currentSubmachine: String get() = state.currentSubmachine
+    val currentSubmachine: String get() = state.currentSubmachine
 
     /** The name of the main submachine. */
-    public val mainSubmachine: String get() = state.mainSubmachine
+    val mainSubmachine: String get() = state.mainSubmachine
 
     /**
      * Whether this path is over.
@@ -278,7 +278,7 @@ public class PathExecutor(
      * non-deterministic choices. When [run] returns, the path is finished and
      * should be removed from the worklist.
      */
-    public fun run() {
+    fun run() {
         logger.debug("Path {} started run()", id)
 
         wireCallbacks()
@@ -400,7 +400,7 @@ public class PathExecutor(
         observers.forEach { it.onBeforeAction(id, ref, isPrior = true) }
 
         logger.debug("[Path {}] Executing prior action {} on transition {}.", id, ref.name, tr.id)
-        actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
+        actions.get(ref.name).handler(transitions, tr.transition, ref.args)
         state.actionEpoch = state.actionEpoch + 1
         state.enablePriorAction = false
         observers.forEach { it.onAfterAction(id, ref, isPrior = true) }
@@ -444,7 +444,7 @@ public class PathExecutor(
                 stack.push(tr.target)
                 checkCallDepth()
                 state.currentSubmachine = tr.transition.submachine
-                state.currentState = submachines.fromName(tr.transition.submachine).initialState
+                state.currentState = submachines.get(tr.transition.submachine).initialState
                 observers.forEach { it.onCall(id, tr.transition.submachine) }
             }
 
@@ -455,7 +455,7 @@ public class PathExecutor(
             is Transition.Return -> {
                 val returned = stack.pop()
                 state.currentState = returned
-                state.currentSubmachine = submachines.fromState(returned).name
+                state.currentSubmachine = submachines.ownerOf(returned).name
                 observers.forEach { it.onReturn(id) }
             }
         }
@@ -468,7 +468,7 @@ public class PathExecutor(
         observers.forEach { it.onBeforeAction(id, ref, isPrior = false) }
 
         logger.debug("[Path {}] Executing post action {} on transition {}.", id, ref.name, tr.id)
-        actions.fromName(ref.name).handler(transitions, tr.transition, ref.args)
+        actions.get(ref.name).handler(transitions, tr.transition, ref.args)
         state.actionEpoch = state.actionEpoch + 1
         observers.forEach { it.onAfterAction(id, ref, isPrior = false) }
     }
@@ -484,13 +484,13 @@ public class PathExecutor(
         return when (result) {
             PathVerdict.Accept -> {
                 accept()
-                observers.forEach { it.onPathEnd(id, PathOutcome.ACCEPTED, state.cursor) }
+                observers.forEach { it.onPathEnd(id, PathOutcome.Accepted, state.cursor) }
                 PathStep.Stop
             }
 
             PathVerdict.Reject -> {
                 reject()
-                observers.forEach { it.onPathEnd(id, PathOutcome.REJECTED, state.cursor) }
+                observers.forEach { it.onPathEnd(id, PathOutcome.Rejected, state.cursor) }
                 PathStep.Stop
             }
 
@@ -535,7 +535,7 @@ public class PathExecutor(
 
     /** Tells the verdict of a path that is stuck in [state] at [cursor]. */
     private fun terminationResult(state: State, cursor: Int, submachine: String): PathVerdict {
-        val sm = submachines.fromName(submachine)
+        val sm = submachines.get(submachine)
         val isAccepting = sm.acceptingStates.contains(state)
 
         return when {
@@ -738,21 +738,21 @@ public class PathExecutor(
      * otherwise would hide a branch the engine pruned from the consumer.
      */
     private fun cut(): PathStep {
-        recordOutcome(PathOutcome.CUT)
-        observers.forEach { it.onPathEnd(id, PathOutcome.CUT, state.cursor) }
+        recordOutcome(PathOutcome.Cut)
+        observers.forEach { it.onPathEnd(id, PathOutcome.Cut, state.cursor) }
         logger.debug("[Path {}] Cut: the path re-entered a configuration it had already left.", id)
         return PathStep.Stop
     }
 
     /** Records the acceptance of this path. */
     private fun accept() {
-        recordOutcome(PathOutcome.ACCEPTED)
+        recordOutcome(PathOutcome.Accepted)
         logger.debug("[Path {}] String accepted.", id)
     }
 
     /** Records the rejection of this path. */
     private fun reject() {
-        recordOutcome(PathOutcome.REJECTED)
+        recordOutcome(PathOutcome.Rejected)
         logger.debug("[Path {}] String rejected.", id)
     }
 
@@ -764,7 +764,7 @@ public class PathExecutor(
      * refused, which is not what happened.
      */
     internal fun markFailed() {
-        recordOutcome(PathOutcome.FAILED)
+        recordOutcome(PathOutcome.Failed)
     }
 
     /** Records the verdict of this path, together with the trail it took to reach it. */
@@ -789,8 +789,9 @@ public class PathExecutor(
     private fun checkStepBound() {
         val bound = state.limits.maxStepsPerPath
         if (steps <= bound) return
-        throw IllegalStateException(
-            "Recognition path $id traversed $steps transitions, more than the limit of $bound. " +
+        throw RecognitionFailedException(
+            pathId = id,
+            reason = "it traversed $steps transitions, more than the limit of $bound. " +
                 "The automaton probably recurses without ever consuming input or reaching a verdict. " +
                 "An adaptive action may be keeping the topology changing, so the engine cannot prove " +
                 "the branch is bounded; raise RecognitionLimits.maxStepsPerPath if the automaton " +
@@ -803,8 +804,9 @@ public class PathExecutor(
         val bound = state.limits.maxCallDepth
         val depth = stack.elements.size
         if (depth <= bound) return
-        throw IllegalStateException(
-            "Recognition path $id reached a call stack of depth $depth, more than the limit of $bound. " +
+        throw RecognitionFailedException(
+            pathId = id,
+            reason = "it reached a call stack of depth $depth, more than the limit of $bound. " +
                 "The automaton probably calls itself without ever consuming input. " +
                 "Raise RecognitionLimits.maxCallDepth if the automaton is known to terminate.",
         )
@@ -825,8 +827,9 @@ public class PathExecutor(
         // the one the check counts.
         val live = worklist.size + 1
         if (live <= bound) return
-        throw IllegalStateException(
-            "The recognition would have had $live live paths, more than the limit of $bound. " +
+        throw RecognitionFailedException(
+            pathId = id,
+            reason = "the recognition would have had $live live paths, more than the limit of $bound. " +
                 "The automaton probably keeps forking without ever reaching a verdict. " +
                 "Raise RecognitionLimits.maxLivePaths if the automaton is known to terminate.",
         )

@@ -3,7 +3,6 @@ package br.usp.poli.lta.cereda.kdaptive.model
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -173,7 +172,7 @@ class ModelSetsTest {
     }
 
     @Test
-    fun `mapping removeFromIdentifier`() {
+    fun `mapping removeById`() {
         val mapping = TransitionMapping()
         val t1 =
             TransitionEdge(
@@ -190,7 +189,7 @@ class ModelSetsTest {
         mapping.add(t1)
         mapping.add(t2)
 
-        mapping.removeFromIdentifier(t1.id)
+        mapping.removeById(t1.id)
         assertEquals(1, mapping.size)
         assertFalse(mapping.contains(t1.id))
         assertTrue(mapping.contains(t2.id))
@@ -205,14 +204,14 @@ class ModelSetsTest {
         actions.add(a2)
 
         assertEquals(2, actions.size)
-        assertSame(a1, actions.fromName("act1"))
-        assertSame(a2, actions.fromName("act2"))
+        assertSame(a1, actions.get("act1"))
+        assertSame(a2, actions.get("act2"))
 
-        assertThrows(IllegalStateException::class.java) { actions.fromName("missing") }
+        assertThrows(NoSuchElementException::class.java) { actions.get("missing") }
 
         actions.removeByName("act1")
         assertEquals(1, actions.size)
-        assertThrows(IllegalStateException::class.java) { actions.fromName("act1") }
+        assertThrows(NoSuchElementException::class.java) { actions.get("act1") }
     }
 
     @Test
@@ -221,12 +220,12 @@ class ModelSetsTest {
         val sm = Submachine(name = "M", states = setOf(S0, S1), initialState = S0, acceptingStates = setOf(S1))
         smachines.add(sm)
 
-        assertSame(sm, smachines.fromName("M"))
-        assertSame(sm, smachines.fromState(S0))
-        assertSame(sm, smachines.fromState(S1))
+        assertSame(sm, smachines.get("M"))
+        assertSame(sm, smachines.ownerOf(S0))
+        assertSame(sm, smachines.ownerOf(S1))
 
-        assertThrows(IllegalStateException::class.java) { smachines.fromName("missing") }
-        assertThrows(IllegalStateException::class.java) { smachines.fromState(S2) }
+        assertThrows(NoSuchElementException::class.java) { smachines.get("missing") }
+        assertThrows(NoSuchElementException::class.java) { smachines.ownerOf(S2) }
     }
 
     @Test
@@ -441,7 +440,7 @@ class ModelSetsTest {
         assertEquals(listOf(t1, t2), mapping.edgesFrom(q0))
         assertEquals(listOf(t3), mapping.edgesFrom(q1))
 
-        mapping.removeFromIdentifier(t1.id)
+        mapping.removeById(t1.id)
         assertEquals(listOf(t2), mapping.edgesFrom(q0))
         assertEquals(emptyList<TransitionEdge>(), mapping.edgesFrom(r0))
 

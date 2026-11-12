@@ -231,7 +231,7 @@ class ConfigurationTest {
         mapping.add(edge)
         val before = mapping.structuralDigest()
 
-        mapping.removeFromIdentifier(edge.id)
+        mapping.removeById(edge.id)
 
         assertNotEquals(before, mapping.structuralDigest())
     }
@@ -278,7 +278,7 @@ class ConfigurationTest {
         val result = ForkingAa().recognize(emptyList())
 
         val outcomes = result.paths.map { it.outcome }
-        assertTrue(outcomes.contains(PathOutcome.CUT))
+        assertTrue(outcomes.contains(PathOutcome.Cut))
     }
 
     @Test
@@ -288,6 +288,6 @@ class ConfigurationTest {
         val result = ForkingAa().recognize(emptyList())
 
         assertTrue(result.accepted)
-        assertEquals(PathOutcome.ACCEPTED, result.acceptedPaths.single().outcome)
+        assertEquals(PathOutcome.Accepted, result.acceptedPaths.single().outcome)
     }
 }

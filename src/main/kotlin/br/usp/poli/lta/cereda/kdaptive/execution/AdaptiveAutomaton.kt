@@ -129,10 +129,14 @@ public abstract class AdaptiveAutomaton {
     /**
      * Adds a symbol-consuming transition. Accepts raw [Char] for symbols.
      *
+     * The three builders of a transition are named after the kind of move they
+     * describe: [symbol] consumes a symbol, [epsilon] consumes nothing, and
+     * [call] enters another submachine.
+     *
      * @throws IllegalArgumentException if the symbol is a wildcard ([Symbol.Any])
      *   or [Symbol.Epsilon]; use [epsilon] for an epsilon transition
      */
-    public fun consume(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
+    public fun symbol(from: Any, symbol: Any, to: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
         val s = resolveState(from)
         val t = resolveState(to)
         val sym = resolveSymbol(symbol)
@@ -224,7 +228,7 @@ public abstract class AdaptiveAutomaton {
     public class FromGroup(private val aa: AdaptiveAutomaton, private val source: Any) {
         /** Adds a symbol-consuming transition. */
         public fun symbol(sym: Any, target: Any, prior: Any = ActionRef.None, post: Any = ActionRef.None) {
-            aa.consume(source, sym, target, prior, post)
+            aa.symbol(source, sym, target, prior, post)
         }
 
         /** Adds an epsilon transition from the group's source state. */
@@ -254,8 +258,15 @@ public abstract class AdaptiveAutomaton {
      */
     public var stopOnFirstAcceptance: Boolean = false
 
-    /** Visitors observing recognition lifecycle and path execution events. */
-    public var visitors: MutableList<ExecutionVisitor> = mutableListOf()
+    /**
+     * Visitors observing recognition lifecycle and path execution events.
+     *
+     * The list is mutable so that a visitor may be registered after the
+     * automaton is built, but the property itself is not: replacing the whole
+     * list would silently drop the visitors a subclass registered in its
+     * constructor.
+     */
+    public val visitors: MutableList<ExecutionVisitor> = mutableListOf()
 
     /**
      * Defines the initial configuration of the adaptive automaton.
@@ -297,7 +308,7 @@ public abstract class AdaptiveAutomaton {
         instance.mainSubmachineSlot = mainSubmachineSlot
         instance.stopOnFirstAcceptance = stopOnFirstAcceptance
         instance.limits = limits
-        instance.visitors = visitors.toMutableList()
+        instance.visitors.addAll(visitors)
         return instance
     }
 
@@ -332,7 +343,7 @@ public abstract class AdaptiveAutomaton {
 
         // The path starts at the initial state of the main submachine; there
         // is no synthetic edge to traverse before the first real move.
-        val initialState = submachines.fromName(mainSub).initialState
+        val initialState = submachines.get(mainSub).initialState
         val root =
             PathExecutor(
                 state =
@@ -387,7 +398,7 @@ public abstract class AdaptiveAutomaton {
 
         val result =
             RecognitionResult(
-                accepted = paths.values.any { it.outcome == PathOutcome.ACCEPTED },
+                accepted = paths.values.any { it.outcome == PathOutcome.Accepted },
                 paths = paths.values.filter { it.done },
             )
         observers.forEach { it.onRecognizeEnd(result) }
@@ -420,7 +431,7 @@ public abstract class AdaptiveAutomaton {
     private fun failPath(failed: PathExecutor, cause: Throwable): Nothing {
         failed.markFailed()
         val observers = visitors.toList()
-        observers.forEach { it.onPathEnd(failed.id, PathOutcome.FAILED, failed.cursor) }
+        observers.forEach { it.onPathEnd(failed.id, PathOutcome.Failed, failed.cursor) }
         observers.forEach { it.onRecognizeFailed(cause) }
         throw failureOf(failed, cause)
     }
@@ -437,6 +448,10 @@ public abstract class AdaptiveAutomaton {
      * cancelled. Every other failure is wrapped, so that the caller may tell
      * which path died and why.
      *
+     * A failure that is already a [RecognitionFailedException] is passed
+     * through: the engine raises it when a structural bound trips, and
+     * wrapping it again would hide the bound that tripped.
+     *
      * @param failed the path that failed
      * @param cause the throwable that killed it
      * @return the throwable the caller receives
@@ -451,9 +466,12 @@ public abstract class AdaptiveAutomaton {
 
         is Error -> cause
 
-        else -> IllegalStateException(
-            "Recognition path ${failed.id} failed: ${cause.message}",
-            cause,
+        is RecognitionFailedException -> cause
+
+        else -> RecognitionFailedException(
+            pathId = failed.id,
+            reason = cause.message ?: cause::class.simpleName ?: "unknown cause",
+            cause = cause,
         )
     }
 
@@ -465,7 +483,7 @@ public abstract class AdaptiveAutomaton {
      */
     private fun anAcceptanceHappened(): Boolean {
         if (!stopOnFirstAcceptance) return false
-        return paths.values.any { it.outcome == PathOutcome.ACCEPTED }
+        return paths.values.any { it.outcome == PathOutcome.Accepted }
     }
 
     /** Returns a human-readable representation of this automaton, with labeled sections. */

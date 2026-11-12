@@ -174,6 +174,6 @@ class ThreadSafetyTest {
         val result = aa.recognize(listOf(CharSymbol('b')))
         assertFalse(result.accepted)
         assertEquals(1, result.paths.size)
-        assertEquals(PathOutcome.REJECTED, result.paths.single().outcome)
+        assertEquals(PathOutcome.Rejected, result.paths.single().outcome)
     }
 }

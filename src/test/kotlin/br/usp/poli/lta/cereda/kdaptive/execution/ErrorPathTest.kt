@@ -74,7 +74,7 @@ class ErrorPathTest {
         val aa = PlainAa()
         val ex =
             assertThrows<IllegalArgumentException> {
-                aa.consume(aa.q0, 'a', aa.q1, prior = ActionRef.Named("A"))
+                aa.symbol(aa.q0, 'a', aa.q1, prior = ActionRef.Named("A"))
             }
         assertTrue(ex.message!!.contains("is a filter"))
     }
@@ -82,14 +82,14 @@ class ErrorPathTest {
     @Test
     fun `a wildcard symbol cannot be consumed`() {
         val aa = PlainAa()
-        assertThrows<IllegalArgumentException> { aa.consume(aa.q0, Symbol.Any, aa.q1) }
-        assertThrows<IllegalArgumentException> { aa.consume(aa.q0, Symbol.Epsilon, aa.q1) }
+        assertThrows<IllegalArgumentException> { aa.symbol(aa.q0, Symbol.Any, aa.q1) }
+        assertThrows<IllegalArgumentException> { aa.symbol(aa.q0, Symbol.Epsilon, aa.q1) }
     }
 
     @Test
     fun `unknown post action name fails loudly`() {
         val aa = FaultAa { it.copy(post = ActionRef.Bound(name = "no-such-action")) }
-        val ex = assertThrows<IllegalStateException> { aa.recognize(aa.char('a')) }
+        val ex = assertThrows<RecognitionFailedException> { aa.recognize(aa.char('a')) }
         assertTrue(ex.message!!.contains("Recognition path"))
         assertTrue(ex.message!!.contains("No action with name 'no-such-action'."))
     }
@@ -97,7 +97,7 @@ class ErrorPathTest {
     @Test
     fun `an unknown prior action name fails loudly`() {
         val aa = FaultAa { it.copy(prior = ActionRef.Bound(name = "no-such-action")) }
-        val ex = assertThrows<IllegalStateException> { aa.recognize(aa.char('a')) }
+        val ex = assertThrows<RecognitionFailedException> { aa.recognize(aa.char('a')) }
         assertTrue(ex.message!!.contains("Recognition path"))
         assertTrue(ex.message!!.contains("No action with name 'no-such-action'."))
     }

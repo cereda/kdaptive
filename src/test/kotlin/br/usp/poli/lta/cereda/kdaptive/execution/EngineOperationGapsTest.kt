@@ -12,7 +12,6 @@ import br.usp.poli.lta.cereda.kdaptive.model.Submachines
 import br.usp.poli.lta.cereda.kdaptive.model.Symbol
 import br.usp.poli.lta.cereda.kdaptive.model.Transition
 import br.usp.poli.lta.cereda.kdaptive.model.TransitionEdge
-import br.usp.poli.lta.cereda.kdaptive.model.TransitionMapping
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -103,7 +102,7 @@ class EngineOperationGapsTest {
     fun `prior action removing its own edge leaves the path stuck and rejected`() {
         val aa =
             SimpleAa(SimpleAa.Mode.PRIOR) { transitions, transition, _ ->
-                transitions.removeFromIdentifier(transitions.transitions.first { it.transition === transition }.id)
+                transitions.removeById(transitions.transitions.first { it.transition === transition }.id)
             }
         assertFalse(aa.recognize(aa.symbols('a')).accepted)
     }
@@ -168,18 +167,18 @@ class EngineOperationGapsTest {
                 mainSubmachine = "M"
             }
         }
-        val ex1 = assertThrows<IllegalArgumentException> { aa.consume("q0", 'a', "q1") }
+        val ex1 = assertThrows<IllegalArgumentException> { aa.symbol("q0", 'a', "q1") }
         assertTrue(ex1.message!!.contains("String state names are not supported"))
 
         val q1 = object : State() {}
-        val ex2 = assertThrows<IllegalArgumentException> { aa.consume(777, 'a', q1) }
+        val ex2 = assertThrows<IllegalArgumentException> { aa.symbol(777, 'a', q1) }
         assertTrue(ex2.message!!.contains("Cannot resolve '777' to State"))
 
         val q0 = object : State() {}
-        val ex3 = assertThrows<IllegalArgumentException> { aa.consume(q0, 42, q1) }
+        val ex3 = assertThrows<IllegalArgumentException> { aa.symbol(q0, 42, q1) }
         assertTrue(ex3.message!!.contains("Cannot resolve '42' to Symbol"))
 
-        val ex4 = assertThrows<IllegalArgumentException> { aa.consume(q0, CharSymbol('a'), q1, prior = 7) }
+        val ex4 = assertThrows<IllegalArgumentException> { aa.symbol(q0, CharSymbol('a'), q1, prior = 7) }
         assertTrue(ex4.message!!.contains("Cannot resolve '7' to ActionRef"))
 
         // The epsilon and call helpers work with plain state objects.

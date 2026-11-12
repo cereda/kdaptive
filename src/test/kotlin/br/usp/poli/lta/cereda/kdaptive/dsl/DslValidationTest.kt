@@ -28,7 +28,7 @@ class DslValidationTest {
                         initial("q0")
                         accepting("q1")
                     }
-                    consume("q0", 'a', "q2")
+                    symbol("q0", 'a', "q2")
                     main("M")
                 }
             }
@@ -46,7 +46,7 @@ class DslValidationTest {
                         initial("q0")
                         accepting("q1")
                     }
-                    consume("q2", 'a', "q1")
+                    symbol("q2", 'a', "q1")
                     main("M")
                 }
             }
@@ -66,7 +66,7 @@ class DslValidationTest {
                     initial("q0")
                     accepting("q1")
                 }
-                consume("q0", 'a', "q1")
+                symbol("q0", 'a', "q1")
                 main("M")
             }
         assertEquals(1, spec.transitions.size)

@@ -2,7 +2,6 @@
 package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -35,11 +34,11 @@ class NondeterminismExample : AdaptiveAutomaton() {
         submachines.add(sm)
 
         // Nondeterministic: from q0 on 'a', two paths fork
-        consume(q0, 'a', q1)
-        consume(q0, 'a', q2)
+        symbol(q0, 'a', q1)
+        symbol(q0, 'a', q2)
 
-        consume(q1, 'b', q3)
-        consume(q2, 'c', q3)
+        symbol(q1, 'b', q3)
+        symbol(q2, 'c', q3)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

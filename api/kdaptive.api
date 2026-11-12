@@ -1,29 +1,16 @@
 public final class br/usp/poli/lta/cereda/kdaptive/dot/DotExporter {
-	public static final field CODE_POINT_WIDTH I
-	public static final field HEX_RADIX I
-	public static final field UNDERSCORE_ESCAPE Ljava/lang/String;
 	public fun <init> ()V
 	public final fun toDot (Lbr/usp/poli/lta/cereda/kdaptive/model/Topology;)Ljava/lang/String;
 }
 
+public abstract interface class br/usp/poli/lta/cereda/kdaptive/dot/DotSink {
+	public abstract fun accept (ILjava/lang/String;)V
+}
+
 public final class br/usp/poli/lta/cereda/kdaptive/dot/GraphVizVisitor : br/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor {
-	public fun <init> (Lkotlin/jvm/functions/Function2;)V
-	public fun onAfterAction (ILbr/usp/poli/lta/cereda/kdaptive/model/ActionRef$Bound;Z)V
-	public fun onAfterTraverse (ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
-	public fun onBeforeAction (ILbr/usp/poli/lta/cereda/kdaptive/model/ActionRef$Bound;Z)V
-	public fun onBeforeTraverse (ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
-	public fun onCall (ILjava/lang/String;)V
+	public fun <init> (Lbr/usp/poli/lta/cereda/kdaptive/dot/DotSink;)V
 	public fun onEdgeAdded (ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;Lbr/usp/poli/lta/cereda/kdaptive/model/Topology;)V
 	public fun onEdgeRemoved (ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;Lbr/usp/poli/lta/cereda/kdaptive/model/Topology;)V
-	public fun onMappingOperation (ILbr/usp/poli/lta/cereda/kdaptive/model/MappingOperation;)V
-	public fun onObservation (ILbr/usp/poli/lta/cereda/kdaptive/model/Observation;)V
-	public fun onPathEnd (ILbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;I)V
-	public fun onPathFork (ILjava/util/List;)V
-	public fun onPathStart (ILjava/util/List;)V
-	public fun onRecognizeEnd (Lbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionResult;)V
-	public fun onRecognizeFailed (Ljava/lang/Throwable;)V
-	public fun onRecognizeStart (Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;)V
-	public fun onReturn (I)V
 }
 
 public final class br/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder {
@@ -32,8 +19,6 @@ public final class br/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder {
 	public static synthetic fun action$default (Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder;Ljava/lang/String;Lbr/usp/poli/lta/cereda/kdaptive/model/Arity;Lkotlin/jvm/functions/Function3;ILjava/lang/Object;)V
 	public final fun call (Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
 	public static synthetic fun call$default (Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
-	public final fun consume (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
-	public static synthetic fun consume$default (Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public final fun epsilon (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
 	public static synthetic fun epsilon$default (Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public final fun from (Ljava/lang/Object;Lkotlin/jvm/functions/Function1;)V
@@ -44,6 +29,8 @@ public final class br/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder {
 	public final fun setMain (Ljava/lang/String;)V
 	public final fun state (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/State;
 	public final fun submachine (Ljava/lang/String;Lkotlin/jvm/functions/Function1;)V
+	public final fun symbol (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+	public static synthetic fun symbol$default (Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonBuilder;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public final fun toSpec ()Lbr/usp/poli/lta/cereda/kdaptive/dsl/AutomatonSpec;
 }
 
@@ -116,8 +103,6 @@ public abstract class br/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomato
 	public fun <init> ()V
 	public final fun call (Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
 	public static synthetic fun call$default (Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;Ljava/lang/Object;Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
-	public final fun consume (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
-	public static synthetic fun consume$default (Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public final fun epsilon (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
 	public static synthetic fun epsilon$default (Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public final fun from (Ljava/lang/Object;Lkotlin/jvm/functions/Function1;)V
@@ -135,8 +120,9 @@ public abstract class br/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomato
 	public final fun setLimits (Lbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits;)V
 	public final fun setMainSubmachine (Ljava/lang/String;)V
 	public final fun setStopOnFirstAcceptance (Z)V
-	public final fun setVisitors (Ljava/util/List;)V
 	public abstract fun setup ()V
+	public final fun symbol (Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;)V
+	public static synthetic fun symbol$default (Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;Ljava/lang/Object;ILjava/lang/Object;)V
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -169,25 +155,6 @@ public abstract interface class br/usp/poli/lta/cereda/kdaptive/execution/Execut
 	public fun onReturn (I)V
 }
 
-public final class br/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor$DefaultImpls {
-	public static fun onAfterAction (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/ActionRef$Bound;Z)V
-	public static fun onAfterTraverse (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
-	public static fun onBeforeAction (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/ActionRef$Bound;Z)V
-	public static fun onBeforeTraverse (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
-	public static fun onCall (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILjava/lang/String;)V
-	public static fun onEdgeAdded (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;Lbr/usp/poli/lta/cereda/kdaptive/model/Topology;)V
-	public static fun onEdgeRemoved (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;Lbr/usp/poli/lta/cereda/kdaptive/model/Topology;)V
-	public static fun onMappingOperation (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/MappingOperation;)V
-	public static fun onObservation (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/model/Observation;)V
-	public static fun onPathEnd (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;I)V
-	public static fun onPathFork (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILjava/util/List;)V
-	public static fun onPathStart (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;ILjava/util/List;)V
-	public static fun onRecognizeEnd (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;Lbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionResult;)V
-	public static fun onRecognizeFailed (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;Ljava/lang/Throwable;)V
-	public static fun onRecognizeStart (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;Lbr/usp/poli/lta/cereda/kdaptive/execution/AdaptiveAutomaton;)V
-	public static fun onReturn (Lbr/usp/poli/lta/cereda/kdaptive/execution/ExecutionVisitor;I)V
-}
-
 public final class br/usp/poli/lta/cereda/kdaptive/execution/ForkedPath {
 	public fun <init> (ILbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
 	public final fun component1 ()I
@@ -201,62 +168,22 @@ public final class br/usp/poli/lta/cereda/kdaptive/execution/ForkedPath {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class br/usp/poli/lta/cereda/kdaptive/execution/PathExecutor {
-	public fun <init> (ILbr/usp/poli/lta/cereda/kdaptive/execution/PathState;Ljava/util/List;Ljava/util/Map;Ljava/util/List;)V
-	public synthetic fun <init> (ILbr/usp/poli/lta/cereda/kdaptive/execution/PathState;Ljava/util/List;Ljava/util/Map;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getActions ()Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;
-	public final fun getCurrentState ()Lbr/usp/poli/lta/cereda/kdaptive/model/State;
-	public final fun getCurrentSubmachine ()Ljava/lang/String;
-	public final fun getCursor ()I
-	public final fun getEnablePriorAction ()Z
-	public final fun getId ()I
-	public final fun getInput ()Ljava/util/List;
-	public final fun getMainSubmachine ()Ljava/lang/String;
-	public final fun getStack ()Lbr/usp/poli/lta/cereda/kdaptive/model/Stack;
-	public final fun getState ()Lbr/usp/poli/lta/cereda/kdaptive/execution/PathState;
-	public final fun getSubmachines ()Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;
-	public final fun getTransitions ()Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionMapping;
-	public final fun run ()V
-}
-
 public final class br/usp/poli/lta/cereda/kdaptive/execution/PathOutcome : java/lang/Enum {
-	public static final field ACCEPTED Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
-	public static final field CUT Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
-	public static final field FAILED Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
-	public static final field PENDING Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
-	public static final field REJECTED Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
+	public static final field Accepted Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
+	public static final field Cut Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
+	public static final field Failed Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
+	public static final field Pending Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
+	public static final field Rejected Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
 	public static fun values ()[Lbr/usp/poli/lta/cereda/kdaptive/execution/PathOutcome;
 }
 
-public final class br/usp/poli/lta/cereda/kdaptive/execution/PathState {
-	public fun <init> (Lbr/usp/poli/lta/cereda/kdaptive/model/State;Ljava/lang/String;Ljava/lang/String;Lbr/usp/poli/lta/cereda/kdaptive/model/Stack;Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionMapping;Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;Ljava/util/List;IZILbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits;)V
-	public synthetic fun <init> (Lbr/usp/poli/lta/cereda/kdaptive/model/State;Ljava/lang/String;Ljava/lang/String;Lbr/usp/poli/lta/cereda/kdaptive/model/Stack;Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionMapping;Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;Ljava/util/List;IZILbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getActionEpoch ()I
-	public final fun getActions ()Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;
-	public final fun getCurrentState ()Lbr/usp/poli/lta/cereda/kdaptive/model/State;
-	public final fun getCurrentSubmachine ()Ljava/lang/String;
-	public final fun getCursor ()I
-	public final fun getEnablePriorAction ()Z
-	public final fun getInput ()Ljava/util/List;
-	public final fun getLimits ()Lbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits;
-	public final fun getMainSubmachine ()Ljava/lang/String;
-	public final fun getStack ()Lbr/usp/poli/lta/cereda/kdaptive/model/Stack;
-	public final fun getSubmachines ()Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;
-	public final fun getTransitions ()Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionMapping;
-	public final fun setActionEpoch (I)V
-	public final fun setActions (Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;)V
-	public final fun setCurrentState (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)V
-	public final fun setCurrentSubmachine (Ljava/lang/String;)V
-	public final fun setCursor (I)V
-	public final fun setEnablePriorAction (Z)V
-	public final fun setInput (Ljava/util/List;)V
-	public final fun setLimits (Lbr/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits;)V
-	public final fun setMainSubmachine (Ljava/lang/String;)V
-	public final fun setStack (Lbr/usp/poli/lta/cereda/kdaptive/model/Stack;)V
-	public final fun setSubmachines (Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;)V
-	public final fun setTransitions (Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionMapping;)V
+public final class br/usp/poli/lta/cereda/kdaptive/execution/RecognitionFailedException : java/lang/IllegalStateException {
+	public fun <init> (ILjava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (ILjava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getPathId ()I
+	public final fun getReason ()Ljava/lang/String;
 }
 
 public final class br/usp/poli/lta/cereda/kdaptive/execution/RecognitionLimits {
@@ -312,10 +239,6 @@ public final class br/usp/poli/lta/cereda/kdaptive/execution/RecognitionResult {
 	public final fun getRejectedPaths ()Ljava/util/List;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class br/usp/poli/lta/cereda/kdaptive/logging/LoggingKt {
-	public static final fun getLogger (Ljava/lang/Object;)Lorg/slf4j/Logger;
 }
 
 public final class br/usp/poli/lta/cereda/kdaptive/model/Action {
@@ -386,7 +309,7 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/Actions : java/lang/Ite
 	public final fun add (Lbr/usp/poli/lta/cereda/kdaptive/model/Action;)V
 	public final fun contains (Lbr/usp/poli/lta/cereda/kdaptive/model/Action;)Z
 	public final fun copy ()Lbr/usp/poli/lta/cereda/kdaptive/model/Actions;
-	public final fun fromName (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/Action;
+	public final fun get (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/Action;
 	public final fun getSize ()I
 	public fun iterator ()Ljava/util/Iterator;
 	public final fun removeByName (Ljava/lang/String;)V
@@ -695,10 +618,10 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/Submachines : java/lang
 	public final fun add (Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;)V
 	public final fun contains (Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;)Z
 	public final fun copy ()Lbr/usp/poli/lta/cereda/kdaptive/model/Submachines;
-	public final fun fromName (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
-	public final fun fromState (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
+	public final fun get (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
 	public final fun getSize ()I
 	public fun iterator ()Ljava/util/Iterator;
+	public final fun ownerOf (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
 	public final fun removeByName (Ljava/lang/String;)V
 	public final fun replaceAll (Ljava/util/Set;)V
 	public fun toString ()Ljava/lang/String;
@@ -775,13 +698,13 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/Topology {
 	public final fun epsilonOrCallEdgesFrom (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)Ljava/util/List;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun fromId (I)Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;
-	public final fun fromState (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
 	public final fun getEdges ()Ljava/util/Set;
 	public final fun getEpsilonEdges ()Ljava/util/List;
 	public final fun getSize ()I
 	public final fun getSubmachines ()Ljava/util/Set;
 	public fun hashCode ()I
 	public final fun matching (Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPattern;)Ljava/util/List;
+	public final fun ownerOf (Lbr/usp/poli/lta/cereda/kdaptive/model/State;)Lbr/usp/poli/lta/cereda/kdaptive/model/Submachine;
 	public fun toString ()Ljava/lang/String;
 }
 
@@ -851,12 +774,6 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/TransitionEdge {
 }
 
 public final class br/usp/poli/lta/cereda/kdaptive/model/TransitionMapping {
-	public static final field GOLDEN_RATIO J
-	public static final field MIX_FACTOR_A J
-	public static final field MIX_FACTOR_B J
-	public static final field SHIFT_A I
-	public static final field SHIFT_B I
-	public static final field SHIFT_C I
 	public fun <init> ()V
 	public final fun add (Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionEdge;)V
 	public final fun clear ()V
@@ -869,7 +786,7 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/TransitionMapping {
 	public final fun getSize ()I
 	public final fun getTransitions ()Ljava/util/Set;
 	public final fun observe (Lbr/usp/poli/lta/cereda/kdaptive/model/Observation;)V
-	public final fun removeFromIdentifier (I)V
+	public final fun removeById (I)V
 	public final fun setOnEdgeAdded (Lkotlin/jvm/functions/Function1;)V
 	public final fun setOnEdgeRemoved (Lkotlin/jvm/functions/Function1;)V
 	public final fun setOnObservation (Lkotlin/jvm/functions/Function1;)V
@@ -909,10 +826,10 @@ public final class br/usp/poli/lta/cereda/kdaptive/model/TransitionPattern {
 }
 
 public final class br/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind : java/lang/Enum {
-	public static final field EPSILON Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
-	public static final field MIXED Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
-	public static final field SUBMACHINE Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
-	public static final field SYMBOL Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
+	public static final field Epsilon Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
+	public static final field Mixed Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
+	public static final field Submachine Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
+	public static final field Symbol Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;
 	public static fun values ()[Lbr/usp/poli/lta/cereda/kdaptive/model/TransitionPatternKind;

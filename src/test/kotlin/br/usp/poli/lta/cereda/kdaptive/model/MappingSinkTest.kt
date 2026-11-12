@@ -36,7 +36,7 @@ class MappingSinkTest {
                 transition = Transition.Epsilon,
             ),
         )
-        m.removeFromIdentifier(m.transitions.first().id)
+        m.removeById(m.transitions.first().id)
         m.observe(object : Observation {})
     }
 
@@ -55,7 +55,7 @@ class MappingSinkTest {
                 transition = Transition.Epsilon,
             )
         m.add(edge)
-        m.removeFromIdentifier(edge.id)
+        m.removeById(edge.id)
 
         assertEquals(listOf(edge), added)
         assertEquals(listOf(edge), removed)

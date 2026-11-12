@@ -43,7 +43,7 @@ class FailureOutcomeTest {
                 ),
             )
             actions.add(Action(name = "Boom") { _, _, _ -> error("boom") })
-            consume(C0, CharSymbol('a'), C1, prior = "Boom")
+            symbol(C0, CharSymbol('a'), C1, prior = "Boom")
         }
     }
 
@@ -61,7 +61,7 @@ class FailureOutcomeTest {
                     acceptingStates = setOf(C1),
                 ),
             )
-            consume(C0, CharSymbol('a'), C1)
+            symbol(C0, CharSymbol('a'), C1)
         }
     }
 
@@ -77,10 +77,10 @@ class FailureOutcomeTest {
             },
         )
 
-        assertFailsWith<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        assertFailsWith<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
-        assertEquals(listOf(PathOutcome.FAILED), outcomes)
-        assertFalse(outcomes.contains(PathOutcome.REJECTED))
+        assertEquals(listOf(PathOutcome.Failed), outcomes)
+        assertFalse(outcomes.contains(PathOutcome.Rejected))
     }
 
     @Test
@@ -100,7 +100,7 @@ class FailureOutcomeTest {
             },
         )
 
-        val thrown = assertFailsWith<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        val thrown = assertFailsWith<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         // The two events are exclusive: a failed recognition never reports a
         // result, and never reports a rejection.
@@ -121,7 +121,7 @@ class FailureOutcomeTest {
             },
         )
 
-        assertFailsWith<IllegalStateException> { aa.recognize(listOf(CharSymbol('a'))) }
+        assertFailsWith<RecognitionFailedException> { aa.recognize(listOf(CharSymbol('a'))) }
 
         assertEquals(1, seen.size)
     }

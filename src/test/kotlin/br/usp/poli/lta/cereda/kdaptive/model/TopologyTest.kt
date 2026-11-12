@@ -120,7 +120,7 @@ class TopologyTest {
         val m = mapping()
         val snapshot = Topology.of(m, submachines())
 
-        m.removeFromIdentifier(snapshot.edges.first().id)
+        m.removeById(snapshot.edges.first().id)
 
         assertEquals(4, snapshot.size)
         assertTrue(snapshot.edges.isNotEmpty())
@@ -244,9 +244,9 @@ class TopologyTest {
     fun `the snapshot knows which submachine owns a state`() {
         val t = Topology.of(mapping(), submachines())
 
-        assertEquals("M", t.fromState(G0).name)
-        assertEquals("M", t.fromState(G1).name)
-        assertThrows<IllegalStateException> { t.fromState(G3) }
+        assertEquals("M", t.ownerOf(G0).name)
+        assertEquals("M", t.ownerOf(G1).name)
+        assertThrows<NoSuchElementException> { t.ownerOf(G3) }
     }
 
     @Test
@@ -255,7 +255,7 @@ class TopologyTest {
         val edge = t.edges.first()
 
         assertEquals(edge, t.fromId(edge.id))
-        assertThrows<IllegalStateException> { t.fromId(-1) }
+        assertThrows<NoSuchElementException> { t.fromId(-1) }
     }
 
     @Test

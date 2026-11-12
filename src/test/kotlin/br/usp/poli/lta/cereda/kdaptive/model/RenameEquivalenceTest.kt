@@ -69,8 +69,8 @@ class RenameEquivalenceTest {
         val action = Action(name = "A") { _, _, _ -> }
         actions.add(action)
 
-        assertEquals(action, actions.fromName("A"))
-        assertThrows<IllegalStateException> { actions.fromName("missing") }
+        assertEquals(action, actions.get("A"))
+        assertThrows<NoSuchElementException> { actions.get("missing") }
     }
 
     // -----------------------------------------------------------------------
@@ -140,10 +140,10 @@ class RenameEquivalenceTest {
             )
         submachines.add(submachine)
 
-        assertEquals(submachine, submachines.fromState(N0))
-        assertEquals(submachine, submachines.fromName("M"))
-        assertThrows<IllegalStateException> { submachines.fromState(object : State() {}) }
-        assertThrows<IllegalStateException> { submachines.fromName("missing") }
+        assertEquals(submachine, submachines.ownerOf(N0))
+        assertEquals(submachine, submachines.get("M"))
+        assertThrows<NoSuchElementException> { submachines.ownerOf(object : State() {}) }
+        assertThrows<NoSuchElementException> { submachines.get("missing") }
     }
 
     // -----------------------------------------------------------------------
@@ -179,7 +179,7 @@ class RenameEquivalenceTest {
         mapping.add(first)
         assertEquals(1, mapping.size)
 
-        mapping.removeFromIdentifier(first.id)
+        mapping.removeById(first.id)
         assertEquals(0, mapping.size)
     }
 

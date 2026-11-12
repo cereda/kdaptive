@@ -178,11 +178,11 @@ class SetsAndEdgeTest {
 
         val clone = actions.copy()
         assertEquals(1, clone.size)
-        assertThrows<IllegalStateException> { clone.fromName("nope") }
+        assertThrows<NoSuchElementException> { clone.get("nope") }
 
         actions.removeByName("A")
         assertEquals(0, actions.size)
-        assertThrows<IllegalArgumentException> { actions.removeByName("A") }
+        assertThrows<NoSuchElementException> { actions.removeByName("A") }
     }
 
     @Test
@@ -190,10 +190,10 @@ class SetsAndEdgeTest {
         val submachines = Submachines()
         val main = Submachine(name = "Main", states = setOf(M0, M1), initialState = M0, acceptingStates = setOf(M1))
         submachines.add(main)
-        assertEquals(main, submachines.fromName("Main"))
-        assertThrows<IllegalStateException> { submachines.fromName("nope") }
-        assertEquals(main, submachines.fromState(M1))
-        assertThrows<IllegalStateException> { submachines.fromState(M2) }
+        assertEquals(main, submachines.get("Main"))
+        assertThrows<NoSuchElementException> { submachines.get("nope") }
+        assertEquals(main, submachines.ownerOf(M1))
+        assertThrows<NoSuchElementException> { submachines.ownerOf(M2) }
 
         assertTrue(submachines.toString().contains("Main"))
 

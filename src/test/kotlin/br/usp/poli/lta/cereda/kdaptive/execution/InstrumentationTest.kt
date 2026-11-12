@@ -92,9 +92,9 @@ class InstrumentationTest {
             }
             ea.add(q1, sym('z'), g0)
         }
-        consume(q0, sym('a'), q1, prior = "Work")
-        consume(q1, sym('b'), q1)
-        consume(q1, sym('a'), q0)
+        symbol(q0, sym('a'), q1, prior = "Work")
+        symbol(q1, sym('b'), q1)
+        symbol(q1, sym('a'), q0)
         main("M")
     }
 
@@ -113,8 +113,8 @@ class InstrumentationTest {
             ea.remove { symbol = sym('a') }
             observe(Note("trimmed"))
         }
-        consume(q0, sym('a'), q1, prior = "Trim")
-        consume(q0, sym('a'), q2, prior = "Trim")
+        symbol(q0, sym('a'), q1, prior = "Trim")
+        symbol(q0, sym('a'), q2, prior = "Trim")
         main("M")
     }
 
@@ -135,7 +135,7 @@ class InstrumentationTest {
         assertEquals(1, operations.size)
 
         val query = operations.single() as MappingOperation.Query
-        assertEquals(TransitionPatternKind.SYMBOL, query.pattern.kind)
+        assertEquals(TransitionPatternKind.Symbol, query.pattern.kind)
         assertEquals(CharSymbol('a'), query.pattern.symbol)
         assertEquals(matched, query.edges)
         assertEquals(3, query.mappingSizeBefore)
@@ -151,7 +151,7 @@ class InstrumentationTest {
         ElementaryActions(m, Submachines()).queryCall(State.Any, SubmachineRef.Any, State.Any)
 
         val query = operations.single() as MappingOperation.Query
-        assertEquals(TransitionPatternKind.SUBMACHINE, query.pattern.kind)
+        assertEquals(TransitionPatternKind.Submachine, query.pattern.kind)
         assertEquals(0, query.edges.size)
     }
 
@@ -202,7 +202,7 @@ class InstrumentationTest {
         assertEquals(4, addition.mappingSizeAfter)
         assertEquals(1, addition.edges.size)
         assertEquals(addition.edge, addition.edges.single())
-        assertEquals(TransitionPatternKind.SYMBOL, addition.pattern.kind)
+        assertEquals(TransitionPatternKind.Symbol, addition.pattern.kind)
         assertEquals(CharSymbol('z'), addition.pattern.symbol)
     }
 

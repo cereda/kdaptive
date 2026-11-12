@@ -40,8 +40,8 @@ class DslShowcaseExample : AdaptiveAutomaton() {
             },
         )
 
-        consume(q0, 'a', q1, post = "AddC")
-        consume(q1, 'b', q2)
+        symbol(q0, 'a', q1, post = "AddC")
+        symbol(q1, 'b', q2)
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted

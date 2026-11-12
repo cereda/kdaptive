@@ -77,32 +77,41 @@ public class Submachines : Iterable<Submachine> {
     public val size: Int get() = entries.size
 
     /**
-     * Retrieves a submachine containing the given state.
+     * Retrieves the submachine that owns the given state.
+     *
+     * A state belongs to the submachine that declares it, and the owner is
+     * what the engine needs to know when a path crosses a boundary.
      *
      * @param state the state to search for
      * @return the submachine containing the state
-     * @throws IllegalStateException if no submachine contains the state
+     * @throws NoSuchElementException if no submachine contains the state
      */
-    public fun fromState(state: State): Submachine = owners[state] ?: error("No submachine contains state '$state'.")
+    public fun ownerOf(state: State): Submachine =
+        owners[state] ?: throw NoSuchElementException("No submachine contains state '$state'.")
 
     /**
      * Retrieves a submachine by name.
      *
+     * The collection is a lookup table first and an iterable second, and the
+     * `get` operator says so: `submachines["name"]` is the submachine
+     * registered under that name.
+     *
      * @param name the submachine name
      * @return the matching submachine
-     * @throws IllegalStateException if no submachine with the given name exists
+     * @throws NoSuchElementException if no submachine with the given name exists
      */
-    public fun fromName(name: String): Submachine = byName[name] ?: error("No submachine with name '$name'.")
+    public operator fun get(name: String): Submachine =
+        byName[name] ?: throw NoSuchElementException("No submachine with name '$name'.")
 
     /**
      * Removes a submachine by name.
      *
      * @param name the submachine name
-     * @throws IllegalStateException if no submachine with the given name exists
+     * @throws NoSuchElementException if no submachine with the given name exists
      */
     public fun removeByName(name: String) {
         val result = byName[name]
-        require(result != null) { "No submachine with name '$name'." }
+        if (result == null) throw NoSuchElementException("No submachine with name '$name'.")
         entries.remove(result)
         rebuildIndexes()
     }

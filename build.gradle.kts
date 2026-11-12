@@ -9,12 +9,44 @@ plugins {
     alias(libs.plugins.dokka)
     alias(libs.plugins.kover)
     alias(libs.plugins.spotless)
+    alias(libs.plugins.spotless.changelog)
     alias(libs.plugins.tapmoc)
-    alias(libs.plugins.binaryCompatibilityValidator)
+    alias(libs.plugins.binary.compatibility.validator)
+}
+
+// The changelog is the single source of truth of the version: the plugin
+// reads it and derives the version of the release it describes. A release
+// is declared by promoting the `[Unreleased]` section to a version heading;
+// the build reads the heading, and the tag names it.
+//
+// The configuration of the extension has to come before its first use — the
+// plugin computes the version lazily and refuses to be reconfigured
+// afterwards — so the block sits here, right after the plugins.
+spotlessChangelog {
+    changelogFile("CHANGELOG.md")
+    // Every build but the release one carries the `-SNAPSHOT` suffix: the
+    // release build says so with `-Prelease=true`.
+    setAppendDashSnapshotUnless_dashPrelease(true)
+    // The major bump recognizes the documented phrase and the bold marker
+    // of the current changelog convention; the match is a plain, case
+    // sensitive contains, so the spellings cover the phrase in prose, at
+    // sentence start, and the marker with or without its colon — the
+    // marker alone would miss `**BREAKING:**`, which is the spelling the
+    // changelog itself uses.
+    ifFoundBumpBreaking(
+        "breaking change",
+        "Breaking change",
+        "**Breaking",
+        "**BREAKING",
+    )
+    tagPrefix("v")
+    commitMessage("Release v{{version}}")
+    remote("origin")
+    branch("main")
 }
 
 group = "br.usp.poli.lta.cereda"
-version = "5.1.0"
+version = spotlessChangelog.versionNext
 
 java {
     // The library ships its sources next to the jar: the jar is the
@@ -33,12 +65,20 @@ kotlin {
     // the authors of a library: every public member names its visibility and
     // its return type, and every public member carries its documentation.
     //
-    // The mode is a warning for now, and a rule from 6.0.0 onwards: the
-    // warning measures the work that remains, and the rule keeps it done.
-    //
     // The language, the API and the Java target are *not* set here: tapmoc
     // owns them, and a build that states them twice states them twice.
-    explicitApiWarning()
+    explicitApi()
+
+    compilerOptions {
+        // The default methods of an interface live in the interface itself,
+        // and the synthetic `DefaultImpls` class that held them is gone. The
+        // class was never callable: nothing could reach it but the compiler.
+        //
+        // `no-compatibility` is the mode that drops the class; `enable` would
+        // keep it for the sake of the consumers compiled against the older
+        // layout, and this is a breaking release that says so.
+        freeCompilerArgs.add("-jvm-default=no-compatibility")
+    }
 }
 
 // The binary-compatibility baseline guards the *library*: it is the artefact
@@ -143,14 +183,6 @@ kover {
             excludes {
                 // Logging facade: exercised transitively by every other test run.
                 packages("br.usp.poli.lta.cereda.kdaptive.logging")
-                // Kotlin's `jvm-default=enable` mode — the default since Kotlin
-                // 2.2 — emits a synthetic `X$DefaultImpls` class holding the
-                // binary-compatibility bridges of the interfaces. Nothing can
-                // call it, so it is unreachable by construction; the real
-                // default bodies live in the interface itself, which stays in
-                // the report. The `jvm-default=all` mode of 6.0.0 removes the
-                // class, and the exclusion with it.
-                classes("*\$DefaultImpls")
             }
         }
         verify {

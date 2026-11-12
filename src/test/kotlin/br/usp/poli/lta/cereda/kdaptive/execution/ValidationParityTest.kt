@@ -122,7 +122,7 @@ class ValidationParityTest {
                         initial(V0)
                         accepting(V1)
                     }
-                    consume(V0, 'a', V2)
+                    symbol(V0, 'a', V2)
                     main("M")
                 }
             }
@@ -138,7 +138,7 @@ class ValidationParityTest {
                                 acceptingStates = setOf(V1),
                             ),
                         )
-                        aa.consume(V0, 'a', V2)
+                        aa.symbol(V0, 'a', V2)
                         aa.mainSubmachine = "M"
                     },
                 )
@@ -242,7 +242,7 @@ class ValidationParityTest {
                         initial(V0)
                         accepting(V1)
                     }
-                    consume(V0, 'a', State.anyOf(V1, V2))
+                    symbol(V0, 'a', State.anyOf(V1, V2))
                     main("M")
                 }
             }
@@ -258,7 +258,7 @@ class ValidationParityTest {
                                 acceptingStates = setOf(V1),
                             ),
                         )
-                        aa.consume(V0, 'a', State.anyOf(V1, V2))
+                        aa.symbol(V0, 'a', State.anyOf(V1, V2))
                         aa.mainSubmachine = "M"
                     },
                 )
@@ -276,7 +276,7 @@ class ValidationParityTest {
                     initial(V0)
                     accepting(V1)
                 }
-                consume(V0, 'a', V1)
+                symbol(V0, 'a', V1)
                 main("M")
             }
         assertEquals(1, spec.transitions.size)
@@ -291,7 +291,7 @@ class ValidationParityTest {
                         acceptingStates = setOf(V1),
                     ),
                 )
-                automaton.consume(V0, 'a', V1)
+                automaton.symbol(V0, 'a', V1)
                 automaton.mainSubmachine = "M"
             }
         assertTrue(aa.recognize(listOf(CharSymbol('a'))).accepted)

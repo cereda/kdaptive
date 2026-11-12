@@ -3,7 +3,6 @@ package br.usp.poli.lta.cereda.kdaptive.examples
 
 import br.usp.poli.lta.cereda.kdaptive.execution.AdaptiveAutomaton
 import br.usp.poli.lta.cereda.kdaptive.model.Action
-import br.usp.poli.lta.cereda.kdaptive.model.State
 import br.usp.poli.lta.cereda.kdaptive.model.Submachine
 
 /**
@@ -40,9 +39,9 @@ class ContextFreeLanguageExample : AdaptiveAutomaton() {
             },
         )
 
-        consume(q0, 'a', q1, post = "A")
+        symbol(q0, 'a', q1, post = "A")
         call(q1, "M", q2)
-        consume(q2, 'b', q3, post = "B")
+        symbol(q2, 'b', q3, post = "B")
     }
 
     fun recognize(input: String): Boolean = recognize(convert(input)).accepted
